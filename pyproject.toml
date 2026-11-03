@@ -32,4 +32,6 @@ capital_radar = ["schema.sql"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Några tester delar fixturer via `from tests import ...`.
+pythonpath = ["."]
 addopts = "-q"
