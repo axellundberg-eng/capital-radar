@@ -1,0 +1,55 @@
+#cloud-config
+# Klistras in under "Cloud config" när servern skapas i Hetzner Cloud Console
+# (Ubuntu 24.04). Ersätt SSH-nyckeln nedan med din publika nyckel och
+# deploy-nyckeln som GitHub Actions använder (se deploy/README.md).
+#
+# Resultat: användaren "deploy" (uid 1000, samma uid som appens container),
+# Docker, brandvägg som bara släpper in SSH, inga lösenord, ingen root-inloggning
+# och automatiska säkerhetsuppdateringar. Webben nås aldrig direkt; trafiken går
+# ut via Cloudflare Tunnel.
+
+users:
+  - name: deploy
+    uid: 1000
+    groups: [docker]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+      - "ssh-ed25519 AAAA...ERSÄTT-MED-DIN-NYCKEL din-dator"
+      - "ssh-ed25519 AAAA...ERSÄTT-MED-DEPLOY-NYCKEL github-actions-deploy"
+
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - sqlite3
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-hardening.conf
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      AllowUsers deploy
+
+runcmd:
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  - usermod -aG docker deploy
+  - mkdir -p /srv/capital-radar/data/documents /srv/capital-radar/deploy /srv/capital-radar/backups
+  - chown -R 1000:1000 /srv/capital-radar
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow OpenSSH
+  - ufw --force enable
+  - systemctl enable --now fail2ban
+  - systemctl restart ssh
