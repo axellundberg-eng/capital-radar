@@ -7,3 +7,5 @@ build/
 data/
 .env
 *.log
+.tmp-tests/
+.test-tmp/

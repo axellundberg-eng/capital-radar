@@ -133,6 +133,8 @@ class Database:
             connection.executescript(schema)
             self._add_missing_columns(connection, schema)
             now = utc_now()
+            # Äldre databaser kan sakna statusen 'blocked' i agent_runs.
+            self._migrate_agent_runs_blocked_status(connection, now)
             for source in SOURCE_SEED:
                 connection.execute(
                     """
@@ -201,6 +203,126 @@ class Database:
                     if default is not None:
                         definition += f" DEFAULT {default}"
                     connection.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
+
+    @staticmethod
+    def _migrate_agent_runs_blocked_status(
+        connection: sqlite3.Connection,
+        now: str,
+    ) -> None:
+        """Allow the persisted ``blocked`` status on agent_runs.
+
+        SQLite cannot alter a CHECK constraint in place, so the table is
+        rebuilt with a superset constraint that keeps every existing status
+        value valid while adding ``blocked`` (execution denied by explicit
+        policy before any provider call, e.g. the egress spärr). Historical
+        rows are copied verbatim; no status is rewritten. The migration is
+        idempotent: once the constraint already mentions ``blocked`` it
+        returns without touching the table.
+        """
+        schema = connection.execute(
+            """
+            SELECT sql FROM sqlite_master
+            WHERE type='table' AND name='agent_runs'
+            """
+        ).fetchone()
+        if not schema or "'blocked'" in str(schema["sql"]):
+            return
+
+        connection.commit()
+        connection.execute("PRAGMA foreign_keys=OFF")
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                """
+                CREATE TABLE agent_runs_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    case_id TEXT,
+                    issuer_id INTEGER REFERENCES issuers(id),
+                    deal_id INTEGER,
+                    agent_type TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    thinking_enabled INTEGER NOT NULL DEFAULT 0,
+                    reasoning_effort TEXT,
+                    prompt_version TEXT NOT NULL,
+                    schema_version TEXT NOT NULL DEFAULT 'v1',
+                    execution_profile_version TEXT NOT NULL DEFAULT 'v1',
+                    execution_profile_json TEXT NOT NULL DEFAULT '{}',
+                    input_hash TEXT NOT NULL,
+                    source_data_cutoff TEXT,
+                    status TEXT NOT NULL
+                        CHECK (status IN ('queued','running','completed','failed','skipped_idempotent','unavailable','blocked')),
+                    started_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    latency_ms INTEGER,
+                    input_tokens INTEGER,
+                    cached_input_tokens INTEGER,
+                    output_tokens INTEGER,
+                    estimated_cost_usd REAL,
+                    retry_count INTEGER NOT NULL DEFAULT 0,
+                    provider_request_id TEXT,
+                    confidence REAL,
+                    artifact_id INTEGER REFERENCES agent_artifacts(id),
+                    error_type TEXT,
+                    safe_error_message TEXT,
+                    idempotency_key TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(idempotency_key)
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO agent_runs_new
+                SELECT
+                    id, case_id, issuer_id, deal_id, agent_type, provider,
+                    model, thinking_enabled, reasoning_effort, prompt_version,
+                    schema_version, execution_profile_version,
+                    execution_profile_json, input_hash, source_data_cutoff,
+                    status, started_at, completed_at, latency_ms,
+                    input_tokens, cached_input_tokens, output_tokens,
+                    estimated_cost_usd, retry_count, provider_request_id,
+                    confidence, artifact_id, error_type, safe_error_message,
+                    idempotency_key, created_at
+                FROM agent_runs
+                """
+            )
+            connection.execute("DROP TABLE agent_runs")
+            connection.execute(
+                "ALTER TABLE agent_runs_new RENAME TO agent_runs"
+            )
+            connection.execute(
+                """
+                CREATE INDEX idx_agent_runs_issuer
+                ON agent_runs(issuer_id, agent_type, created_at DESC)
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX idx_agent_runs_status
+                ON agent_runs(status, started_at)
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX idx_agent_runs_case
+                ON agent_runs(case_id, agent_type)
+                """
+            )
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO schema_migrations(
+                    version, name, applied_at
+                ) VALUES (7, 'agent_runs_blocked_status', ?)
+                """,
+                (now,),
+            )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.execute("PRAGMA foreign_keys=ON")
 
     def start_run(self, source_id: str, run_type: str, source_url: str) -> int:
         with self.connect() as connection:

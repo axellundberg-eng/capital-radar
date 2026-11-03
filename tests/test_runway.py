@@ -19,6 +19,7 @@ class RunwayTests(unittest.TestCase):
     def test_new_calculation_retains_historical_rows_and_analysis_references(self):
         from copy import deepcopy
         from capital_radar.runway import _save_assessment
+        from capital_radar.radar_analysis import current_analysis
         with tempfile.TemporaryDirectory() as directory:
             db = Database(Path(directory) / 'history.db')
             db.initialize()
@@ -40,7 +41,9 @@ class RunwayTests(unittest.TestCase):
                 self.assertEqual(c.execute('SELECT COUNT(*) FROM runway_assessments').fetchone()[0], 2)
                 self.assertEqual(c.execute('SELECT runway_assessment_id FROM analysis_versions').fetchone()[0], old['id'])
                 self.assertEqual(c.execute('SELECT current_runway_assessment_id FROM issuer_analysis_summary').fetchone()[0], old['id'])
-                # Läsvägen via radar_analysis.current_analysis testas igen i fas 3.
+                current = current_analysis(c,[issuer])
+                self.assertEqual(len(current),1)
+                self.assertEqual(current[0]['reported_runway_months'], old['operating_runway_months'])
 
     def test_completed_cash_and_committed_facility_adjust_scores(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
