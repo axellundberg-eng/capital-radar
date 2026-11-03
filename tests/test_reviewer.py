@@ -1,5 +1,8 @@
 """Tester för den oberoende granskaren. Inga riktiga API-anrop: en fejkad
-Anthropic-klient spelar upp förberedda svar och räknar anropen."""
+Anthropic-klient spelar upp förberedda svar och räknar anropen.
+
+Granskaren pratar med databasen bara via Capital Radar-API:t; testerna kör
+hela vägen genom den riktiga /review-routern med FastAPI TestClient."""
 
 from __future__ import annotations
 
@@ -10,12 +13,18 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from capital_radar.config import Settings
 from capital_radar.db import Database
 from capital_radar.reviewer import prompts
+from capital_radar.reviewer.api import build_review_router
 from capital_radar.reviewer.providers import AnthropicReviewProvider, build_provider
 from capital_radar.reviewer.service import ReviewService, build_review_service
+from capital_radar.reviewer.store import HttpReviewStore, SqliteReviewStore
+
+TOKEN = "test-review-token"
 
 NOW = "2026-11-03T10:00:00+00:00"
 PAGE_3 = (
@@ -83,6 +92,9 @@ def _settings(tmp_path: Path, **overrides: Any) -> Any:
         "reviewer_hard_timeout_seconds": 3.0,
         "reviewer_max_source_chars": 24000,
         "reviewer_headline_batch_size": 40,
+        "review_api_token": TOKEN,
+        "reviewer_api_base_url": "http://testserver",
+        "reviewer_api_timeout_seconds": 5.0,
     }
     values.update(overrides)
     values["reviewer_enabled"] = bool(values["anthropic_api_key"])
@@ -184,15 +196,33 @@ def _good_review(ids: dict[str, int]) -> dict[str, Any]:
     }
 
 
+def _api(settings: Any, db: Database) -> TestClient:
+    app = FastAPI()
+    app.include_router(
+        build_review_router(settings, store=SqliteReviewStore(db, clock=lambda: NOW))
+    )
+    return TestClient(app)
+
+
+def _http_store(api: TestClient, token: str = TOKEN) -> HttpReviewStore:
+    def send(method: str, path: str, body: Any) -> tuple[int, Any]:
+        response = api.request(
+            method, path, json=body, headers={"Authorization": f"Bearer {token}"}
+        )
+        return response.status_code, response.json()
+
+    return HttpReviewStore(send)
+
+
 def _service(tmp_path: Path, responses: list[Any], **overrides: Any):
     settings = _settings(tmp_path, **overrides)
     db = Database(settings.db_path)
     db.initialize()
     ids = _seed(db)
     client = FakeClient(responses)
+    store = _http_store(_api(settings, db))
     service = ReviewService(
-        db, settings, provider=AnthropicReviewProvider(settings, client=client),
-        clock=lambda: NOW,
+        store, settings, provider=AnthropicReviewProvider(settings, client=client)
     )
     return service, db, ids, client
 
@@ -330,7 +360,9 @@ def test_missing_key_disables_reviewer(tmp_path: Path, monkeypatch: pytest.Monke
     db = Database(settings.db_path)
     db.initialize()
     _seed(db)
-    service = build_review_service(settings, db=db)
+    api_settings = _settings(tmp_path)
+    service = build_review_service(settings, store=_http_store(_api(api_settings, db)))
+    assert service.provider is None
     result = service.run(prompts.EXTRACTION_TASK, limit=5)
     assert result["status"] == "disabled"
     assert "ANTHROPIC_API_KEY" in result["reason"]
@@ -373,8 +405,8 @@ def test_hard_timeout_is_recorded_and_retry_is_explicit(tmp_path: Path) -> None:
 
     client.messages.delay = 0.0
     client.messages.responses.append(_message(_good_review(ids)))
-    retry = ReviewService(db, service.settings, provider=AnthropicReviewProvider(
-        service.settings, client=client), clock=lambda: NOW)
+    retry = ReviewService(service.store, service.settings, provider=AnthropicReviewProvider(
+        service.settings, client=client))
     result = retry.run(prompts.EXTRACTION_TASK, limit=5, retry_failed=True)
     assert result["counts"] == {"completed": 1}
     with db.connect() as c:
@@ -444,15 +476,78 @@ def test_headline_batches_respect_batch_size(tmp_path: Path) -> None:
     assert [len(p.targets) for p in prepared] == [2, 1]
 
 
-def test_cli_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cli_dry_run_goes_through_api(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     from capital_radar.__main__ import main
+    from capital_radar.reviewer import cli
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
-    monkeypatch.setenv("SCREENER_DB_PATH", str(tmp_path / "screener.db"))
+    # Pekar på en databas som inte finns: CLI:t får inte öppna SQLite själv.
+    monkeypatch.setenv("SCREENER_DB_PATH", str(tmp_path / "finns-inte" / "x.db"))
     db = Database(tmp_path / "screener.db")
     db.initialize()
     _seed(db)
+    store = _http_store(_api(_settings(tmp_path), db))
+    monkeypatch.setattr(
+        cli, "build_review_service", lambda s: build_review_service(s, store=store)
+    )
     assert main(["review", "extractions", "-n", "3", "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "status: dry_run" in out and "extraction_job" in out and "tokens in" in out
+
+
+def test_cli_reports_unreachable_api(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from capital_radar.__main__ import main
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("REVIEWER_API_BASE_URL", "http://127.0.0.1:9")
+    monkeypatch.setenv("REVIEWER_API_TIMEOUT_SECONDS", "1")
+    assert main(["review", "headlines", "--dry-run"]) == 2
+    assert "Kunde inte nå Capital Radar-API:t" in capsys.readouterr().out
+    assert not (tmp_path / "data").exists()  # ingen lokal databas skapades
+
+
+def test_review_api_requires_token(tmp_path: Path) -> None:
+    db = Database(tmp_path / "screener.db")
+    db.initialize()
+    query = "/review/headline-candidates?model=m&prompt_version=v"
+    assert _api(_settings(tmp_path, review_api_token=None), db).get(query).status_code == 503
+    api = _api(_settings(tmp_path), db)
+    assert api.get(query).status_code == 401
+    assert api.get(query, headers={"Authorization": "Bearer fel"}).status_code == 401
+    ok = api.get(query, headers={"Authorization": f"Bearer {TOKEN}"})
+    assert ok.status_code == 200 and ok.json() == {"items": []}
+
+
+def test_review_api_rejects_duplicate_claim_and_unknown_status(tmp_path: Path) -> None:
+    db = Database(tmp_path / "screener.db")
+    db.initialize()
+    api = _api(_settings(tmp_path), db)
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+    claim = {
+        "task": "review_headlines", "provider": "anthropic", "model": "m",
+        "prompt_version": "v", "input_sha256": "a" * 64, "idempotency_key": "b" * 64,
+        "hard_timeout_seconds": 120,
+    }
+    first = api.post("/review/runs", json=claim, headers=headers)
+    assert first.status_code == 200
+    assert api.post("/review/runs", json=claim, headers=headers).status_code == 409
+    too_long = {**claim, "idempotency_key": "c" * 64, "hard_timeout_seconds": 600}
+    assert api.post("/review/runs", json=too_long, headers=headers).status_code == 422
+    run_id = first.json()["run_id"]
+    bad = api.post(f"/review/runs/{run_id}/result", json={"status": "hittepå"}, headers=headers)
+    assert bad.status_code == 422
+
+
+def test_app_mounts_review_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from capital_radar.app import create_app
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SCREENER_DB_PATH", str(tmp_path / "screener.db"))
+    monkeypatch.setenv("SCREENER_REVIEW_API_TOKEN", "")
+    paths = set(create_app().openapi()["paths"])
+    assert {"/review/extraction-candidates", "/review/runs"} <= paths

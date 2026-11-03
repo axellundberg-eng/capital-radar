@@ -6,9 +6,9 @@ import argparse
 from typing import Any, Sequence
 
 from ..config import Settings
-from ..db import Database
 from . import prompts
 from .service import build_review_service
+from .store import ReviewStoreError
 
 _TASKS = {
     "extractions": prompts.EXTRACTION_TASK,
@@ -43,15 +43,19 @@ def add_review_parser(subparsers: Any) -> None:
 
 def run_review_command(args: argparse.Namespace) -> int:
     settings = Settings.from_env()
-    db = Database(settings.db_path)
-    db.initialize()
-    service = build_review_service(settings, db=db)
-    result = service.run(
-        _TASKS[args.target],
-        limit=max(1, args.limit),
-        dry_run=args.dry_run,
-        retry_failed=args.retry_failed,
-    )
+    # Granskaren öppnar aldrig databasen själv; allt går via Capital
+    # Radar-API:t på REVIEWER_API_BASE_URL.
+    service = build_review_service(settings)
+    try:
+        result = service.run(
+            _TASKS[args.target],
+            limit=max(1, args.limit),
+            dry_run=args.dry_run,
+            retry_failed=args.retry_failed,
+        )
+    except ReviewStoreError as exc:
+        print(f"Kunde inte nå Capital Radar-API:t ({settings.reviewer_api_base_url}): {exc}")
+        return 2
     print(format_summary(result))
     if args.dry_run:
         for item in result["prepared"]:

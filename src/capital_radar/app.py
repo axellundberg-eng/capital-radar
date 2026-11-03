@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from . import __version__
 from .config import Settings
+from .reviewer.api import build_review_router
 
 
 def _database_status(settings: Settings) -> dict[str, object]:
@@ -48,5 +49,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "database": database,
             },
         )
+
+    app.include_router(build_review_router(settings))
 
     return app
