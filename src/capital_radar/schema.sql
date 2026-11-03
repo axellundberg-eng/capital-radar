@@ -1138,3 +1138,63 @@ CREATE TRIGGER IF NOT EXISTS radar_snapshot_no_delete
 CREATE TRIGGER IF NOT EXISTS radar_snapshot_no_update
  BEFORE UPDATE ON issuer_runway_snapshots BEGIN
  SELECT RAISE(ABORT, 'runway snapshots are immutable'); END;
+
+-- Oberoende granskare (tillägg efter frysningen). Granskaren skriver ALDRIG
+-- i DeepSeeks tabeller; den lägger bara egna rader här. Ett run = högst ett
+-- provideranrop. idempotency_key gör att samma indata aldrig granskas två
+-- gånger med samma modell och promptversion.
+CREATE TABLE IF NOT EXISTS review_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    prompt_version TEXT NOT NULL,
+    input_sha256 TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    issuer_id INTEGER,
+    document_id INTEGER,
+    extraction_job_id INTEGER,
+    status TEXT NOT NULL,
+    error_type TEXT,
+    error TEXT,
+    response_id TEXT,
+    stop_reason TEXT,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    cache_read_tokens INTEGER,
+    estimated_input_tokens INTEGER NOT NULL DEFAULT 0,
+    latency_ms INTEGER,
+    raw_output TEXT,
+    attempt_count INTEGER NOT NULL DEFAULT 1,
+    deadline_at TEXT,
+    started_at TEXT NOT NULL,
+    completed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS review_verdicts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL REFERENCES review_runs(id),
+    task TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    prompt_version TEXT NOT NULL,
+    input_sha256 TEXT NOT NULL,
+    target_kind TEXT NOT NULL,
+    target_id INTEGER NOT NULL,
+    document_id INTEGER,
+    extraction_job_id INTEGER,
+    verdict TEXT NOT NULL,
+    issues_json TEXT NOT NULL DEFAULT '[]',
+    expected_value TEXT,
+    reasoning TEXT NOT NULL,
+    source_quote TEXT NOT NULL DEFAULT '',
+    quote_found_in_source INTEGER,
+    created_at TEXT NOT NULL,
+    UNIQUE(run_id, target_kind, target_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_runs_job
+    ON review_runs(extraction_job_id, model, prompt_version);
+
+CREATE INDEX IF NOT EXISTS idx_review_verdicts_target
+    ON review_verdicts(task, target_kind, target_id);
