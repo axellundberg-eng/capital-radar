@@ -16,6 +16,7 @@ from . import __version__
 from .api_auth import ApiError
 from .config import Settings
 from .radar_analysis import SnapshotObserver
+from .reviewer.api import build_review_router
 from .transaction_read_model import TransactionReadModel
 from .transaction_refresh import TransactionEditorialWorker
 from .web_api import WebServices, api_error_handler, build_static_router, build_web_router
@@ -84,5 +85,6 @@ def create_app(settings: Settings | None = None, *, start_workers: bool = True) 
         )
 
     app.include_router(build_web_router())
+    app.include_router(build_review_router(settings))
     app.include_router(build_static_router())
     return app
