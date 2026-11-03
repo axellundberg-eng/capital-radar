@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -10,12 +11,12 @@ from capital_radar.config import Settings
 
 
 def _settings(tmp_path: Path) -> Settings:
-    return Settings(
-        data_dir=tmp_path,
+    return replace(
+        Settings.from_env(),
         db_path=tmp_path / "screener.db",
         documents_path=tmp_path / "documents",
         git_sha="test-sha",
-        deepseek_api_key="",
+        deepseek_api_key=None,
     )
 
 
