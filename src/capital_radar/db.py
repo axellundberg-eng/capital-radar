@@ -24,6 +24,7 @@ from .normalization import (
     stable_hash,
     utc_now,
 )
+from .projection_revision import ensure_projection_revision_schema
 from .relevance import classify_title
 
 
@@ -163,6 +164,9 @@ class Database:
                         "updated_at": now,
                     },
                 )
+            # Sist: läsmodellens revisionstriggers. De versionshanteras av
+            # projection_revision och ligger därför inte i schema.sql.
+            ensure_projection_revision_schema(connection, applied_at=now)
 
     @staticmethod
     def _add_missing_columns(connection: sqlite3.Connection, schema: str) -> None:

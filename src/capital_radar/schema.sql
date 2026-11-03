@@ -128,6 +128,22 @@ CREATE TABLE IF NOT EXISTS action_progress_events (
     UNIQUE(action_id, sequence_no)
 );
 
+CREATE TABLE IF NOT EXISTS adjusted_runway_recalculations (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ issuer_id INTEGER NOT NULL REFERENCES issuers(id),
+ idempotency_key TEXT NOT NULL,
+ request_hash TEXT NOT NULL,
+ calculation_hash TEXT NOT NULL,
+ correction_ids_json TEXT NOT NULL,
+ before_json TEXT NOT NULL,
+ after_json TEXT NOT NULL,
+ actor TEXT NOT NULL,
+ reason TEXT NOT NULL,
+ status TEXT NOT NULL CHECK(status IN ('completed', 'failed')),
+ created_at TEXT NOT NULL,
+ UNIQUE(issuer_id, idempotency_key)
+);
+
 CREATE TABLE IF NOT EXISTS agent_artifacts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     issuer_id INTEGER REFERENCES issuers(id),
@@ -142,6 +158,74 @@ CREATE TABLE IF NOT EXISTS agent_artifacts (
     source_data_cutoff TEXT,
     created_at TEXT NOT NULL,
     UNIQUE(agent_type, artifact_kind, content_sha256)
+);
+
+CREATE TABLE IF NOT EXISTS financing_transaction_corrections (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ proposal_key TEXT NOT NULL UNIQUE,
+ correction_type TEXT NOT NULL,
+ transaction_id TEXT NOT NULL,
+ issuer_id INTEGER NOT NULL REFERENCES issuers(id),
+ expected_document_ids_json TEXT NOT NULL,
+ additional_document_ids_json TEXT NOT NULL DEFAULT '[]',
+ resulting_rounds_json TEXT NOT NULL,
+ reason TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'proposed',
+ original_feed_json TEXT NOT NULL,
+ applied_feed_json TEXT,
+ created_by TEXT NOT NULL,
+ approved_by TEXT,
+ applied_by TEXT,
+ reverted_by TEXT,
+ created_at TEXT NOT NULL,
+ approved_at TEXT,
+ applied_at TEXT,
+ reverted_at TEXT,
+ CHECK(correction_type IN (
+   'split_transaction','move_document','assign_document_to_round',
+   'unlink_document_from_transaction','rebuild_transaction'
+ )),
+ CHECK(status IN ('proposed','approved','applied','reverted'))
+);
+
+CREATE TABLE IF NOT EXISTS financing_transaction_value_corrections (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ proposal_key TEXT NOT NULL UNIQUE,
+ transaction_id TEXT NOT NULL,
+ issuer_id INTEGER NOT NULL REFERENCES issuers(id),
+ field_name TEXT NOT NULL,
+ expected_previous_value_json TEXT NOT NULL,
+ proposed_value_json TEXT NOT NULL,
+ source_document_id INTEGER NOT NULL REFERENCES documents(id),
+ source_excerpt TEXT NOT NULL,
+ confidence REAL NOT NULL CHECK(confidence BETWEEN 0 AND 1),
+ rationale TEXT NOT NULL,
+ original_transaction_json TEXT NOT NULL,
+ effective_transaction_json TEXT,
+ status TEXT NOT NULL DEFAULT 'proposed'
+   CHECK(status IN ('proposed','approved','applied','reverted','failed')),
+ created_by TEXT NOT NULL,
+ approved_by TEXT,
+ applied_by TEXT,
+ reverted_by TEXT,
+ created_at TEXT NOT NULL,
+ approved_at TEXT,
+ applied_at TEXT,
+ reverted_at TEXT,
+ last_apply_error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS agent_proposal_jobs (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, actor TEXT NOT NULL,
+ idempotency_key TEXT NOT NULL, request_json TEXT NOT NULL, request_sha256 TEXT NOT NULL,
+ issuer_id INTEGER NOT NULL, transaction_id TEXT NOT NULL, source_document_id INTEGER NOT NULL,
+ status TEXT NOT NULL DEFAULT 'queued'
+ CHECK(status IN ('queued','validating','proposed','rejected','failed')),
+ correction_id INTEGER REFERENCES financing_transaction_value_corrections(id),
+ error_code TEXT, retry_count INTEGER NOT NULL DEFAULT 0,
+ available_at REAL NOT NULL DEFAULT 0, lease_token TEXT, lease_until REAL,
+ created_at TEXT NOT NULL, started_at TEXT, finished_at TEXT, grouping_correction_id INTEGER REFERENCES financing_transaction_corrections(id),
+ UNIQUE(actor,idempotency_key)
 );
 
 CREATE TABLE IF NOT EXISTS agent_runs (
@@ -373,6 +457,20 @@ CREATE TABLE IF NOT EXISTS financing_events (
     updated_at TEXT NOT NULL
 , canonical_round_key TEXT, lifecycle_stage TEXT, stage_effective_at TEXT, financing_type TEXT, raw_type_description TEXT, issue_price REAL, shares_before REAL, shares_issued REAL, shares_after REAL, dilution REAL, market_price_reference REAL, vwap_reference REAL, market_cap_before REAL, raise_to_market_cap REAL, discount_to_spot REAL, discount_to_vwap REAL, subscription_commitment_amount REAL, subscription_commitment_pct REAL, guarantee_commitment_amount REAL, guarantee_commitment_pct REAL, secured_total_amount REAL, secured_total_pct REAL, final_subscription_amount REAL, final_subscription_pct REAL, subscription_without_guarantees_pct REAL, guarantee_utilized_amount REAL, guarantee_utilized_pct REAL, guarantee_fee_details TEXT, guarantee_fee_amount REAL, guarantee_fee_pct REAL, guarantee_fee_cash_pct REAL, guarantee_fee_share_pct REAL, guarantee_fee_basis TEXT, credit_limit REAL, drawn_amount REAL, undrawn_commitment REAL, transaction_cost REAL, transaction_cost_pct REAL, adviser TEXT, issuer_agent TEXT, outcome TEXT, extraction_version TEXT, normalization_version TEXT);
 
+CREATE TABLE IF NOT EXISTS financing_correction_proposals (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, proposal_key TEXT NOT NULL UNIQUE,
+ issuer_id INTEGER NOT NULL REFERENCES issuers(id), financing_event_id INTEGER NOT NULL REFERENCES financing_events(id),
+ canonical_round_key TEXT, correction_type TEXT NOT NULL,
+ field_name TEXT, previous_value_json TEXT, proposed_value_json TEXT,
+ expected_previous_value_json TEXT, source_document_id INTEGER REFERENCES documents(id),
+ source_excerpt TEXT, confidence REAL NOT NULL, rationale TEXT NOT NULL,
+ impact_preview_json TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'proposed',
+ created_by TEXT NOT NULL, approved_by TEXT, applied_by TEXT, created_at TEXT NOT NULL,
+ approved_at TEXT, applied_at TEXT, reverted_at TEXT, resolution_note TEXT,
+ CHECK(correction_type IN ('fill_field','replace_field','clear_field','change_lifecycle','assign_round','merge_events','supersede_duplicate','exclude_cash_effect','restore_cash_effect')),
+ CHECK(status IN ('proposed','approved','applied','rejected','reverted','superseded'))
+);
+
 CREATE TABLE IF NOT EXISTS financing_event_enrichment_facts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     financing_event_id INTEGER NOT NULL REFERENCES financing_events(id),
@@ -442,6 +540,28 @@ CREATE TABLE IF NOT EXISTS financing_event_relationships (
     CHECK(financing_event_id <> related_financing_event_id)
 );
 
+CREATE TABLE IF NOT EXISTS financing_field_proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposal_key TEXT NOT NULL UNIQUE,
+    issuer_id INTEGER NOT NULL REFERENCES issuers(id),
+    financing_event_id INTEGER NOT NULL REFERENCES financing_events(id),
+    field_name TEXT NOT NULL,
+    proposed_value_json TEXT NOT NULL,
+    previous_value_json TEXT,
+    source_document_id INTEGER NOT NULL REFERENCES documents(id),
+    source_excerpt TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    rationale TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'proposed'
+        CHECK(status IN ('proposed', 'applied', 'rejected', 'superseded')),
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    reviewed_by TEXT,
+    reviewed_at TEXT,
+    resolution_note TEXT,
+    applied_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS financing_market_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     issuer_id INTEGER NOT NULL REFERENCES issuers(id),
@@ -459,6 +579,16 @@ CREATE TABLE IF NOT EXISTS financing_market_snapshots (
     created_at TEXT NOT NULL,
     UNIQUE(issuer_id, as_of_date)
 );
+
+CREATE TABLE IF NOT EXISTS financing_notification_corrections(
+ id INTEGER PRIMARY KEY, actor TEXT NOT NULL, issuer_id INTEGER NOT NULL,
+ group_key TEXT NOT NULL, before_json TEXT NOT NULL, after_json TEXT NOT NULL,
+ evidence_json TEXT NOT NULL, rationale TEXT NOT NULL, created_at TEXT NOT NULL);
+
+CREATE TABLE IF NOT EXISTS financing_notification_members(
+ transaction_id TEXT PRIMARY KEY, issuer_id INTEGER NOT NULL, group_key TEXT NOT NULL,
+ correction_id INTEGER NOT NULL REFERENCES financing_notification_corrections(id),
+ ordinal INTEGER NOT NULL);
 
 CREATE TABLE IF NOT EXISTS financing_outcome_market_days (
     financing_event_id INTEGER NOT NULL REFERENCES financing_events(id),
@@ -482,6 +612,105 @@ CREATE TABLE IF NOT EXISTS financing_outcome_market_metrics (
     source_url TEXT NOT NULL,
     retrieved_at TEXT NOT NULL,
     complete INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS financing_overrides (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, proposal_id INTEGER NOT NULL UNIQUE REFERENCES financing_correction_proposals(id),
+ financing_event_id INTEGER NOT NULL REFERENCES financing_events(id), field_name TEXT NOT NULL,
+ override_value_json TEXT, source_document_id INTEGER REFERENCES documents(id), source_excerpt TEXT,
+ active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, reverted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS financing_round_memberships (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, issuer_id INTEGER NOT NULL REFERENCES issuers(id), canonical_round_key TEXT NOT NULL,
+ financing_event_id INTEGER NOT NULL REFERENCES financing_events(id), lifecycle_stage TEXT, language TEXT,
+ is_primary INTEGER NOT NULL DEFAULT 0, superseded_by_event_id INTEGER REFERENCES financing_events(id),
+ cash_effect_included INTEGER NOT NULL DEFAULT 1, proposal_id INTEGER REFERENCES financing_correction_proposals(id),
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+ UNIQUE(issuer_id, canonical_round_key, financing_event_id)
+);
+
+CREATE TABLE IF NOT EXISTS financing_transaction_document_links (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ correction_id INTEGER NOT NULL REFERENCES financing_transaction_value_corrections(id),
+ issuer_id INTEGER NOT NULL REFERENCES issuers(id),
+ document_id INTEGER NOT NULL REFERENCES documents(id),
+ canonical_round_key TEXT NOT NULL,
+ category TEXT NOT NULL,
+ financing_event_id INTEGER REFERENCES financing_events(id),
+ transaction_id TEXT,
+ relation_action TEXT NOT NULL DEFAULT 'link',
+ active INTEGER NOT NULL DEFAULT 1,
+ deactivated_by_correction_id INTEGER REFERENCES financing_transaction_value_corrections(id),
+ created_at TEXT NOT NULL,
+ reverted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS financing_transaction_document_overrides (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ correction_id INTEGER NOT NULL REFERENCES financing_transaction_corrections(id),
+ issuer_id INTEGER NOT NULL REFERENCES issuers(id),
+ document_id INTEGER NOT NULL REFERENCES documents(id),
+ canonical_round_key TEXT NOT NULL,
+ active INTEGER NOT NULL DEFAULT 1,
+ created_at TEXT NOT NULL,
+ reverted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS financing_transaction_grouping_consolidations (
+ correction_id INTEGER PRIMARY KEY REFERENCES financing_transaction_corrections(id),
+ issuer_id INTEGER NOT NULL REFERENCES issuers(id), plan_json TEXT NOT NULL,
+ fingerprints_json TEXT NOT NULL, max_value_row_id INTEGER NOT NULL,
+ active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, reverted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS financing_transaction_grouping_replacements (
+ correction_id INTEGER NOT NULL REFERENCES financing_transaction_corrections(id),
+ previous_override_id INTEGER NOT NULL REFERENCES financing_transaction_document_overrides(id),
+ PRIMARY KEY(correction_id,previous_override_id)
+);
+
+CREATE TABLE IF NOT EXISTS financing_transaction_instrument_bindings (
+ correction_id INTEGER PRIMARY KEY REFERENCES financing_transaction_corrections(id),
+ issuer_id INTEGER NOT NULL REFERENCES issuers(id),
+ transaction_id TEXT NOT NULL, category TEXT NOT NULL,
+ canonical_round_key TEXT NOT NULL, document_ids_json TEXT NOT NULL,
+ source_fingerprints_json TEXT NOT NULL,
+ preserved_membership_json TEXT NOT NULL,
+ active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, reverted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS financing_transaction_projection_bindings (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ correction_id INTEGER NOT NULL UNIQUE REFERENCES financing_transaction_corrections(id),
+ issuer_id INTEGER NOT NULL REFERENCES issuers(id),
+ canonical_round_key TEXT NOT NULL,
+ transaction_id TEXT NOT NULL,
+ category TEXT NOT NULL,
+ document_ids_json TEXT NOT NULL,
+ neutral_document_ids_json TEXT NOT NULL,
+ neutral_source_fingerprints_json TEXT NOT NULL,
+ retired_transaction_ids_json TEXT NOT NULL,
+ active INTEGER NOT NULL DEFAULT 1,
+ created_at TEXT NOT NULL,
+ reverted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS financing_transaction_stage_evidence (
+ correction_id INTEGER PRIMARY KEY REFERENCES financing_transaction_value_corrections(id),
+ evidence_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS financing_transaction_value_overrides (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ correction_id INTEGER NOT NULL REFERENCES financing_transaction_value_corrections(id),
+ transaction_id TEXT NOT NULL,
+ field_name TEXT NOT NULL,
+ value_json TEXT NOT NULL,
+ active INTEGER NOT NULL DEFAULT 1,
+ deactivated_by_correction_id INTEGER REFERENCES financing_transaction_value_corrections(id),
+ created_at TEXT NOT NULL,
+ reverted_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS issuer_aliases (
@@ -539,6 +768,14 @@ CREATE TABLE IF NOT EXISTS issuer_report_refresh_state (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS issuer_runway_snapshots (
+ issuer_id INTEGER NOT NULL REFERENCES issuers(id), snapshot_date TEXT NOT NULL,
+ reported_runway_months REAL, adjusted_runway_months REAL, runway_band TEXT,
+ cash REAL, monthly_burn REAL, calculation_version TEXT NOT NULL,
+ calculation_json TEXT NOT NULL, created_at TEXT NOT NULL,
+ PRIMARY KEY(issuer_id, snapshot_date)
+);
+
 CREATE TABLE IF NOT EXISTS issuer_screening_overrides (
     issuer_id INTEGER PRIMARY KEY REFERENCES issuers(id),
     eligible INTEGER NOT NULL,
@@ -563,6 +800,12 @@ CREATE TABLE IF NOT EXISTS issuer_workflow (
     follow_up_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS radar_financing_weights (
+ id INTEGER PRIMARY KEY, issuer_id INTEGER NOT NULL REFERENCES issuers(id),
+ transaction_id TEXT NOT NULL, weight REAL NOT NULL CHECK(weight BETWEEN 0 AND 1),
+ actor TEXT NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS report_extractions (
@@ -616,6 +859,12 @@ CREATE TABLE IF NOT EXISTS report_refresh_items (
     updated_at TEXT NOT NULL,
     completed_at TEXT,
     UNIQUE(run_id, issuer_id)
+);
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    applied_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS screening_batches (
@@ -706,6 +955,9 @@ CREATE TABLE IF NOT EXISTS universe_snapshot_members (
     PRIMARY KEY(snapshot_id, security_id)
 );
 
+CREATE INDEX IF NOT EXISTS adjusted_runway_recalculations_issuer
+ ON adjusted_runway_recalculations(issuer_id, id DESC);
+
 CREATE INDEX IF NOT EXISTS idx_action_progress_events_cursor
     ON action_progress_events(action_id, sequence_no);
 
@@ -714,6 +966,8 @@ CREATE INDEX IF NOT EXISTS idx_agent_artifacts_case
 
 CREATE INDEX IF NOT EXISTS idx_agent_artifacts_issuer
     ON agent_artifacts(issuer_id, agent_type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_agent_proposal_queue ON agent_proposal_jobs(status,available_at,id);
 
 CREATE INDEX IF NOT EXISTS idx_agent_review_financing_document ON financing_event_evidence(document_id);
 
@@ -756,6 +1010,8 @@ CREATE INDEX IF NOT EXISTS idx_extraction_jobs_status
 CREATE INDEX IF NOT EXISTS idx_financial_facts_lookup
     ON financial_facts(issuer_id, fact_type, period_end, as_of_date);
 
+CREATE INDEX IF NOT EXISTS idx_financing_correction_proposals_queue ON financing_correction_proposals(status, created_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_financing_enrichment_event
     ON financing_event_enrichment_facts(financing_event_id, field_name);
 
@@ -765,17 +1021,27 @@ CREATE INDEX IF NOT EXISTS idx_financing_events_canonical_round
 CREATE INDEX IF NOT EXISTS idx_financing_events_issuer_date
     ON financing_events(issuer_id, effective_date, announcement_date);
 
+CREATE INDEX IF NOT EXISTS idx_financing_field_proposals_event
+    ON financing_field_proposals(financing_event_id, field_name, status);
+
+CREATE INDEX IF NOT EXISTS idx_financing_field_proposals_queue
+    ON financing_field_proposals(status, created_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_financing_guarantee_tranches_event
     ON financing_event_guarantee_tranches(financing_event_id, tier);
 
 CREATE INDEX IF NOT EXISTS idx_financing_outcome_market_days_date
     ON financing_outcome_market_days(trading_date);
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_financing_override_active ON financing_overrides(financing_event_id, field_name) WHERE active=1;
+
 CREATE INDEX IF NOT EXISTS idx_financing_participants_event
     ON financing_event_participants(financing_event_id, role);
 
 CREATE INDEX IF NOT EXISTS idx_financing_relationships_related
     ON financing_event_relationships(related_financing_event_id, relationship_type);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_financing_round_primary ON financing_round_memberships(issuer_id, canonical_round_key) WHERE is_primary=1;
 
 CREATE INDEX IF NOT EXISTS idx_issuer_alias_normalized
     ON issuer_aliases(normalized_alias);
@@ -822,3 +1088,53 @@ CREATE INDEX IF NOT EXISTS idx_securities_isin ON securities(isin);
 
 CREATE INDEX IF NOT EXISTS idx_securities_market_segment
     ON securities(market, segment, active);
+
+CREATE INDEX IF NOT EXISTS idx_transaction_corrections_status
+ ON financing_transaction_corrections(status, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transaction_document_link_active
+ ON financing_transaction_document_links(document_id,canonical_round_key,category)
+ WHERE active=1;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transaction_document_override_active
+ ON financing_transaction_document_overrides(document_id) WHERE active=1;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transaction_value_override_active
+ ON financing_transaction_value_overrides(transaction_id,field_name) WHERE active=1;
+
+CREATE INDEX IF NOT EXISTS idx_transaction_value_status
+ ON financing_transaction_value_corrections(status,created_at DESC);
+
+CREATE INDEX IF NOT EXISTS notification_members_issuer ON financing_notification_members(issuer_id,group_key);
+
+CREATE INDEX IF NOT EXISTS radar_weight_latest
+ ON radar_financing_weights(transaction_id, id);
+
+CREATE TRIGGER IF NOT EXISTS adjusted_runway_recalculations_no_delete
+ BEFORE DELETE ON adjusted_runway_recalculations BEGIN
+ SELECT RAISE(ABORT, 'runway recalculation audits are immutable'); END;
+
+CREATE TRIGGER IF NOT EXISTS adjusted_runway_recalculations_no_update
+ BEFORE UPDATE ON adjusted_runway_recalculations BEGIN
+ SELECT RAISE(ABORT, 'runway recalculation audits are immutable'); END;
+
+CREATE TRIGGER IF NOT EXISTS agent_proposal_request_immutable
+ BEFORE UPDATE OF actor,idempotency_key,request_json,request_sha256,issuer_id,transaction_id,source_document_id,created_at
+ ON agent_proposal_jobs BEGIN SELECT RAISE(ABORT,'immutable_agent_request'); END;
+
+CREATE TRIGGER IF NOT EXISTS agent_proposal_request_no_delete BEFORE DELETE ON agent_proposal_jobs
+ BEGIN SELECT RAISE(ABORT,'immutable_agent_request'); END;
+
+CREATE TRIGGER IF NOT EXISTS notification_audit_no_delete BEFORE DELETE ON financing_notification_corrections
+ BEGIN SELECT RAISE(ABORT,'immutable_notification_audit'); END;
+
+CREATE TRIGGER IF NOT EXISTS notification_audit_no_update BEFORE UPDATE ON financing_notification_corrections
+ BEGIN SELECT RAISE(ABORT,'immutable_notification_audit'); END;
+
+CREATE TRIGGER IF NOT EXISTS radar_snapshot_no_delete
+ BEFORE DELETE ON issuer_runway_snapshots BEGIN
+ SELECT RAISE(ABORT, 'runway snapshots are immutable'); END;
+
+CREATE TRIGGER IF NOT EXISTS radar_snapshot_no_update
+ BEFORE UPDATE ON issuer_runway_snapshots BEGIN
+ SELECT RAISE(ABORT, 'runway snapshots are immutable'); END;

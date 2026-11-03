@@ -83,6 +83,32 @@ def test_missing_required_column_fails_loudly(tmp_path: Path) -> None:
         Database(path).initialize()
 
 
-def test_schema_has_no_triggers() -> None:
-    # Läsmodellernas triggers från den gamla tjänsten följer inte med.
-    assert "CREATE TRIGGER" not in schema_sql().upper()
+def test_schema_freezes_only_audit_triggers() -> None:
+    schema = schema_sql()
+    # Skydd mot ändring av granskningsloggar följer med i schemat ...
+    assert "notification_audit_no_update" in schema
+    # ... men läsmodellens revisionstriggers installeras av projection_revision.
+    assert "trg_dashboard_projection_" not in schema
+
+
+def test_initialize_installs_projection_revision_tracking(tmp_path: Path) -> None:
+    db = Database(tmp_path / "screener.db")
+    db.initialize()
+    with closing(sqlite3.connect(db.path)) as connection:
+        triggers = {
+            name for (name,) in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='trigger'"
+            )
+        }
+        revision = connection.execute(
+            "SELECT revision FROM dashboard_projection_revision"
+        ).fetchone()[0]
+    assert "trg_dashboard_projection_documents_insert" in triggers
+    # CRM följer inte med och bevakas därför inte.
+    assert not any("issuer_crm" in name for name in triggers)
+    db.initialize()
+    with closing(sqlite3.connect(db.path)) as connection:
+        again = connection.execute(
+            "SELECT revision FROM dashboard_projection_revision"
+        ).fetchone()[0]
+    assert again == revision

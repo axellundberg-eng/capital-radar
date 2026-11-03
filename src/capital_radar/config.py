@@ -84,7 +84,21 @@ class Settings:
     research_max_results: int = 5
     mfn_monitor_enabled: bool = True
     mfn_monitor_interval_seconds: int = 3600
+    anthropic_api_key: str | None = field(default=None, repr=False)
+    reviewer_model: str = "claude-haiku-5-5"
+    reviewer_effort: str = "medium"
+    reviewer_max_output_tokens: int = 8000
+    reviewer_connect_timeout_seconds: float = 10.0
+    reviewer_read_timeout_seconds: float = 90.0
+    reviewer_hard_timeout_seconds: float = 120.0
+    reviewer_max_source_chars: int = 24_000
+    reviewer_headline_batch_size: int = 40
     git_sha: str = "dev"
+
+    @property
+    def reviewer_enabled(self) -> bool:
+        """Granskaren är avstängd utan nyckel; inget annat påverkas."""
+        return bool(self.anthropic_api_key)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -325,6 +339,27 @@ class Settings:
                     int(os.getenv("SCREENER_MFN_MONITOR_INTERVAL", "3600")),
                 ),
             ),
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY") or None,
+            reviewer_model=os.getenv("REVIEWER_MODEL", "claude-haiku-5-5").strip(),
+            reviewer_effort=os.getenv("REVIEWER_EFFORT", "medium").strip().casefold(),
+            reviewer_max_output_tokens=max(
+                1024, int(os.getenv("REVIEWER_MAX_OUTPUT_TOKENS", "8000"))
+            ),
+            reviewer_connect_timeout_seconds=float(
+                os.getenv("REVIEWER_CONNECT_TIMEOUT_SECONDS", "10")
+            ),
+            reviewer_read_timeout_seconds=float(
+                os.getenv("REVIEWER_READ_TIMEOUT_SECONDS", "90")
+            ),
+            reviewer_hard_timeout_seconds=float(
+                os.getenv("REVIEWER_HARD_TIMEOUT_SECONDS", "120")
+            ),
+            reviewer_max_source_chars=max(
+                2_000, int(os.getenv("REVIEWER_MAX_SOURCE_CHARS", "24000"))
+            ),
+            reviewer_headline_batch_size=max(
+                1, min(100, int(os.getenv("REVIEWER_HEADLINE_BATCH_SIZE", "40")))
+            ),
             git_sha=os.getenv("GIT_SHA", "dev"),
         )
         _validate_timeout_order(settings)
@@ -374,3 +409,16 @@ def _validate_timeout_order(settings: Settings) -> None:
                     f"{prefix}_CONNECT/READ/HARD_TIMEOUT_SECONDS måste vara "
                     "positiva och stigande (connect <= read < hard)"
                 )
+    if settings.anthropic_api_key:
+        # AGENTS.md: ingen enskild operation får gå längre än 180 sekunder.
+        if not (
+            0
+            < settings.reviewer_connect_timeout_seconds
+            <= settings.reviewer_read_timeout_seconds
+            < settings.reviewer_hard_timeout_seconds
+            <= 180
+        ):
+            raise ValueError(
+                "REVIEWER_CONNECT/READ/HARD_TIMEOUT_SECONDS måste vara "
+                "positiva och stigande (connect <= read < hard <= 180)"
+            )
