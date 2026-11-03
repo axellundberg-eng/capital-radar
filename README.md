@@ -8,10 +8,20 @@ Cap, First North och NGM. Efterträder `Screener-analys-hus`, som arkiveras.
 | Fas | Innehåll | Status |
 | --- | --- | --- |
 | 1 | Grund: FastAPI, Docker, CI, backup och tunnel | Klar |
-| 2 | Screener + runway (källor, dokument, extraction, runway) | Ej påbörjad |
+| 2 | Screener + runway (källor, dokument, extraction, runway) | Klar (körs via API i fas 4) |
 | 3 | Transaktionsflöde (feed, rättningar, läsmodell, radar) | Ej påbörjad |
 | 4 | Webbgränssnitt och API | Ej påbörjad |
 | 5 | Drift på Hetzner med Cloudflare Access | Ej påbörjad |
+
+## Avgränsning
+
+Med från Screener-analys-hus: bolagsuniversum, MFN/Nasdaq/NGM-källor,
+dokumenthämtning, AI-extraction, runway, report refresh och analysköer.
+Databasschemat i `src/capital_radar/schema.sql` är fryst från den gamla
+tjänsten och kan öppna produktionsdatabasen oförändrad.
+
+Inte med: emissionsgarantier, granskningsagenter, CRM, nyhetskommentarer och
+webbsökning vid otillräckliga fakta (`web_fallback`).
 
 ## Lokal utveckling
 
