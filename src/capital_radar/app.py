@@ -6,13 +6,19 @@ OpenAPI-specen genereras automatiskt från routrarna (/openapi.json, /docs).
 from __future__ import annotations
 
 import sqlite3
-from contextlib import closing
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, closing
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from . import __version__
+from .api_auth import ApiError
 from .config import Settings
+from .radar_analysis import SnapshotObserver
+from .transaction_read_model import TransactionReadModel
+from .transaction_refresh import TransactionEditorialWorker
+from .web_api import WebServices, api_error_handler, build_static_router, build_web_router
 
 
 def _database_status(settings: Settings) -> dict[str, object]:
@@ -29,10 +35,38 @@ def _database_status(settings: Settings) -> dict[str, object]:
     return {"status": "ok", "schema_version": schema_version, "journal_mode": journal_mode}
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, *, start_workers: bool = True) -> FastAPI:
+    """`start_workers=False` ger en app utan bakgrundstrådar (för tester).
+
+    Utan läsmodell läser API:t direkt ur databasen, som gamla servern gjorde.
+    """
     settings = settings or Settings.from_env()
-    app = FastAPI(title="Capital Radar", version=__version__)
+    web = WebServices.build(settings)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        if not start_workers:
+            yield
+            return
+        settings.db_path.parent.mkdir(parents=True, exist_ok=True)
+        web.database.initialize()
+        web.read_model = TransactionReadModel(settings.db_path)
+        web.editorial_worker = TransactionEditorialWorker(web.database, settings)
+        snapshot_observer = SnapshotObserver(web.database)
+        web.read_model.start()
+        web.editorial_worker.start()
+        snapshot_observer.start()
+        try:
+            yield
+        finally:
+            snapshot_observer.stop()
+            web.editorial_worker.stop()
+            web.read_model.stop()
+
+    app = FastAPI(title="Capital Radar", version=__version__, lifespan=lifespan)
     app.state.settings = settings
+    app.state.web = web
+    app.add_exception_handler(ApiError, api_error_handler)
 
     @app.get("/health", tags=["drift"])
     def health() -> JSONResponse:
@@ -49,4 +83,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             },
         )
 
+    app.include_router(build_web_router())
+    app.include_router(build_static_router())
     return app

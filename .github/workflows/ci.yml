@@ -20,6 +20,11 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - run: pytest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Frontend tests
+        run: node --test tests/js/workspace_loading.test.js tests/js/admin_auth.test.js
 
   image:
     needs: test
@@ -54,7 +59,11 @@ jobs:
           sudo chown -R 1000:1000 data
           docker run -d --name smoke -p 8000:8000 -v "$PWD/data:/data" ghcr.io/${{ github.repository }}:${{ github.sha }}
           for i in $(seq 1 20); do
-            if curl -fsS http://127.0.0.1:8000/health; then exit 0; fi
+            if curl -fsS http://127.0.0.1:8000/health; then
+              curl -fsS -o /dev/null http://127.0.0.1:8000/
+              curl -fsS -o /dev/null http://127.0.0.1:8000/workspace.js
+              exit 0
+            fi
             sleep 2
           done
           docker logs smoke

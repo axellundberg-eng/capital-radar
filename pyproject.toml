@@ -28,7 +28,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-capital_radar = ["schema.sql"]
+capital_radar = ["schema.sql", "web/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
