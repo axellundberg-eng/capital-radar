@@ -101,6 +101,11 @@ def compute(facts: list[Fact], period_end: str, *, today: str) -> Runway:
     if cash is None:
         result.status = "missing_cash"
         return result
+    placements = next((f.value for f in facts if f.kind == "short_term_investments"
+                       and f.period_end == period_end), 0.0)
+    if placements:
+        result.flags.append("includes_short_term_investments")
+        cash += placements
     result.cash = cash
     result.periods = _periods(facts, period_end)
     if not result.periods:
@@ -124,5 +129,8 @@ def compute(facts: list[Fact], period_end: str, *, today: str) -> Runway:
         result.cash_flow_positive = True
         return result
     result.runway_at_report = round(cash / chosen.monthly_burn, 1)
+    if cash / chosen.monthly_burn < since:
+        # Kassan borde redan vara slut: nästan alltid ny finansiering efter rapporten.
+        result.flags.append("cash_exhausted_since_report")
     result.runway_today = round(max(0.0, cash - chosen.monthly_burn * since) / chosen.monthly_burn, 1)
     return result

@@ -3,13 +3,14 @@
 const BANDS = [
   ["3_9", "3–9 mån", "Målgrupp"],
   ["under_3", "Under 3 mån", "Akut"],
+  ["exhausted", "Kassa slut enl. rapport", "Kolla finansiering"],
   ["9_18", "9–18 mån", "Bevaka"],
   ["over_18", "Över 18 mån", ""],
   ["positive", "Kassaflödespositiva", ""],
   ["missing", "Saknar data", ""],
   ["all", "Alla", ""],
 ];
-const KIND = { cash: "Likvida medel", operating_cash_flow: "Kassaflöde, löpande verksamhet",
+const KIND = { cash: "Likvida medel", short_term_investments: "Kortfristiga placeringar", operating_cash_flow: "Kassaflöde, löpande verksamhet",
   capex: "Investeringar (capex)", investing_cash_flow: "Kassaflöde, investeringar" };
 
 const state = { items: [], band: "3_9", query: "", hideStale: false, selected: null, overview: null };
@@ -45,6 +46,7 @@ function visible() {
 function runwayCell(item) {
   if (item.status !== "ok") return '<span class="pill muted">Saknar data</span>';
   if (item.cash_flow_positive) return '<span class="pill good">Positivt</span>';
+  if (item.band === "exhausted") return '<span class="pill band-exhausted" title="Kassan borde vara slut sedan rapporten">Slut?</span>';
   const recent = item.recent_runway_today != null
     ? `<small title="I senaste periodens takt">${months(item.recent_runway_today)} i senaste takt</small>` : "";
   return `<span class="pill band-${item.band}">${months(item.runway_today)}</span>${recent}`;
@@ -75,6 +77,9 @@ function renderRows() {
 function explanation(d) {
   if (d.status !== "ok") return "Runway kan inte beräknas: rapporten saknar kassa eller kassaflöde.";
   if (d.cash_flow_positive) return "Bolaget har positivt kassaflöde efter investeringar och bränner inte kassa.";
+  if (d.band === "exhausted") return `Kassan ${msek(d.cash)} den ${date(d.period_end)} räckte ${months(d.runway_at_report)} med en burn på`
+    + ` ${msek(d.monthly_burn)} per månad, men ${months(d.months_since_report)} har gått. Bolaget har med stor sannolikhet`
+    + " tagit in ny finansiering efter rapporten. Kontrollera pressmeddelanden innan kontakt.";
   const chosen = d.periods.find((p) => Math.abs(p.monthly_burn - d.monthly_burn) < 1) || d.periods.at(-1);
   return `Kassan var ${msek(d.cash)} den ${date(d.period_end)}. Bolaget bränner ${msek(d.monthly_burn)} per månad`
     + ` (baserat på ${chosen?.months ?? "?"} månader). Sedan dess har ${months(d.months_since_report)} gått,`

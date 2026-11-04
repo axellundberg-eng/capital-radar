@@ -29,6 +29,7 @@ Svara med enbart ett JSON-objekt:
   "unit": "enheten som tabellerna anges i, t.ex. TSEK, MSEK, kSEK, SEK, TEUR",
   "currency": "SEK",
   "cash": {"value": tal, "date": "YYYY-MM-DD", "page": sidnummer, "quote": "kort citat"} eller null,
+  "short_term_investments": {"value": tal, "date": "YYYY-MM-DD", "page": sidnummer, "quote": "kort citat"} eller null,
   "cash_flows": [
     {"kind": "operating_cash_flow | capex | operating_investments | investing_cash_flow",
      "value": tal, "period_start": "YYYY-MM-DD", "period_end": "YYYY-MM-DD",
@@ -39,6 +40,9 @@ Svara med enbart ett JSON-objekt:
 Regler:
 - "value" anges exakt som i tabellen, i angiven enhet, med tecken (utflöde negativt).
 - cash = likvida medel vid periodens slut.
+- short_term_investments = kortfristiga placeringar (t.ex. räntefonder, kortfristiga
+  finansiella placeringar) i balansräkningen vid periodens slut, om de inte redan ingår
+  i likvida medel. Annars null.
 - operating_cash_flow = kassaflöde från den löpande verksamheten (efter förändring av rörelsekapital).
 - capex = investeringar i materiella och immateriella anläggningstillgångar (inklusive
   aktiverade utvecklingsutgifter), summerat om de står på flera rader. Inte förvärv av bolag.
@@ -166,6 +170,11 @@ def parse_response(raw: str) -> Extraction:
     if isinstance(cash, dict) and _number(cash.get("value")) is not None:
         facts.append(ExtractedFact("cash", _number(cash["value"]) * multiplier, currency, None,
                                    _date(cash.get("date")) or end, cash.get("page"), cash.get("quote")))
+    placements = data.get("short_term_investments")
+    if isinstance(placements, dict) and _number(placements.get("value")) is not None:
+        facts.append(ExtractedFact("short_term_investments", abs(_number(placements["value"])) * multiplier,
+                                   currency, None, _date(placements.get("date")) or end,
+                                   placements.get("page"), placements.get("quote")))
     for item in data.get("cash_flows") or []:
         if not isinstance(item, dict) or item.get("kind") not in KINDS:
             continue

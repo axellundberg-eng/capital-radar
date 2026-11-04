@@ -103,6 +103,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--facit", action="store_true")
     run.add_argument("--latest", action="store_true", help="senaste rapporten per bolag")
     run.add_argument("--reextract", action="store_true", help="extrahera igen (facit/--document)")
+    run.add_argument("--reextract-below", type=float, metavar="MÅN",
+                     help="med --latest: extrahera igen bolag med runway under MÅN månader")
     run.add_argument("--workers", type=int, default=4)
     run.add_argument("--limit", type=int)
     run.add_argument("--token-budget", type=int, default=8_000_000)
@@ -128,6 +130,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.facit:
         return run_facit(connection, settings, client, today, force=args.reextract)
     if args.latest:
+        if args.reextract_below is not None and client is not None:
+            for document_id, result_json in connection.execute(
+                    "SELECT document_id, result_json FROM runway_results").fetchall():
+                result = json.loads(result_json)
+                short = (result.get("status") == "ok" and not result.get("cash_flow_positive")
+                         and (result.get("runway_today") or 0) < args.reextract_below)
+                if short:
+                    reextract(connection, document_id)
         connection.close()
         counts = run_latest(settings, client, today=today, workers=args.workers, limit=args.limit,
                             token_budget=args.token_budget, log=lambda line: print(line, flush=True))

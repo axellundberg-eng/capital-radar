@@ -264,3 +264,22 @@ def test_extract_retries_once_on_broken_answer():
 
     result, _, _, usage = extract(Flaky(), ["Kassaflöde"])
     assert result.facts[0].value == 5 and usage["prompt_tokens"] == 20
+
+
+def test_short_term_investments_count_as_liquidity_and_exhausted_cash_is_flagged():
+    base = [("cash", 1e6, None), ("short_term_investments", 2e6, None), ("operating_cash_flow", -6e6, "2026-01-01")]
+    result = compute(facts(*base), END, today="2026-08-30")
+    assert result.cash == 3e6 and "includes_short_term_investments" in result.flags
+    late = compute(facts(*base), END, today="2026-12-31")
+    assert "cash_exhausted_since_report" in late.flags and late.runway_today == 0.0
+
+
+def test_one_report_per_company_when_published_in_two_languages(tmp_path, legacy_db):
+    from radar import batch
+
+    with sqlite3.connect(legacy_db) as db:
+        db.execute("INSERT INTO documents VALUES (12, 1, 'Interim report Q2', '2026-08-20', 'report')")
+        db.execute("INSERT INTO attachments VALUES (3, 12, 'https://storage.mfn.se/x/q2-en.pdf')")
+    connection = connect(tmp_path / "radar.db")
+    import_legacy(connection, legacy_db)
+    assert batch.latest_reports(connection) == [(10, "Exempel AB")]

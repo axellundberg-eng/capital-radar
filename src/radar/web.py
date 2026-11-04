@@ -24,6 +24,8 @@ FLAG_TEXT = {
     "stale_report": "Senaste rapporten är äldre än 7 månader",
     "recent_period_burn_higher": "Senaste perioden bränner snabbare än snittet",
     "investing_as_capex": "Investeringar uppskattade från investeringsflödet",
+    "includes_short_term_investments": "Likviditeten inkluderar kortfristiga placeringar",
+    "cash_exhausted_since_report": "Kassan borde vara slut sedan rapporten: kontrollera ny finansiering",
 }
 
 
@@ -32,6 +34,8 @@ def band(row: dict) -> str:
         return "missing"
     if row["cash_flow_positive"]:
         return "positive"
+    if "cash_exhausted_since_report" in row["flags"]:
+        return "exhausted"
     value = row["runway_today"]
     for name, low, high in BANDS:
         if value >= low and (high is None or value < high):
@@ -45,9 +49,10 @@ def latest_rows(connection: sqlite3.Connection) -> list[dict]:
            FROM companies c
            JOIN reports r ON r.company_id = c.id
            JOIN runway_results rr ON rr.document_id = r.document_id
-           WHERE r.published_at = (SELECT MAX(r2.published_at) FROM reports r2
-                                   JOIN runway_results x ON x.document_id = r2.document_id
-                                   WHERE r2.company_id = c.id)""").fetchall()
+           WHERE r.document_id = (SELECT r2.document_id FROM reports r2
+                                  JOIN runway_results x ON x.document_id = r2.document_id
+                                  WHERE r2.company_id = c.id
+                                  ORDER BY r2.published_at DESC, r2.document_id ASC LIMIT 1)""").fetchall()
     items = []
     for row in rows:
         result = json.loads(row["result_json"])

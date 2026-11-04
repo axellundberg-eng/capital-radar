@@ -18,10 +18,13 @@ from .extract import ChatClient
 from .pipeline import process
 from .settings import Settings
 
+# En rapport per bolag: senaste publiceringen; vid samma tidpunkt (svensk och engelsk
+# version) den med lägst id.
 LATEST_REPORTS = """
 SELECT r.document_id, c.name FROM reports r JOIN companies c ON c.id = r.company_id
-WHERE r.pdf_url IS NOT NULL AND r.published_at = (
-    SELECT MAX(r2.published_at) FROM reports r2 WHERE r2.company_id = r.company_id AND r2.pdf_url IS NOT NULL)
+WHERE r.document_id = (
+    SELECT r2.document_id FROM reports r2 WHERE r2.company_id = r.company_id AND r2.pdf_url IS NOT NULL
+    ORDER BY r2.published_at DESC, r2.document_id ASC LIMIT 1)
 ORDER BY c.name COLLATE NOCASE
 """
 
