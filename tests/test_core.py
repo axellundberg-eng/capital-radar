@@ -283,3 +283,22 @@ def test_one_report_per_company_when_published_in_two_languages(tmp_path, legacy
     connection = connect(tmp_path / "radar.db")
     import_legacy(connection, legacy_db)
     assert batch.latest_reports(connection) == [(10, "Exempel AB")]
+
+
+def test_token_budget_counts_only_this_runs_own_reports(tmp_path, legacy_db, monkeypatch):
+    from radar import batch
+
+    settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "files")
+    connection = connect(settings.db_path)
+    import_legacy(connection, legacy_db)
+    with connection:  # tidigare körningars tokens får inte räknas mot den här budgeten
+        connection.execute("INSERT INTO extractions(document_id, model, pages, status, prompt_tokens, "
+                           "completion_tokens, created_at) VALUES (10, 'm', '[]', 'invalid', 900000, 0, 'x')")
+    connection.close()
+    monkeypatch.setattr(pipeline, "fetch_pdf", lambda url, target, **_: (target, "abc"))
+    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde"])
+    answer = {"report_period_end": END, "unit": "MSEK", "cash": {"value": 12, "date": END},
+              "cash_flows": [{"kind": "operating_cash_flow", "value": -6, "period_start": "2026-01-01",
+                              "period_end": END}]}
+    counts = batch.run_latest(settings, FakeClient(answer), today=END, token_budget=1000, log=lambda _: None)
+    assert counts.get("ok") == 1 and counts["tokens_used"] == 150

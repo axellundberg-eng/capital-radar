@@ -34,9 +34,12 @@ def latest_reports(connection: sqlite3.Connection, limit: int | None = None) -> 
     return rows[:limit] if limit else rows
 
 
-def tokens_used(connection: sqlite3.Connection) -> int:
+def tokens_used(connection: sqlite3.Connection, document_id: int | None = None) -> int:
+    """Tokens för en rapport. Per rapport, så att parallella arbetare inte räknar varandras."""
+    where, params = ("WHERE document_id=?", (document_id,)) if document_id is not None else ("", ())
     row = connection.execute(
-        "SELECT COALESCE(SUM(prompt_tokens), 0) + COALESCE(SUM(completion_tokens), 0) FROM extractions").fetchone()
+        "SELECT COALESCE(SUM(prompt_tokens), 0) + COALESCE(SUM(completion_tokens), 0) FROM extractions "
+        + where, params).fetchone()
     return int(row[0])
 
 
@@ -60,7 +63,7 @@ def run_latest(settings: Settings, client: ChatClient | None, *, today: str, wor
     main = connect(settings.db_path)
     try:
         jobs = latest_reports(main, limit)
-        budget = Budget(token_budget, tokens_used(main))
+        budget = Budget(token_budget, 0)  # budgeten gäller den här körningen
     finally:
         main.close()
     counts: dict[str, int] = {}
@@ -69,10 +72,10 @@ def run_latest(settings: Settings, client: ChatClient | None, *, today: str, wor
     def work(document_id: int, name: str) -> str:
         connection = connect(settings.db_path)
         try:
-            before = tokens_used(connection)
+            before = tokens_used(connection, document_id)
             ai = None if budget.exhausted() else client
             outcome = process(connection, settings, ai, document_id, today=today, model=settings.deepseek_model)
-            budget.add(tokens_used(connection) - before)
+            budget.add(tokens_used(connection, document_id) - before)
         finally:
             connection.close()
         if outcome.get("status") == "failed":
