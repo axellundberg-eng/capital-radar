@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import json
 import logging
 import math
@@ -1914,7 +1915,9 @@ class ManualActionService:
         )
         purge_result: dict[str, int] = {}
         try:
-            purge_result = self.store.purge_document_raw_content(issuer_id)
+            # Avstängt som standard, se extraction_v2 (SCREENER_PURGE_DOCUMENT_CONTENT).
+            if os.getenv("SCREENER_PURGE_DOCUMENT_CONTENT", "false").lower() == "true":
+                purge_result = self.store.purge_document_raw_content(issuer_id)
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning(
                 "document_purge_failed issuer=%s error=%s", issuer_id, exc

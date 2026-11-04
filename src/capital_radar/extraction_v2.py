@@ -30,6 +30,7 @@ Idempotency är LCS-affärslogik och ligger UTANFÖR Instructor: samma
 
 from __future__ import annotations
 
+import os
 import asyncio
 import json
 import logging
@@ -947,10 +948,14 @@ async def run_extraction_v2_async(
         # "completed"-bolag: MFN-källan kan hämtas om via source_url om en
         # manuell kommentar behöver texten igen. Ett purge-fel får aldrig
         # fälla en lyckad extraction.
-        try:
-            store.purge_single_document_content(candidate.document_id)
-        except Exception:  # noqa: BLE001
-            pass
+        # Capital Radar: avstängt som standard. Raderad text gjorde att
+        # nyare rapporter aldrig kunde extraheras om (1 694 rapporter i den
+        # gamla databasen). Slå på med SCREENER_PURGE_DOCUMENT_CONTENT=true.
+        if os.getenv("SCREENER_PURGE_DOCUMENT_CONTENT", "false").lower() == "true":
+            try:
+                store.purge_single_document_content(candidate.document_id)
+            except Exception:  # noqa: BLE001
+                pass
         return {
             "status": "completed",
             "usage": usage,
