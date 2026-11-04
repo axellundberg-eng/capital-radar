@@ -6,6 +6,8 @@
     python -m radar run --latest           senaste rapporten per bolag (--workers, --limit, --token-budget)
     python -m radar news --latest          pressmeddelanden efter senaste rapporten: hitta finansiering
                                            (--max-runway 12, --workers, --token-budget, --max-items, --retry-failed)
+    python -m radar qualify                hämta saknat/gammalt marknadsvärde (Nasdaq) för bolag med runway
+                                           under 9 mån utan annonserad emission (--refresh-market tvingar om)
     python -m radar status                 antal rapporter per status
     python -m radar serve                  webbgränssnitt (RADAR_PORT, RADAR_BASE_PATH)
 """
@@ -22,8 +24,10 @@ from .db import connect
 from .extract import DeepSeekClient
 from .batch import run_latest
 from .importer import import_legacy
+from .marketcap import refresh_many
 from .news import run_news
 from .pipeline import process
+from .qualify import prospect_companies
 from .settings import Settings
 
 FACIT = Path(__file__).resolve().parent / "data" / "runway_facit.json"
@@ -91,6 +95,16 @@ def news_command(args, connection, settings: Settings, client, today: str) -> in
     return 0
 
 
+def qualify_command(args, connection, today: str) -> int:
+    from .web import latest_rows
+
+    wanted = [(i["id"], isin) for i, isin in prospect_companies(connection, latest_rows(connection))]
+    counts = refresh_many(connection, wanted, today, force=args.refresh_market)
+    counts["prospects"] = len(wanted)
+    print(json.dumps(counts, ensure_ascii=False), flush=True)
+    return 0
+
+
 def serve() -> int:
     import os
 
@@ -133,6 +147,8 @@ def main(argv: list[str] | None = None) -> int:
     news.add_argument("--token-budget", type=int, default=1_000_000)
     news.add_argument("--max-items", type=int, default=8, help="högst så många AI-granskade nyheter per bolag")
     news.add_argument("--retry-failed", action="store_true", help="försök igen med nyheter som misslyckats")
+    qualify = sub.add_parser("qualify")
+    qualify.add_argument("--refresh-market", action="store_true", help="hämta marknadsvärde igen även om det är färskt")
     sub.add_parser("status")
     sub.add_parser("serve")
     args = parser.parse_args(argv)
@@ -149,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
         rows = connection.execute("SELECT status, COUNT(*) FROM reports GROUP BY status").fetchall()
         print(json.dumps({row[0]: row[1] for row in rows}))
         return 0
+    if args.command == "qualify":
+        return qualify_command(args, connection, today)
     client = _client(settings)
     if client is None:
         print("DEEPSEEK_API_KEY saknas; kör bara hämtning och text.")

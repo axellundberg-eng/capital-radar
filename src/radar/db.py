@@ -85,6 +85,16 @@ CREATE TABLE IF NOT EXISTS financing_events (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS financing_company ON financing_events(company_id, event_date);
+CREATE TABLE IF NOT EXISTS market_data (
+    company_id INTEGER PRIMARY KEY,
+    isin TEXT,
+    market_cap REAL,                   -- hela valutaenheter
+    currency TEXT,
+    source TEXT,                       -- nasdaq
+    fetched_at TEXT NOT NULL,
+    error TEXT,
+    sector TEXT                        -- Nasdaqs sektornamn (ICB), när det finns
+);
 """
 
 

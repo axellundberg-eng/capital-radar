@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .db import connect
+from .qualify import load_history, load_market, qualify
 from .settings import Settings
 
 BANDS = (("under_3", 0, 3), ("3_9", 3, 9), ("9_18", 9, 18), ("over_18", 18, None))
@@ -132,12 +133,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 """SELECT kind, value, currency, period_start, period_end, page, quote FROM facts
                    WHERE extraction_id = (SELECT MAX(id) FROM extractions WHERE document_id=? AND status='ok')
                    ORDER BY kind, period_start""", (item["document_id"],))]
+            market = load_market(connection).get(company_id)
+            history = load_history(connection).get(company_id, [])
         finally:
             connection.close()
         return JSONResponse({**item, "pdf_url": report["pdf_url"], "page_count": report["page_count"],
                              "periods": result.get("periods", []), "facts": facts,
+                             "qualification": qualify(item, market, history).to_dict(),
                              "flag_text": {flag: FLAG_TEXT.get(flag, flag) for flag in item["flags"]}},
                             headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/prospects")
+    def prospects() -> JSONResponse:
+        connection = db()
+        try:
+            items = latest_rows(connection)
+            market, history = load_market(connection), load_history(connection)
+        finally:
+            connection.close()
+        out = []
+        for item in items:
+            if item["band"] not in ("3_9", "under_3") or "raise_announced" in item["flags"]:
+                continue
+            q = qualify(item, market.get(item["id"]), history.get(item["id"], []))
+            out.append({**item, **q.to_dict(), "market_error": (market.get(item["id"]) or {}).get("error")})
+        out.sort(key=lambda i: (-i["score"], i["runway_today"] or 0, i["name"].casefold()))
+        return JSONResponse({"items": out}, headers={"Cache-Control": "no-store"})
 
     app.mount("/static", StaticFiles(directory=str(static)), name="static")
 

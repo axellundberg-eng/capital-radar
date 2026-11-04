@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Capital Radar</title>
-  <link rel="stylesheet" href="static/styles.css?v=3">
+  <link rel="stylesheet" href="static/styles.css?v=4">
 </head>
 <body>
   <header class="top">
@@ -19,6 +19,12 @@
         <p>Runway räknas från idag: rapportens kassa minus burn sedan periodslut. Målgrupp: 3–9 månader.</p>
       </div>
 
+      <div class="views" id="views" role="tablist">
+        <button class="view active" data-view="list" role="tab">Lista</button>
+        <button class="view" data-view="prospects" role="tab">Prospekt</button>
+      </div>
+
+      <div id="listView">
       <nav class="bands" id="bands" aria-label="Runway-grupper"></nav>
 
       <div class="tools">
@@ -42,6 +48,27 @@
           <tbody id="rows"><tr><td colspan="6" class="empty">Laddar…</td></tr></tbody>
         </table>
       </div>
+      </div>
+
+      <div id="prospectView" hidden>
+        <p class="source">Bolag med runway under 9 månader och ingen annonserad emission, rankade efter prospektpoäng. Marknadsvärde från Nasdaq; saknas det visas "okänt".</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Bolag</th>
+                <th class="num">Poäng</th>
+                <th class="num">Runway idag</th>
+                <th class="num">Kapitalbehov</th>
+                <th class="num">Marknadsvärde</th>
+                <th class="num">Andel</th>
+                <th>Senaste emission</th>
+              </tr>
+            </thead>
+            <tbody id="prospectRows"><tr><td colspan="7" class="empty">Laddar…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <aside class="detail" id="detail" aria-live="polite">
@@ -49,6 +76,6 @@
     </aside>
   </main>
 
-  <script src="static/app.js?v=4" defer></script>
+  <script src="static/app.js?v=5" defer></script>
 </body>
 </html>

@@ -17,7 +17,7 @@ const TYPE = { rights_issue: "Företrädesemission", directed_issue: "Riktad emi
   convertible: "Konvertibel", warrants: "Teckningsoptioner", other: "Övrigt" };
 const STATUS = { announced: "Annonserad", completed: "Genomförd", cancelled: "Avbruten" };
 
-const state = { items: [], band: "3_9", query: "", hideStale: false, hideRaise: true, selected: null, overview: null };
+const state = { items: [], band: "3_9", query: "", hideStale: false, hideRaise: true, selected: null, overview: null, view: "list", prospects: null };
 const $ = (selector) => document.querySelector(selector);
 
 function escapeHtml(value) {
@@ -84,6 +84,58 @@ function renderRows() {
     </tr>`).join("") : '<tr><td colspan="6" class="empty">Inga bolag i den här gruppen.</td></tr>';
 }
 
+function scoreClass(score) { return score >= 70 ? "high" : score >= 45 ? "mid" : "low"; }
+function pct(value) { return value == null ? "okänt" : `${Math.round(value * 100)} %`; }
+
+function lastIssue(item) {
+  const e = item.last_issue;
+  if (!e) return '<span class="source">Ingen känd</span>';
+  return `${TYPE[e.type] || e.type}<small>${STATUS[e.status] || e.status} · ${date(e.date)}${e.amount != null ? " · " + msek(e.amount) : ""}</small>`;
+}
+
+function renderProspects() {
+  const items = state.prospects;
+  if (!items) return;
+  const rows = items;
+  $("#prospectRows").innerHTML = rows.length ? rows.map((item) => `
+    <tr data-id="${item.id}" class="${state.selected === item.id ? "selected" : ""}" tabindex="0">
+      <td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.market || "")}</small></td>
+      <td class="num"><span class="score ${scoreClass(item.score)}" title="${escapeHtml(item.summary)}">${item.score}</span></td>
+      <td class="num"><span class="pill band-${item.band}">${months(item.runway_today)}</span></td>
+      <td class="num">${msek(item.capital_need)}</td>
+      <td class="num">${item.market_cap ? msek(item.market_cap) : "okänt"}</td>
+      <td class="num">${pct(item.share)}</td>
+      <td>${lastIssue(item)}</td>
+    </tr>`).join("") : '<tr><td colspan="7" class="empty">Inga prospekt just nu.</td></tr>';
+}
+
+function qualificationSection(d) {
+  const q = d.qualification;
+  if (!q || state.view !== "prospects") return "";
+  const items = q.checks.map((c) => `<li class="st-${c.status}"><div><strong>${escapeHtml(c.label)}</strong>
+    <span class="st">${{ pass: "ok", warn: "varning", fail: "underkänd", info: "info" }[c.status]}</span></div>
+    <span>${escapeHtml(c.reason)}</span></li>`).join("");
+  return `<h3>Kvalificering · poäng ${q.score}/100</h3><p class="explain">${escapeHtml(q.summary)}</p>
+    <ul class="facts checks">${items}</ul>`;
+}
+
+async function loadProspects() {
+  try {
+    state.prospects = (await api("api/prospects")).items;
+    renderProspects();
+  } catch (error) {
+    $("#prospectRows").innerHTML = `<tr><td colspan="7" class="empty">Prospekten kunde inte läsas (${escapeHtml(error.message)}).</td></tr>`;
+  }
+}
+
+function setView(view) {
+  state.view = view;
+  document.querySelectorAll(".view").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+  $("#listView").hidden = view !== "list";
+  $("#prospectView").hidden = view !== "prospects";
+  if (view === "prospects" && !state.prospects) loadProspects();
+}
+
 function explanation(d) {
   if (d.status !== "ok") return "Runway kan inte beräknas: rapporten saknar kassa eller kassaflöde.";
   if (d.cash_flow_positive) return "Bolaget har positivt kassaflöde efter investeringar och bränner inte kassa.";
@@ -142,6 +194,7 @@ function renderDetail(d) {
     </div>
     <p class="explain">${explanation(d)}${financingNote(d)}</p>
     ${flags ? `<ul class="flags">${flags}</ul>` : ""}
+    ${qualificationSection(d)}
     ${financingSection(d)}
     <h3>Perioder</h3>
     <table class="mini"><thead><tr><th>Period</th><th class="num">Löpande</th><th class="num">Investeringar</th><th class="num">Burn / mån</th></tr></thead>
@@ -154,6 +207,7 @@ function renderDetail(d) {
 async function select(id) {
   state.selected = id;
   renderRows();
+  renderProspects();
   $("#detail").innerHTML = '<div class="placeholder">Laddar…</div>';
   try {
     renderDetail(await api(`api/companies/${id}`));
@@ -177,6 +231,8 @@ async function load() {
 }
 
 document.addEventListener("click", (event) => {
+  const viewButton = event.target.closest("[data-view]");
+  if (viewButton) { setView(viewButton.dataset.view); return; }
   const bandButton = event.target.closest("[data-band]");
   if (bandButton) { state.band = bandButton.dataset.band; renderBands(); renderRows(); return; }
   const row = event.target.closest("tr[data-id]");
