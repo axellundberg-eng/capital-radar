@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-ALLOWED_HOSTS = ("mfn.se", "cision.com", "bequoted.com", "globenewswire.com", "beqom.com")
+ALLOWED_HOSTS = ("mfn.se", "tt.se", "cision.com", "bequoted.com", "globenewswire.com", "beqom.com")
 MAX_BYTES = 40_000_000
 MAX_TEXT_BYTES = 2_000_000
 MAX_TEXT_CHARS = 12_000
