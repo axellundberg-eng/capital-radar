@@ -97,7 +97,7 @@ jobs:
           scp -i ~/.ssh/deploy -o ConnectTimeout=20 \
             docker-compose.yml deploy@${{ vars.DEPLOY_HOST }}:/srv/capital-radar/docker-compose.yml
           scp -i ~/.ssh/deploy -o ConnectTimeout=20 \
-            deploy/litestream.yml deploy/remote-deploy.sh deploy/restore-db.sh \
+            deploy/litestream.yml deploy/remote-deploy.sh deploy/restore-db.sh deploy/set-tunnel-token.sh \
             deploy@${{ vars.DEPLOY_HOST }}:/srv/capital-radar/deploy/
       - name: Driftsätt ${{ github.sha }}
         env:
