@@ -336,3 +336,20 @@ def test_short_release_falls_back_to_older_full_report(tmp_path, legacy_db, monk
     assert outcome["runway"]["status"] == "ok" and outcome["document_id"] == 10
     assert len(calls) == 1  # det korta dokumentet skickades aldrig till AI
     assert connection.execute("SELECT status FROM reports WHERE document_id=13").fetchone()[0] == "skipped"
+
+
+def test_company_without_full_report_stays_visible_as_missing(tmp_path, legacy_db, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from radar import batch
+    from radar.web import create_app
+
+    settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "files")
+    connection = connect(settings.db_path)
+    import_legacy(connection, legacy_db)
+    monkeypatch.setattr(pipeline, "fetch_pdf", lambda url, target, **_: (target, "abc"))
+    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Inbjudan till presentation"])
+    outcome = batch.process_with_fallback(connection, settings, FakeClient({}), 10, today=END)
+    assert outcome["runway"]["status"] == "missing_full_report"
+    items = TestClient(create_app(settings)).get("/api/companies").json()["items"]
+    assert [(i["name"], i["band"]) for i in items] == [("Exempel AB", "missing")]

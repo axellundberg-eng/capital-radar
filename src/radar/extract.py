@@ -71,7 +71,7 @@ class DeepSeekClient:
 
     def complete(self, system: str, user: str) -> tuple[str, dict[str, int]]:
         response = self._client.chat.completions.create(
-            model=self.model, temperature=0, max_tokens=8000,
+            model=self.model, temperature=0, max_tokens=16000,
             response_format={"type": "json_object"},
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         )

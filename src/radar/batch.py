@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 import threading
@@ -64,7 +65,8 @@ def _skip(connection: sqlite3.Connection, document_id: int) -> None:
     with connection:
         connection.execute("UPDATE reports SET status='skipped', error=? WHERE document_id=?",
                            ("kort dokument utan balansräkning", document_id))
-        connection.execute("DELETE FROM runway_results WHERE document_id=?", (document_id,))
+        connection.execute("DELETE FROM runway_results WHERE document_id=? AND "
+                           "json_extract(result_json, '$.status') != 'missing_full_report'", (document_id,))
 
 
 def process_with_fallback(connection: sqlite3.Connection, settings: Settings, client: ChatClient | None,
@@ -82,7 +84,20 @@ def process_with_fallback(connection: sqlite3.Connection, settings: Settings, cl
         outcome = process(connection, settings, client, candidate, today=today, model=settings.deepseek_model)
         if (outcome.get("runway") or {}).get("status") == "ok":
             break
-    return outcome or {"status": "failed", "error": "inga rapporter med balansräkning"}
+    if outcome:
+        return outcome
+    # Inget fullständigt underlag: behåll bolaget synligt som "saknar data".
+    result = {"status": "missing_full_report", "flags": []}
+    with connection:
+        company_id = connection.execute("SELECT company_id FROM reports WHERE document_id=?",
+                                        (document_id,)).fetchone()[0]
+        connection.execute(
+            """INSERT INTO runway_results(company_id, document_id, computed_at, result_json)
+               VALUES (?, ?, datetime('now'), ?) ON CONFLICT(company_id, document_id)
+               DO UPDATE SET result_json=excluded.result_json""",
+            (company_id, document_id, json.dumps(result)))
+    return {"document_id": document_id, "status": "failed", "error": "inga rapporter med balansräkning",
+            "runway": result}
 
 
 def latest_reports(connection: sqlite3.Connection, limit: int | None = None) -> list[tuple[int, str]]:
