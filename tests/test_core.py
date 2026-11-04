@@ -32,10 +32,11 @@ def test_longest_period_is_used_and_cash_rolls_forward():
     assert result.runway_today == 9.0
 
 
-def test_much_faster_recent_quarter_is_used():
+def test_much_faster_recent_quarter_is_shown_beside_the_main_number():
     result = compute(facts(("cash", 12e6, None), ("operating_cash_flow", -6e6, "2026-01-01"),
                            ("operating_cash_flow", -6e6, "2026-04-01")), END, today=END)
-    assert result.monthly_burn == 2e6
+    assert result.monthly_burn == 1e6 and result.runway_today == 12.0
+    assert result.recent_monthly_burn == 2e6 and result.recent_runway_today == 6.0
     assert "recent_period_burn_higher" in result.flags
 
 
@@ -43,6 +44,7 @@ def test_negative_quarter_never_overrides_positive_half_year():
     result = compute(facts(("cash", 1e6, None), ("operating_cash_flow", 3e6, "2026-01-01"),
                            ("operating_cash_flow", -1e6, "2026-04-01")), END, today=END)
     assert result.cash_flow_positive
+    assert "recent_period_burn_higher" in result.flags
 
 
 def test_capex_or_investing_rules():

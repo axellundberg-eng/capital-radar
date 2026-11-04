@@ -45,7 +45,9 @@ function visible() {
 function runwayCell(item) {
   if (item.status !== "ok") return '<span class="pill muted">Saknar data</span>';
   if (item.cash_flow_positive) return '<span class="pill good">Positivt</span>';
-  return `<span class="pill band-${item.band}">${months(item.runway_today)}</span>`;
+  const recent = item.recent_runway_today != null
+    ? `<small title="I senaste periodens takt">${months(item.recent_runway_today)} i senaste takt</small>` : "";
+  return `<span class="pill band-${item.band}">${months(item.runway_today)}</span>${recent}`;
 }
 
 function renderBands() {
@@ -76,7 +78,9 @@ function explanation(d) {
   const chosen = d.periods.find((p) => Math.abs(p.monthly_burn - d.monthly_burn) < 1) || d.periods.at(-1);
   return `Kassan var ${msek(d.cash)} den ${date(d.period_end)}. Bolaget bränner ${msek(d.monthly_burn)} per månad`
     + ` (baserat på ${chosen?.months ?? "?"} månader). Sedan dess har ${months(d.months_since_report)} gått,`
-    + ` så kvarvarande runway är ${months(d.runway_today)}.`;
+    + ` så kvarvarande runway är ${months(d.runway_today)}.`
+    + (d.recent_monthly_burn ? ` Senaste perioden bränner dock ${msek(d.recent_monthly_burn)} per månad;`
+      + ` i den takten räcker kassan ${months(d.recent_runway_today)}.` : "");
 }
 
 function pdfLink(d, page) {

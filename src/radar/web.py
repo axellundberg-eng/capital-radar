@@ -60,6 +60,8 @@ def latest_rows(connection: sqlite3.Connection) -> list[dict]:
             "cash_flow_positive": result.get("cash_flow_positive", False),
             "months_since_report": result.get("months_since_report"),
             "period_end": result.get("period_end"), "flags": result.get("flags", []),
+            "recent_monthly_burn": result.get("recent_monthly_burn"),
+            "recent_runway_today": result.get("recent_runway_today"),
         }
         item["band"] = band(item)
         items.append(item)

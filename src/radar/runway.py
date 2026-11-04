@@ -1,8 +1,9 @@
 """Runway från fakta. Regler kalibrerade mot facitsetet.
 
 - Burn per kassaflödesperiod, med periodens egen längd.
-- Längsta perioden används, utom när den senaste bränner över 1,5 gånger så
-  fort (då den). Ett negativt kvartal gör aldrig ett positivt år negativt.
+- Längsta perioden ger huvudtalet (minst säsongsbrus). Bränner den senaste
+  perioden över 1,5 gånger så fort visas den separat som varning, med egen
+  runway, men ändrar inte huvudtalet.
 - Investeringar: capex, men hela investeringskassaflödet om capex verkar
   ofullständig (minst 25 % av ett större utflöde).
 - Kassan rullas fram med burn från periodslut till idag.
@@ -47,6 +48,8 @@ class Runway:
     months_since_report: float | None = None
     runway_at_report: float | None = None
     runway_today: float | None = None
+    recent_monthly_burn: float | None = None
+    recent_runway_today: float | None = None
     periods: list[Period] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
 
@@ -102,12 +105,8 @@ def compute(facts: list[Fact], period_end: str, *, today: str) -> Runway:
         result.status = "missing_cash_flow"
         return result
     chosen, recent = result.periods[-1], result.periods[0]
-    if len(result.periods) > 1 and recent.monthly_burn > 0:
-        if chosen.monthly_burn == 0:
-            result.flags.append("recent_period_burn_higher")
-        elif recent.monthly_burn > chosen.monthly_burn * RECENT_RATIO:
-            result.flags.append("recent_period_burn_higher")
-            chosen = recent
+    faster_recent = (len(result.periods) > 1 and recent.monthly_burn > 0
+                     and recent.monthly_burn > chosen.monthly_burn * RECENT_RATIO)
     if chosen.investments_basis == "investing_cash_flow":
         result.flags.append("investing_as_capex")
     since = max(0.0, _months(period_end, today))
@@ -115,6 +114,10 @@ def compute(facts: list[Fact], period_end: str, *, today: str) -> Runway:
     if since > STALE_MONTHS:
         result.flags.append("stale_report")
     result.monthly_burn = chosen.monthly_burn
+    if faster_recent:
+        result.flags.append("recent_period_burn_higher")
+        result.recent_monthly_burn = recent.monthly_burn
+        result.recent_runway_today = round(max(0.0, cash - recent.monthly_burn * since) / recent.monthly_burn, 1)
     if chosen.monthly_burn == 0:
         result.cash_flow_positive = True
         return result
