@@ -15,8 +15,10 @@ KEYWORDS = (
     "kassaflöde", "kassaflödesanalys", "likvida medel", "den löpande verksamheten",
     "investeringsverksamheten", "cash flow", "cash and cash equivalents",
     "operating activities", "investing activities", "liquid funds", "balansräkning",
+    "summa tillgångar", "total assets", "balance sheet", "kassa och bank",
 )
-MAX_PAGES = 6
+BALANCE_HINTS = ("balansräkning", "summa tillgångar", "balance sheet", "total assets")
+MAX_PAGES = 8
 MAX_PAGE_CHARS = 6000
 
 PROMPT = """Du läser en kvartals- eller årsrapport från ett börsnoterat bolag.
@@ -115,7 +117,13 @@ def select_pages(page_texts: list[str]) -> list[int]:
         score = sum(lower.count(word) for word in KEYWORDS)
         if score:
             scored.append((score, number))
-    best = sorted(number for _, number in sorted(scored, reverse=True)[:MAX_PAGES])
+    chosen = [number for _, number in sorted(scored, reverse=True)[:MAX_PAGES]]
+    # Balansräkningen ska alltid med: annars saknas kassan trots att den finns.
+    balance = next((n for n, t in enumerate(page_texts, start=1)
+                    if any(h in t.lower() for h in BALANCE_HINTS)), None)
+    if balance and balance not in chosen:
+        chosen = chosen[:MAX_PAGES - 1] + [balance]
+    best = sorted(chosen)
     return best or list(range(1, min(len(page_texts), MAX_PAGES) + 1))
 
 

@@ -202,7 +202,7 @@ def setup(tmp_path, legacy_db, monkeypatch):
     connection = connect(settings.db_path)
     import_legacy(connection, legacy_db)
     monkeypatch.setattr(pipeline, "fetch_pdf", lambda url, target, **_: (target, "abc"))
-    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde"])
+    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde", "Balansräkning likvida medel 12"])
     pipeline.process(connection, settings, ReportClient(), 10, today=TODAY)
     fetched = []
 

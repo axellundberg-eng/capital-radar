@@ -1,6 +1,8 @@
 """Steg 2: kör kedjan för senaste rapporten per bolag, kostnadsmedvetet.
 
-- Bara senaste rapporten med PDF per bolag.
+- Senaste rapporten med PDF per bolag. Är den bara ett kort pressmeddelande utan
+  balansräkning (vanligt för kommunikéer och kallelser) prövas nästa äldre
+  rapport, högst MAX_FALLBACKS gånger. Kontrollen sker före AI-anropet.
 - Redan extraherade rapporter hoppas över (inga nya AI-anrop).
 - Flera arbetare parallellt, var och en med egen databasanslutning.
 - Tokenbudget: inga nya extraktioner startas när budgeten är förbrukad.
@@ -8,6 +10,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -27,6 +30,59 @@ WHERE r.document_id = (
     ORDER BY r2.published_at DESC, r2.document_id ASC LIMIT 1)
 ORDER BY c.name COLLATE NOCASE
 """
+
+
+MAX_FALLBACKS = 2
+SHORT_PAGES = 4
+BALANCE_WORDS = re.compile(
+    r"summa tillgångar|summa eget kapital|total assets|balansräkning|balance sheet|"
+    r"likvida medel\s*[-\d]|cash and cash equivalents\s*[-\d]", re.I)
+
+
+def company_reports(connection: sqlite3.Connection, document_id: int) -> list[int]:
+    """Bolagets rapporter med PDF, nyast först, med start i den angivna."""
+    company = connection.execute("SELECT company_id, published_at FROM reports WHERE document_id=?",
+                                 (document_id,)).fetchone()
+    rows = connection.execute(
+        """SELECT document_id FROM reports WHERE company_id=? AND pdf_url IS NOT NULL
+           AND (published_at < ? OR document_id = ?) ORDER BY published_at DESC, document_id ASC""",
+        (company[0], company[1], document_id)).fetchall()
+    return [int(row[0]) for row in rows]
+
+
+def lacks_balance_sheet(connection: sqlite3.Connection, document_id: int) -> bool:
+    """Kort dokument utan ord som hör till en balansräkning: inte värt ett AI-anrop."""
+    row = connection.execute("SELECT page_count FROM reports WHERE document_id=?", (document_id,)).fetchone()
+    if not row or not row[0] or row[0] >= SHORT_PAGES:
+        return False
+    text = " ".join(r[0] for r in connection.execute(
+        "SELECT text FROM report_pages WHERE document_id=?", (document_id,)))
+    return not BALANCE_WORDS.search(text)
+
+
+def _skip(connection: sqlite3.Connection, document_id: int) -> None:
+    with connection:
+        connection.execute("UPDATE reports SET status='skipped', error=? WHERE document_id=?",
+                           ("kort dokument utan balansräkning", document_id))
+        connection.execute("DELETE FROM runway_results WHERE document_id=?", (document_id,))
+
+
+def process_with_fallback(connection: sqlite3.Connection, settings: Settings, client: ChatClient | None,
+                          document_id: int, *, today: str) -> dict:
+    """Senaste rapporten först; korta dokument utan siffror hoppas över mot en äldre rapport."""
+    outcome: dict = {}
+    for candidate in company_reports(connection, document_id)[:MAX_FALLBACKS + 1]:
+        status = connection.execute("SELECT status FROM reports WHERE document_id=?", (candidate,)).fetchone()[0]
+        if status == "skipped":
+            continue
+        process(connection, settings, None, candidate, today=today)  # hämta och text, inget AI-anrop
+        if lacks_balance_sheet(connection, candidate):
+            _skip(connection, candidate)
+            continue
+        outcome = process(connection, settings, client, candidate, today=today, model=settings.deepseek_model)
+        if (outcome.get("runway") or {}).get("status") == "ok":
+            break
+    return outcome or {"status": "failed", "error": "inga rapporter med balansräkning"}
 
 
 def latest_reports(connection: sqlite3.Connection, limit: int | None = None) -> list[tuple[int, str]]:
@@ -72,10 +128,11 @@ def run_latest(settings: Settings, client: ChatClient | None, *, today: str, wor
     def work(document_id: int, name: str) -> str:
         connection = connect(settings.db_path)
         try:
-            before = tokens_used(connection, document_id)
+            candidates = company_reports(connection, document_id)[:MAX_FALLBACKS + 1]
+            before = sum(tokens_used(connection, d) for d in candidates)
             ai = None if budget.exhausted() else client
-            outcome = process(connection, settings, ai, document_id, today=today, model=settings.deepseek_model)
-            budget.add(tokens_used(connection, document_id) - before)
+            outcome = process_with_fallback(connection, settings, ai, document_id, today=today)
+            budget.add(sum(tokens_used(connection, d) for d in candidates) - before)
         finally:
             connection.close()
         if outcome.get("status") == "failed":

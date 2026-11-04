@@ -173,7 +173,7 @@ def test_web_lists_companies_by_band_and_explains_detail(tmp_path, legacy_db, mo
     connection = connect(settings.db_path)
     import_legacy(connection, legacy_db)
     monkeypatch.setattr(pipeline, "fetch_pdf", lambda url, target, **_: (target, "abc"))
-    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde"])
+    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde", "Balansräkning likvida medel 12"])
     answer = {"report_period_start": "2026-01-01", "report_period_end": END, "unit": "MSEK",
               "cash": {"value": 12, "date": END, "page": 1, "quote": "Likvida medel 12"},
               "cash_flows": [{"kind": "operating_cash_flow", "value": -6, "period_start": "2026-01-01",
@@ -217,7 +217,7 @@ def test_batch_takes_latest_report_per_company_and_respects_budget(tmp_path, leg
     connection.close()
 
     monkeypatch.setattr(pipeline, "fetch_pdf", lambda url, target, **_: (target, "abc"))
-    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde"])
+    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde", "Balansräkning likvida medel 12"])
     calls = []
 
     class CountingClient(FakeClient):
@@ -296,9 +296,43 @@ def test_token_budget_counts_only_this_runs_own_reports(tmp_path, legacy_db, mon
                            "completion_tokens, created_at) VALUES (10, 'm', '[]', 'invalid', 900000, 0, 'x')")
     connection.close()
     monkeypatch.setattr(pipeline, "fetch_pdf", lambda url, target, **_: (target, "abc"))
-    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde"])
+    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde", "Balansräkning likvida medel 12"])
     answer = {"report_period_end": END, "unit": "MSEK", "cash": {"value": 12, "date": END},
               "cash_flows": [{"kind": "operating_cash_flow", "value": -6, "period_start": "2026-01-01",
                               "period_end": END}]}
     counts = batch.run_latest(settings, FakeClient(answer), today=END, token_budget=1000, log=lambda _: None)
     assert counts.get("ok") == 1 and counts["tokens_used"] == 150
+
+
+def test_balance_sheet_page_is_always_sent():
+    pages = ["kassaflöde"] * 10 + ["Balansräkning Summa tillgångar 100"]
+    assert 11 in select_pages(pages)
+
+
+def test_short_release_falls_back_to_older_full_report(tmp_path, legacy_db, monkeypatch):
+    from radar import batch
+
+    with sqlite3.connect(legacy_db) as db:
+        db.execute("INSERT INTO documents VALUES (13, 1, 'Kommuniké Q3', '2026-10-20', 'report', NULL)")
+        db.execute("INSERT INTO attachments VALUES (4, 13, 'https://storage.mfn.se/x/kort.pdf')")
+    settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "files")
+    connection = connect(settings.db_path)
+    import_legacy(connection, legacy_db)
+    monkeypatch.setattr(pipeline, "fetch_pdf", lambda url, target, **_: (target, "abc"))
+    pages = {13: ["Rörelseresultatet ökade. Kassaflödet förbättrades."],
+             10: ["Kassaflöde från den löpande verksamheten", "Balansräkning likvida medel 12"]}
+    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: pages[int(Path(path).stem)])
+    calls = []
+
+    class Recording(FakeClient):
+        def complete(self, system, user):
+            calls.append(user)
+            return super().complete(system, user)
+
+    answer = {"report_period_end": END, "unit": "MSEK", "cash": {"value": 12, "date": END},
+              "cash_flows": [{"kind": "operating_cash_flow", "value": -6, "period_start": "2026-01-01",
+                              "period_end": END}]}
+    outcome = batch.process_with_fallback(connection, settings, Recording(answer), 13, today=END)
+    assert outcome["runway"]["status"] == "ok" and outcome["document_id"] == 10
+    assert len(calls) == 1  # det korta dokumentet skickades aldrig till AI
+    assert connection.execute("SELECT status FROM reports WHERE document_id=13").fetchone()[0] == "skipped"
