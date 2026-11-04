@@ -4,6 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     SCREENER_DB_PATH=/data/screener.db \
+    RADAR_DATA_PATH=/data \
     SCREENER_DOCUMENTS_PATH=/data/documents \
     SCREENER_ISSUER_FEEDS_PATH=/app/legacy/config/issuer_feeds.json \
     CAPITAL_RADAR_HOST=0.0.0.0 \
