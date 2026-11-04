@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Capital Radar</title>
+  <link rel="stylesheet" href="static/styles.css?v=1">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">Capital Radar <span class="tag">ny kärna</span></div>
+    <div class="meta" id="meta">Läser underlag…</div>
+  </header>
+
+  <main class="layout">
+    <section class="list">
+      <div class="intro">
+        <h1>Bolag med kort runway</h1>
+        <p>Runway räknas från idag: rapportens kassa minus burn sedan periodslut. Målgrupp: 3–9 månader.</p>
+      </div>
+
+      <nav class="bands" id="bands" aria-label="Runway-grupper"></nav>
+
+      <div class="tools">
+        <input id="search" type="search" placeholder="Sök bolag" aria-label="Sök bolag">
+        <label class="check"><input id="hideStale" type="checkbox"> Dölj gamla rapporter</label>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Bolag</th>
+              <th class="num">Runway idag</th>
+              <th class="num">Burn / mån</th>
+              <th class="num">Kassa</th>
+              <th>Rapport</th>
+              <th>Varningar</th>
+            </tr>
+          </thead>
+          <tbody id="rows"><tr><td colspan="6" class="empty">Laddar…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="detail" id="detail" aria-live="polite">
+      <div class="placeholder">Välj ett bolag för att se hur siffran räknats fram.</div>
+    </aside>
+  </main>
+
+  <script src="static/app.js?v=1" defer></script>
+</body>
+</html>

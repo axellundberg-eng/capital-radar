@@ -15,6 +15,20 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
 
+  radar:
+    # Ny kärna: webbgränssnitt under /v2 (Cloudflare-routen pekar hit).
+    image: ghcr.io/${GITHUB_REPOSITORY:-axellundberg-eng/capital-radar}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: ["python", "-m", "radar", "serve"]
+    env_file: .env
+    environment:
+      - RADAR_BASE_PATH=/v2
+      - RADAR_PORT=8001
+    volumes:
+      - /srv/capital-radar/data:/data
+    ports:
+      - "127.0.0.1:8001:8001"
+
   litestream:
     profiles: ["backup"]
     image: litestream/litestream:0.3.13

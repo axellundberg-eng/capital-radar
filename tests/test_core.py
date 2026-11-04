@@ -156,3 +156,31 @@ def test_pipeline_failure_is_recorded_and_retried(tmp_path, legacy_db, monkeypat
     assert outcome["status"] == "failed" and "hämta" in outcome["error"]
     row = connection.execute("SELECT status, error FROM reports WHERE document_id=10").fetchone()
     assert row["status"] == "failed" and "timeout" in row["error"]
+
+
+def test_web_lists_companies_by_band_and_explains_detail(tmp_path, legacy_db, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from radar.web import create_app
+
+    settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "files")
+    connection = connect(settings.db_path)
+    import_legacy(connection, legacy_db)
+    monkeypatch.setattr(pipeline, "fetch_pdf", lambda url, target, **_: (target, "abc"))
+    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde"])
+    answer = {"report_period_start": "2026-01-01", "report_period_end": END, "unit": "MSEK",
+              "cash": {"value": 12, "date": END, "page": 1, "quote": "Likvida medel 12"},
+              "cash_flows": [{"kind": "operating_cash_flow", "value": -6, "period_start": "2026-01-01",
+                              "period_end": END, "page": 1}]}
+    pipeline.process(connection, settings, FakeClient(answer), 10, today="2026-12-31")
+    client = TestClient(create_app(settings))
+    overview = client.get("/api/overview").json()
+    assert overview["with_result"] == 1
+    items = client.get("/api/companies").json()["items"]
+    assert items[0]["name"] == "Exempel AB" and items[0]["runway_at_report"] == 12.0
+    detail = client.get("/api/companies/1").json()
+    assert detail["facts"][0]["quote"] == "Likvida medel 12"
+    assert detail["pdf_url"].endswith("rapport.pdf")
+    assert client.get("/api/companies/999").status_code == 404
+    assert "Capital Radar" in client.get("/").text
+    assert client.get("/static/app.js").status_code == 200
