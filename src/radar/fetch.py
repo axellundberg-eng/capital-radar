@@ -23,7 +23,7 @@ def allowed(url: str) -> bool:
 def fetch_pdf(url: str, target: Path, *, timeout: float, user_agent: str) -> tuple[Path, str]:
     if not allowed(url):
         raise FetchError(f"värden är inte tillåten: {urlparse(url).hostname}")
-    request = Request(url, headers={"User-Agent": user_agent, "Accept": "application/pdf"})
+    request = Request(url, headers={"User-Agent": user_agent, "Accept": "application/pdf,*/*;q=0.8"})
     with urlopen(request, timeout=timeout) as response:  # noqa: S310 (värden är kontrollerad)
         body = response.read(MAX_BYTES + 1)
     if len(body) > MAX_BYTES:
