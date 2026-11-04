@@ -8,6 +8,8 @@ BACKUP="${1:?sökväg till backup-databasen saknas}"
 DOCUMENTS="${2:-}"
 DATA=/srv/capital-radar/data
 cd /srv/capital-radar
+# Starta om på samma version som senast driftsattes, inte på "latest".
+export IMAGE_TAG="$(cat .deployed-tag 2>/dev/null || echo latest)"
 
 check="$(sqlite3 "$BACKUP" 'PRAGMA integrity_check;')"
 [ "$check" = "ok" ] || { echo "integrity_check misslyckades: $check"; exit 1; }
