@@ -6,7 +6,7 @@
 set -euo pipefail
 cd /srv/capital-radar
 
-read -rsp "Klistra in tunnel-token från Cloudflare och tryck Enter: " token
+read -rsp "Klistra in tunnel-token från Cloudflare och tryck Enter: " token || true
 echo
 token="$(printf '%s' "$token" | tr -d '[:space:]')"
 # Cloudflare visar ibland hela kommandot; behåll bara token-delen.
