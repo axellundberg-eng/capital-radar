@@ -64,6 +64,7 @@ class WebServices:
     research: ResearchChannel
     read_model: TransactionReadModel | None = None
     editorial_worker: TransactionEditorialWorker | None = None
+    mfn_monitor: Any = None
 
     @classmethod
     def build(cls, settings: Settings) -> "WebServices":
@@ -335,6 +336,8 @@ def build_web_router() -> APIRouter:
             "runway_tolerance_months": 1,
             "missing_facts_policy": "await_sources_and_retry",
         }
+        if web.mfn_monitor is not None:
+            payload["mfn_monitor"] = web.mfn_monitor.status()
         return _json(payload)
 
     @router.get("/api/research/status", tags=["research"])

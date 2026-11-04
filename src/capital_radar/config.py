@@ -76,6 +76,8 @@ class Settings:
     transaction_audit_interval_seconds: int = 86_400
     # Bakgrundsbygget av läsmodellen; första bygget på en stor databas tar minuter.
     read_model_refresh_timeout_seconds: float = 55.0
+    # Insamling (MFN-bevakning, rapporter, AI-analys) i webbprocessen.
+    collection_enabled: bool = False
     transaction_audit_max_candidates: int = 25
     research_enabled: bool = False
     research_ddgs_primary_backend: str = "google"
@@ -306,6 +308,7 @@ class Settings:
             transaction_audit_enabled=_env_flag(
                 "SCREENER_TRANSACTION_AUDIT_ENABLED", default=True
             ),
+            collection_enabled=_env_flag("CAPITAL_RADAR_COLLECTION_ENABLED", default=False),
             read_model_refresh_timeout_seconds=max(
                 1.0,
                 min(

@@ -13,9 +13,13 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from . import __version__
+from .analysis_worker import AnalysisWorker
 from .api_auth import ApiError
 from .config import Settings
+from .manual_actions import ManualActionService
+from .mfn_monitor import MfnMonitor
 from .radar_analysis import SnapshotObserver
+from .report_refresh import ReportRefreshService, ReportRefreshWorker
 from .transaction_read_model import TransactionReadModel
 from .transaction_refresh import TransactionEditorialWorker
 from .web_api import WebServices, api_error_handler, build_static_router, build_web_router
@@ -58,9 +62,28 @@ def create_app(settings: Settings | None = None, *, start_workers: bool = True) 
         web.read_model.start()
         web.editorial_worker.start()
         snapshot_observer.start()
+        collectors: list = []
+        if settings.collection_enabled:
+            actions = ManualActionService(web.database, settings)
+            analysis = AnalysisWorker(
+                actions, poll_interval=settings.worker_poll_interval,
+                worker_threads=settings.analysis_worker_threads,
+            )
+            reports = ReportRefreshWorker(ReportRefreshService(web.database, settings, actions=actions))
+            analysis.start()
+            reports.resume()
+            collectors += [analysis, reports]
+            if settings.mfn_monitor_enabled:
+                web.mfn_monitor = MfnMonitor(web.database, settings, actions)
+                web.mfn_monitor.start()
+                collectors.append(web.mfn_monitor)
         try:
             yield
         finally:
+            for collector in reversed(collectors):
+                stop = getattr(collector, "stop", None)
+                if stop:
+                    stop()
             snapshot_observer.stop()
             web.editorial_worker.stop()
             web.read_model.stop()
