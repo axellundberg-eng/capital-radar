@@ -1,6 +1,6 @@
 #cloud-config
 # Klistras in under "Cloud config" när servern skapas i Hetzner Cloud Console
-# (Ubuntu 24.04). Ersätt SSH-nyckeln nedan med din publika nyckel och
+# (Ubuntu 24.04 eller 26.04). Ersätt SSH-nyckeln nedan med din publika nyckel och
 # deploy-nyckeln som GitHub Actions använder (se deploy/README.md).
 #
 # Resultat: användaren "deploy" (uid 1000, samma uid som appens container),
@@ -11,7 +11,6 @@
 users:
   - name: deploy
     uid: 1000
-    groups: [docker]
     shell: /bin/bash
     sudo: "ALL=(ALL) NOPASSWD:ALL"
     lock_passwd: true
@@ -43,7 +42,8 @@ runcmd:
   - chmod a+r /etc/apt/keyrings/docker.asc
   - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
   - apt-get update
-  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+  # Faller tillbaka på Ubuntus egna paket om Dockers repo saknar releasen.
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin || apt-get install -y docker.io docker-compose-v2
   - usermod -aG docker deploy
   - mkdir -p /srv/capital-radar/data/documents /srv/capital-radar/deploy /srv/capital-radar/backups
   - chown -R 1000:1000 /srv/capital-radar

@@ -40,7 +40,7 @@ Skapa `/srv/capital-radar/.env` från `.env.example` (DeepSeek-nyckel,
 
 Repo → Settings:
 
-- Environments → `production` (lägg gärna till dig själv som required reviewer).
+- (Environments behövs inte; de kräver betalplan för privata repon.)
 - Secrets and variables → Actions:
   - Secret `DEPLOY_SSH_KEY`: innehållet i `~/.ssh/capital-radar-deploy`.
   - Secret `DEPLOY_KNOWN_HOSTS`: utdata från `ssh-keyscan -t ed25519 <server-ip>`.

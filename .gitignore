@@ -10,3 +10,4 @@ data/
 .tmp-tests/
 .test-tmp/
 backups/
+deploy/cloud-init.local.yml
