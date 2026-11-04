@@ -93,6 +93,9 @@ class Settings:
     reviewer_hard_timeout_seconds: float = 120.0
     reviewer_max_source_chars: int = 24_000
     reviewer_headline_batch_size: int = 40
+    review_api_token: str | None = field(default=None, repr=False)
+    reviewer_api_base_url: str = "http://127.0.0.1:8000"
+    reviewer_api_timeout_seconds: float = 30.0
     git_sha: str = "dev"
 
     @property
@@ -359,6 +362,13 @@ class Settings:
             ),
             reviewer_headline_batch_size=max(
                 1, min(100, int(os.getenv("REVIEWER_HEADLINE_BATCH_SIZE", "40")))
+            ),
+            review_api_token=os.getenv("SCREENER_REVIEW_API_TOKEN") or None,
+            reviewer_api_base_url=os.getenv(
+                "REVIEWER_API_BASE_URL", "http://127.0.0.1:8000"
+            ).rstrip("/"),
+            reviewer_api_timeout_seconds=max(
+                1.0, min(60.0, float(os.getenv("REVIEWER_API_TIMEOUT_SECONDS", "30")))
             ),
             git_sha=os.getenv("GIT_SHA", "dev"),
         )
