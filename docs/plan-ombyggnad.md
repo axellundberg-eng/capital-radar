@@ -4,6 +4,22 @@ Utgår från granskningen i `granskning-runway-och-flode.md`. Målet är ett
 system där varje siffra går att förklara och spåra till en källa, och där
 ett fel i ett bolag aldrig fäller hela vyn.
 
+## Princip
+
+Den gamla koden används som kravlista, inte som grund. Varje del skrivs om
+som ny, liten och testad kod med egna kopplingar. De gamla modulerna får
+leva kvar bara tills den nya delen har ersatt dem och visat rätt resultat.
+
+## Upptäckt 2026-11-04: rapportkedjan tappar data
+
+- Den gamla driften raderade text och PDF:er efter extraktion för att spara
+  disk. 5 557 dokumentinnehåll är tomma, och 1 694 av 5 774 rapporter kan
+  inte extraheras om.
+- Följden är att 80 bolag står kvar på rapporter som är 9–22 månader gamla,
+  trots att nyare rapporter finns nedladdade.
+- Radering är nu avstängd. Den nya rapportkedjan (steg 1b) måste hämta om
+  saknade PDF:er.
+
 ## Redan åtgärdat (2026-11-04)
 
 - Runway räknas från idag: rapportkassan rullas fram med burn.
@@ -23,6 +39,18 @@ ett fel i ett bolag aldrig fäller hela vyn.
   (intervall) och en lista över antaganden. Saknad data blir status
   "saknas", inte tyst bortfall.
 - Testas med ett facitset av 20–30 verkliga bolag och kända svar.
+
+Status: `runway_engine.py` (v1) och `runway_compare.py` finns och körs i
+skuggläge mot produktionsdata.
+
+## Steg 1b: Ny rapportkedja
+
+- Ny, fristående kedja: hitta rapport → hämta PDF → extrahera text →
+  DeepSeek med JSON-schema (kassa, kassaflöden per period, capex, skuld,
+  periodens start och slut) → spara fakta med sida och utdrag.
+- Hämtar om rapporter vars text saknas.
+- Varje steg har en status per dokument, så att ett fel syns och kan köras
+  om, i stället för att fastna som "content_ready".
 
 ## Steg 2: Affärsmodell med stabila ID:n
 
