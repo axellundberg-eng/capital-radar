@@ -8,20 +8,16 @@
 - Gör inte ett identiskt nytt försök utan att först ha identifierat orsaken eller
   valt en säkrare metod.
 
-## Prioriterad garantigranskning
+## Ny kod och gammal kod
 
-- Vid finansierings- och garantigranskning: läs `agents/guarantee-reviewer.md`
-  och det aktuella livekontraktet. Använd befintligt abonnemangsflöde, ingen ny
-  timer/worker eller direkt modell-API-koppling.
-- Prioritera garantiberikning när granskbara kandidater finns. Reservera minst
-  en garantifokuserad batch inom körbudgeten utan att tränga bort kontraktets
-  financing-, backlog- och discovery-banor. Högst20claims totalt och giltig
-  lease gäller; respektera deferrals och andra aktiva körningar.
-  Målet är att lägga huvuddelen av den återstående granskningsbudgeten på
-  garantier när underlaget tillåter det; redovisa faktisk täckning och hinder.
-- Varje garanti behöver en källbunden inventering av villkor, tranch/instrument,
-  tilldelning, ersättning, betalning/säljbarhet, historik och kvarvarande gaps.
-  Äldre, outnyttjade, negativa och dataglesa fall får inte väljas bort.
-- Ny information kräver jämförelse med tidigare granskning och aktuell
-  dokumentversion. Historiskt minne och en publicerad agentprofil är inte
-  bevis för en aktiv körning eller aktuell finansiell verifiering.
+- `src/radar/` är den nya kärnan, skriven från grunden.
+- `legacy/` är den gamla koden. Den körs i produktion tills den nya har
+  ersatt den, och raderas sedan i sin helhet. Den används bara som karta
+  över vad systemet ska klara, aldrig som grund.
+- Ny kod får **aldrig importera** något från `legacy/` eller `capital_radar`.
+- Från den gamla koden får ny kod **endast använda API-inloggningarna** i
+  `src/radar/credentials.py` (`DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`,
+  `SCREENER_ADMIN_API_TOKEN`). Alla andra inställningar får egna `RADAR_`-namn.
+- Reglerna kontrolleras av `tests/test_boundaries.py` i CI. Testet får inte
+  försvagas eller kringgås.
+- Ändra inte i `legacy/` utom för att hålla produktionen igång.

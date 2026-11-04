@@ -25,13 +25,14 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["src"]
+# src/ = ny kod. legacy/src/ = gammal kod som körs tills den ersatts och sedan raderas.
+where = ["src", "legacy/src"]
 
 [tool.setuptools.package-data]
 capital_radar = ["schema.sql", "web/*"]
 
 [tool.pytest.ini_options]
+# Bara ny kod. Gamla tester körs med: pytest -c legacy/pytest.ini
 testpaths = ["tests"]
-# Några tester delar fixturer via `from tests import ...`.
-pythonpath = ["."]
+pythonpath = ["src"]
 addopts = "-q"

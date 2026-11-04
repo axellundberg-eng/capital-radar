@@ -19,12 +19,15 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e ".[dev]"
-      - run: pytest
+      - name: Ny kod
+        run: pytest
+      - name: Gammal kod (legacy)
+        run: pytest -c legacy/pytest.ini
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
       - name: Frontend tests
-        run: node --test tests/js/workspace_loading.test.js tests/js/admin_auth.test.js
+        run: node --test legacy/tests/js/workspace_loading.test.js legacy/tests/js/admin_auth.test.js
 
   image:
     needs: test
