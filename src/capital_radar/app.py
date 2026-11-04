@@ -50,7 +50,9 @@ def create_app(settings: Settings | None = None, *, start_workers: bool = True) 
             return
         settings.db_path.parent.mkdir(parents=True, exist_ok=True)
         web.database.initialize()
-        web.read_model = TransactionReadModel(settings.db_path)
+        web.read_model = TransactionReadModel(
+            settings.db_path, refresh_timeout=settings.read_model_refresh_timeout_seconds,
+        )
         web.editorial_worker = TransactionEditorialWorker(web.database, settings)
         snapshot_observer = SnapshotObserver(web.database)
         web.read_model.start()

@@ -70,7 +70,7 @@ class TransactionReadModel:
         self.database_path = Path(database_path).resolve()
         self.path = self.database_path.with_name(self.database_path.name + ".read-model.sqlite3")
         self.interval_seconds = max(0.1, min(interval_seconds, 30.0))
-        self.refresh_timeout = max(0.1, min(refresh_timeout, 55.0))
+        self.refresh_timeout = max(0.1, min(refresh_timeout, 900.0))
         self._stop = threading.Event()
         self._state_lock = threading.Lock()
         self._refreshing, self._stale = False, True

@@ -74,6 +74,8 @@ class Settings:
     transaction_editorial_background_enabled: bool = False
     transaction_audit_enabled: bool = True
     transaction_audit_interval_seconds: int = 86_400
+    # Bakgrundsbygget av läsmodellen; första bygget på en stor databas tar minuter.
+    read_model_refresh_timeout_seconds: float = 55.0
     transaction_audit_max_candidates: int = 25
     research_enabled: bool = False
     research_ddgs_primary_backend: str = "google"
@@ -303,6 +305,13 @@ class Settings:
             ),
             transaction_audit_enabled=_env_flag(
                 "SCREENER_TRANSACTION_AUDIT_ENABLED", default=True
+            ),
+            read_model_refresh_timeout_seconds=max(
+                1.0,
+                min(
+                    900.0,
+                    float(os.getenv("SCREENER_READ_MODEL_REFRESH_TIMEOUT", "55")),
+                ),
             ),
             transaction_audit_interval_seconds=max(
                 3_600,
