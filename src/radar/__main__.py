@@ -46,10 +46,19 @@ def _facit_check(case: dict, runway: dict) -> str:
     return "ok" if abs(burn - expected) <= TOLERANCE * expected else "fel"
 
 
-def run_facit(connection, settings: Settings, client, today: str) -> int:
+def reextract(connection, document_id: int) -> None:
+    """Låt en redan extraherad rapport extraheras igen (t.ex. efter ny prompt)."""
+    with connection:
+        connection.execute("UPDATE reports SET status='text' WHERE document_id=? AND status='extracted'",
+                           (document_id,))
+
+
+def run_facit(connection, settings: Settings, client, today: str, *, force: bool = False) -> int:
     cases = json.loads(FACIT.read_text(encoding="utf-8"))
     counts: dict[str, int] = {}
     for case in cases:
+        if force and client is not None:
+            reextract(connection, case["document_id"])
         outcome = process(connection, settings, client, case["document_id"], today=today, model=settings.deepseek_model)
         runway = outcome.get("runway") or {}
         verdict = _facit_check(case, runway) if "error" not in outcome else "steg-fel"
@@ -93,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--document", type=int, action="append", default=[])
     run.add_argument("--facit", action="store_true")
     run.add_argument("--latest", action="store_true", help="senaste rapporten per bolag")
+    run.add_argument("--reextract", action="store_true", help="extrahera igen (facit/--document)")
     run.add_argument("--workers", type=int, default=4)
     run.add_argument("--limit", type=int)
     run.add_argument("--token-budget", type=int, default=8_000_000)
@@ -116,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
     if client is None:
         print("DEEPSEEK_API_KEY saknas; kör bara hämtning och text.")
     if args.facit:
-        return run_facit(connection, settings, client, today)
+        return run_facit(connection, settings, client, today, force=args.reextract)
     if args.latest:
         connection.close()
         counts = run_latest(settings, client, today=today, workers=args.workers, limit=args.limit,
@@ -124,6 +134,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(counts, ensure_ascii=False), flush=True)
         return 0
     for document_id in args.document:
+        if args.reextract and client is not None:
+            reextract(connection, document_id)
         print(json.dumps(process(connection, settings, client, document_id, today=today,
                                  model=settings.deepseek_model), ensure_ascii=False, default=str))
     return 0

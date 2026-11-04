@@ -4,9 +4,9 @@
   "name": "Sedana Medical",
   "document_id": 24906,
   "report_period_end": "2026-09-30",
-  "expected_monthly_burn": 5645111,
+  "expected_monthly_burn": 5755778,
   "cash_flow_positive": false,
-  "basis": "9M YTD (CFO -7.957M + intangibles capex -42.849M)/9; Q3 alone ~4.09M",
+  "basis": "Verifierat 2026-11-04: inkl. materiell capex",
   "verdict": "new"
  },
  {
@@ -34,9 +34,9 @@
   "name": "ChargePanel",
   "document_id": 4474,
   "report_period_end": "2026-06-30",
-  "expected_monthly_burn": 597167,
+  "expected_monthly_burn": 811667,
   "cash_flow_positive": false,
-  "basis": "H1 2026 CFO -3,583k/6 (incl. investing -1,287k: ~812k/mo); Q2 CFO only 231k/mo",
+  "basis": "Verifierat 2026-11-04: H1 CFO + aktiverad utveckling (facit missade investeringar)",
   "verdict": "new"
  },
  {
@@ -54,9 +54,9 @@
   "name": "Klimator",
   "document_id": 11130,
   "report_period_end": "2026-06-30",
-  "expected_monthly_burn": 2128667,
+  "expected_monthly_burn": 802500,
   "cash_flow_positive": false,
-  "basis": "Q2 2026 CFO -6,386k/3 (H1 -4,815k/6 = 0.80M/mo; capex unknown)",
+  "basis": "Längsta perioden (H1): CFO -4 815k / 6",
   "verdict": "both_ok"
  },
  {
@@ -64,9 +64,9 @@
   "name": "Newbury Pharmaceuticals",
   "document_id": 13856,
   "report_period_end": "2026-05-31",
-  "expected_monthly_burn": 3428667,
+  "expected_monthly_burn": 1620000,
   "cash_flow_positive": false,
-  "basis": "Q3 (Mar-May 2026) CFO -10,286k/3; 9M -14,575k/9 = 1.62M/mo",
+  "basis": "Längsta perioden (9M): CFO -14,6 MSEK / 9",
   "verdict": "new"
  },
  {
@@ -194,9 +194,9 @@
   "name": "Acconeer",
   "document_id": 25057,
   "report_period_end": "2026-09-30",
-  "expected_monthly_burn": 3858000,
+  "expected_monthly_burn": 4650000,
   "cash_flow_positive": false,
-  "basis": "9M 2026: CFO -18.4M + investing -16.3M = -34.7M/9 (CFO only: 2.05M)",
+  "basis": "Verifierat 2026-11-04: 9M efter rörelsekapital",
   "verdict": "new"
  },
  {

@@ -4,8 +4,9 @@
 - Längsta perioden ger huvudtalet (minst säsongsbrus). Bränner den senaste
   perioden över 1,5 gånger så fort visas den separat som varning, med egen
   runway, men ändrar inte huvudtalet.
-- Investeringar: capex, men hela investeringskassaflödet om capex verkar
-  ofullständig (minst 25 % av ett större utflöde).
+- Investeringar: i första hand rörelseinvesteringar (investeringsflödet utan
+  förvärv och finansiella placeringar), annars capex, och bara om båda saknas
+  hela investeringskassaflödet (flaggas).
 - Kassan rullas fram med burn från periodslut till idag.
 """
 
@@ -16,7 +17,6 @@ from datetime import date
 
 DAYS_PER_MONTH = 30.4375
 RECENT_RATIO = 1.5
-CAPEX_SHARE = 0.25
 STALE_MONTHS = 7.0
 
 
@@ -79,13 +79,15 @@ def _periods(facts: list[Fact], period_end: str) -> list[Period]:
         if months is None:
             continue
         cfo = at("operating_cash_flow", start).value
+        operating = at("operating_investments", start)
         capex_fact, investing_fact = at("capex", start), at("investing_cash_flow", start)
-        capex = abs(capex_fact.value) if capex_fact else None
-        investing = -investing_fact.value if investing_fact and investing_fact.value < 0 else None
-        if investing is not None and (capex is None or CAPEX_SHARE * investing <= capex < investing):
-            amount, basis = investing, "investing_cash_flow"
-        elif capex is not None:
-            amount, basis = capex, "capex"
+        if operating is not None:
+            # Netto: ett positivt tal (avyttringar större än investeringar) minskar burnen.
+            amount, basis = -operating.value, "operating_investments"
+        elif capex_fact is not None:
+            amount, basis = abs(capex_fact.value), "capex"
+        elif investing_fact is not None and investing_fact.value < 0:
+            amount, basis = -investing_fact.value, "investing_cash_flow"
         else:
             amount, basis = 0.0, "none"
         burn = max(0.0, (amount - cfo) / months)

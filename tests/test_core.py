@@ -47,15 +47,19 @@ def test_negative_quarter_never_overrides_positive_half_year():
     assert "recent_period_burn_higher" in result.flags
 
 
-def test_capex_or_investing_rules():
-    partial = compute(facts(("cash", 1e7, None), ("operating_cash_flow", 0, "2026-01-01"),
-                            ("capex", -3e6, "2026-01-01"), ("investing_cash_flow", -6e6, "2026-01-01")),
-                      END, today=END)
-    assert partial.monthly_burn == 1e6 and "investing_as_capex" in partial.flags
-    acquisition = compute(facts(("cash", 1e7, None), ("operating_cash_flow", 0, "2026-01-01"),
-                                ("capex", 6e5, "2026-01-01"), ("investing_cash_flow", -6e7, "2026-01-01")),
-                          END, today=END)
-    assert acquisition.monthly_burn == 1e5
+def test_investment_priority_excludes_acquisitions():
+    # Rörelseinvesteringar (utan förvärv) går före capex och investeringsflöde.
+    operating = compute(facts(("cash", 1e7, None), ("operating_cash_flow", 0, "2026-01-01"),
+                              ("operating_investments", -3e6, "2026-01-01"), ("capex", -4e6, "2026-01-01"),
+                              ("investing_cash_flow", -6e7, "2026-01-01")), END, today=END)
+    assert operating.monthly_burn == 5e5
+    capex_only = compute(facts(("cash", 1e7, None), ("operating_cash_flow", 0, "2026-01-01"),
+                               ("capex", 6e5, "2026-01-01"), ("investing_cash_flow", -6e7, "2026-01-01")),
+                         END, today=END)
+    assert capex_only.monthly_burn == 1e5 and "investing_as_capex" not in capex_only.flags
+    fallback = compute(facts(("cash", 1e7, None), ("operating_cash_flow", 0, "2026-01-01"),
+                             ("investing_cash_flow", -6e6, "2026-01-01")), END, today=END)
+    assert fallback.monthly_burn == 1e6 and "investing_as_capex" in fallback.flags
 
 
 def test_missing_data_is_a_status():

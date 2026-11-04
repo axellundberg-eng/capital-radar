@@ -10,7 +10,7 @@ from typing import Any, Protocol
 
 from .units import parse_unit
 
-KINDS = ("operating_cash_flow", "capex", "investing_cash_flow")
+KINDS = ("operating_cash_flow", "capex", "operating_investments", "investing_cash_flow")
 KEYWORDS = (
     "kassaflöde", "kassaflödesanalys", "likvida medel", "den löpande verksamheten",
     "investeringsverksamheten", "cash flow", "cash and cash equivalents",
@@ -30,7 +30,7 @@ Svara med enbart ett JSON-objekt:
   "currency": "SEK",
   "cash": {"value": tal, "date": "YYYY-MM-DD", "page": sidnummer, "quote": "kort citat"} eller null,
   "cash_flows": [
-    {"kind": "operating_cash_flow | capex | investing_cash_flow",
+    {"kind": "operating_cash_flow | capex | operating_investments | investing_cash_flow",
      "value": tal, "period_start": "YYYY-MM-DD", "period_end": "YYYY-MM-DD",
      "page": sidnummer, "quote": "kort citat"}
   ]
@@ -42,6 +42,10 @@ Regler:
 - operating_cash_flow = kassaflöde från den löpande verksamheten (efter förändring av rörelsekapital).
 - capex = investeringar i materiella och immateriella anläggningstillgångar (inklusive
   aktiverade utvecklingsutgifter), summerat om de står på flera rader. Inte förvärv av bolag.
+- operating_investments = kassaflödet från investeringsverksamheten MINUS förvärv och
+  avyttringar av dotterbolag/rörelser, finansiella placeringar och andelar i intresse-
+  eller joint venture-bolag. Försäljning av inventarier räknas med (netto). Ange det
+  beräknade talet och citera raderna du använt.
 - investing_cash_flow = kassaflöde från investeringsverksamheten totalt.
 - Ta med varje periodkolumn för innevarande år som finns (t.ex. både kvartalet och hittills i år).
 - Hoppa över en siffra hellre än att gissa.
