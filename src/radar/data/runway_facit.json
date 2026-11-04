@@ -74,9 +74,9 @@
   "name": "Bong",
   "document_id": 3209,
   "report_period_end": "2026-06-30",
-  "expected_monthly_burn": 1100000,
+  "expected_monthly_burn": 750000,
   "cash_flow_positive": false,
-  "basis": "H1 2026 FCF: CFO +2.9M - capex 9.5M = -6.6M/6 (using net investing -7.4M: 0.75M)",
+  "basis": "Verifierat 2026-11-04: H1 CFO + nettoinvesteringar (samma princip som Ferronordic)",
   "verdict": "new"
  },
  {
@@ -184,9 +184,9 @@
   "name": "Observit",
   "document_id": 14808,
   "report_period_end": "2026-06-30",
-  "expected_monthly_burn": 285667,
-  "cash_flow_positive": false,
-  "basis": "Q2 2026 CFO -857k/3 (H1 CFO +1,009k; incl. investing -3,885k H1: ~479k/mo if investing is capex)",
+  "expected_monthly_burn": null,
+  "cash_flow_positive": null,
+  "basis": "Oklart mellan Q2 utan investeringar och H1 med investeringar",
   "verdict": "new"
  },
  {

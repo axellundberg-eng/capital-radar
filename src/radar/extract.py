@@ -65,12 +65,16 @@ class DeepSeekClient:
 
     def complete(self, system: str, user: str) -> tuple[str, dict[str, int]]:
         response = self._client.chat.completions.create(
-            model=self.model, temperature=0, max_tokens=4000,
+            model=self.model, temperature=0, max_tokens=8000,
             response_format={"type": "json_object"},
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         )
         usage = response.usage
-        return response.choices[0].message.content or "", {
+        choice = response.choices[0]
+        content = choice.message.content or ""
+        if not content.strip():
+            raise ExtractionError(f"tomt svar (finish_reason={choice.finish_reason})")
+        return content, {
             "prompt_tokens": getattr(usage, "prompt_tokens", 0) or 0,
             "completion_tokens": getattr(usage, "completion_tokens", 0) or 0,
         }
@@ -173,7 +177,21 @@ def parse_response(raw: str) -> Extraction:
     return Extraction(_date(data.get("report_period_start")), end, currency, tuple(facts))
 
 
-def extract(client: ChatClient, page_texts: list[str]) -> tuple[Extraction, list[int], str, dict[str, int]]:
+def extract(client: ChatClient, page_texts: list[str], *, attempts: int = 2
+            ) -> tuple[Extraction, list[int], str, dict[str, int]]:
+    """Ett nytt försök vid tomt eller trasigt svar; sedan fel med svaret bifogat."""
     pages = select_pages(page_texts)
-    raw, usage = client.complete(PROMPT, build_user_message(page_texts, pages))
-    return parse_response(raw), pages, raw, usage
+    message = build_user_message(page_texts, pages)
+    usage_total = {"prompt_tokens": 0, "completion_tokens": 0}
+    last_error: ExtractionError | None = None
+    raw = ""
+    for _ in range(max(1, attempts)):
+        try:
+            raw, usage = client.complete(PROMPT, message)
+            for key in usage_total:
+                usage_total[key] += usage.get(key, 0)
+            return parse_response(raw), pages, raw, usage_total
+        except ExtractionError as error:
+            last_error = error
+    last_error.raw = raw  # type: ignore[attr-defined]
+    raise last_error

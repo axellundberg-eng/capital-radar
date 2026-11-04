@@ -241,3 +241,26 @@ def test_parse_response_accepts_fenced_or_wrapped_json():
     body = json.dumps({"report_period_end": END, "unit": "SEK", "cash": {"value": 5, "date": END}})
     for raw in (f"```json\n{body}\n```", f"Här är svaret:\n{body}\nKlart."):
         assert parse_response(raw).facts[0].value == 5
+
+
+def test_english_unit_suffixes():
+    from radar.units import parse_unit
+
+    assert parse_unit("SEKm") == (1e6, "SEK")
+    assert parse_unit("SEK m") == (1e6, "SEK")
+    assert parse_unit("EURk") == (1e3, "EUR")
+    assert parse_unit("SEKbn") == (1e9, "SEK")
+
+
+def test_extract_retries_once_on_broken_answer():
+    from radar.extract import extract
+
+    good = json.dumps({"report_period_end": END, "unit": "SEK", "cash": {"value": 5, "date": END}})
+    answers = iter(['{"report_period_end": "2026', good])
+
+    class Flaky:
+        def complete(self, system, user):
+            return next(answers), {"prompt_tokens": 10, "completion_tokens": 5}
+
+    result, _, _, usage = extract(Flaky(), ["Kassaflöde"])
+    assert result.facts[0].value == 5 and usage["prompt_tokens"] == 20

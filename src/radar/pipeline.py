@@ -63,8 +63,9 @@ def _extract(connection, client: ChatClient, model: str, report: sqlite3.Row) ->
     except ExtractionError as error:
         with connection:
             connection.execute(
-                "INSERT INTO extractions(document_id, model, pages, status, error, created_at) VALUES (?,?,?,?,?,?)",
-                (document_id, model, "[]", "invalid", str(error), _now()))
+                """INSERT INTO extractions(document_id, model, pages, status, error, response_json, created_at)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (document_id, model, "[]", "invalid", str(error), getattr(error, "raw", None), _now()))
         raise
     with connection:
         cursor = connection.execute(
