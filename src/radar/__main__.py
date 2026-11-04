@@ -136,7 +136,8 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--latest", action="store_true", help="senaste rapporten per bolag")
     run.add_argument("--reextract", action="store_true", help="extrahera igen (facit/--document)")
     run.add_argument("--reextract-below", type=float, metavar="MÅN",
-                     help="med --latest: extrahera igen bolag med runway under MÅN månader")
+                     help="med --latest: extrahera igen bolag som bränner kassa och har runway under MÅN "
+                          "månader (så plockas händelser efter perioden och kortfristiga lån upp)")
     run.add_argument("--workers", type=int, default=4)
     run.add_argument("--limit", type=int)
     run.add_argument("--token-budget", type=int, default=8_000_000)

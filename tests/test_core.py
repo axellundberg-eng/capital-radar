@@ -353,3 +353,44 @@ def test_company_without_full_report_stays_visible_as_missing(tmp_path, legacy_d
     assert outcome["runway"]["status"] == "missing_full_report"
     items = TestClient(create_app(settings)).get("/api/companies").json()["items"]
     assert [(i["name"], i["band"]) for i in items] == [("Exempel AB", "missing")]
+
+
+# --- Händelser efter perioden och kortfristig skuld ----------------------------
+
+XSPRAY = [("cash", 180e6, None), ("operating_cash_flow", -79.2e6, "2026-01-01")]
+
+
+def test_post_period_outflow_is_subtracted_and_inflow_only_shown():
+    base = compute(facts(*XSPRAY), END, today="2026-09-30")
+    result = compute(facts(*XSPRAY, ("post_period_outflow", 50e6, "2026-07-10"),
+                           ("post_period_inflow", 30e6, "2026-08-01")), END, today="2026-09-30")
+    assert round(base.runway_today - result.runway_today, 1) == 3.8
+    assert result.post_period_outflows == 50e6 and result.reported_inflows_after_period == 30e6
+    assert "post_period_outflows" in result.flags
+    assert result.runway_at_report == base.runway_at_report
+
+
+def test_debt_due_12m_warns_without_changing_main_runway():
+    base = compute(facts(*XSPRAY), END, today="2026-09-30")
+    result = compute(facts(*XSPRAY, ("debt_due_12m", 60e6, None)), END, today="2026-09-30")
+    assert result.runway_today == base.runway_today
+    assert result.debt_due_12m == 60e6 and result.runway_after_debt == round((180e6 - 39.6e6 - 60e6) / 13.2e6, 1)
+    assert "debt_due_within_12m" in result.flags
+    small = compute(facts(*XSPRAY, ("debt_due_12m", 5e6, None)), END, today="2026-09-30")
+    assert "debt_due_within_12m" not in small.flags
+
+
+def test_parse_response_reads_events_after_period_and_debt_with_units():
+    raw = json.dumps({"report_period_end": END, "unit": "MSEK", "currency": "SEK",
+                      "cash": {"value": 180, "page": 4, "quote": "Likvida medel"},
+                      "events_after_period": [
+                          {"description": "Amortering", "direction": "out", "amount": 50, "date": "2026-07-10",
+                           "page": 12, "quote": "amorterade 50 MSEK"},
+                          {"description": "Lån", "direction": "in", "amount": 20, "date": None},
+                          {"description": "Okänd", "direction": "sideways", "amount": 5}],
+                      "debt_due_12m": {"value": 60, "page": 5, "quote": "Kortfristiga skulder"}})
+    kinds = {f.kind: f for f in parse_response(raw).facts}
+    out = kinds["post_period_outflow"]
+    assert (out.value, out.period_start, out.page) == (50e6, "2026-07-10", 12) and "amorterade" in out.quote
+    assert kinds["post_period_inflow"].value == 20e6 and kinds["debt_due_12m"].value == 60e6
+    assert len(kinds) == 4

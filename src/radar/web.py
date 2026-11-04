@@ -28,6 +28,8 @@ FLAG_TEXT = {
     "includes_short_term_investments": "Likviditeten inkluderar kortfristiga placeringar",
     "cash_exhausted_since_report": "Kassan borde vara slut sedan rapporten: kontrollera ny finansiering",
     "raise_announced": "En emission eller finansiering är annonserad men inte genomförd",
+    "post_period_outflows": "Utbetalningar efter perioden (t.ex. amortering) är avdragna från kassan",
+    "debt_due_within_12m": "Lån förfaller inom 12 månader: runway efter amortering är klart kortare",
     "financing_received": "Genomförd finansiering efter rapporten ingår i runway",
 }
 
@@ -74,6 +76,10 @@ def latest_rows(connection: sqlite3.Connection) -> list[dict]:
             "confirmed_financing": result.get("confirmed_financing", 0.0),
             "announced_financing": result.get("announced_financing", 0.0),
             "financing_events": result.get("financing_events", []),
+            "post_period_outflows": result.get("post_period_outflows", 0.0),
+            "reported_inflows_after_period": result.get("reported_inflows_after_period", 0.0),
+            "debt_due_12m": result.get("debt_due_12m"),
+            "runway_after_debt": result.get("runway_after_debt"),
         }
         item["band"] = band(item)
         items.append(item)

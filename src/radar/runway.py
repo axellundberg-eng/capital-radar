@@ -7,6 +7,11 @@
 - Investeringar: i första hand rörelseinvesteringar (investeringsflödet utan
   förvärv och finansiella placeringar), annars capex, och bara om båda saknas
   hela investeringskassaflödet (flaggas).
+- Utflöden efter periodens slut som rapporten själv nämner (t.ex. amortering,
+  fakta `post_period_outflow`) dras från kassan innan den rullas fram. Inflöden
+  efter perioden (`post_period_inflow`) läggs inte till (de kommer från
+  nyhetssteget) utan visas bara. Lån som förfaller inom 12 månader
+  (`debt_due_12m`) ändrar inte huvudtalet utan ger en varning med egen runway.
 - Kassan rullas fram med burn från periodslut till idag.
 - Bekräftad finansiering efter rapporten (genomförda rundor, se rounds.py) läggs
   till kassan; annonserade rundor redovisas bara och flaggas.
@@ -57,6 +62,10 @@ class Runway:
     confirmed_financing: float = 0.0
     announced_financing: float = 0.0
     financing_events: list[dict] = field(default_factory=list)
+    post_period_outflows: float = 0.0
+    reported_inflows_after_period: float = 0.0
+    debt_due_12m: float | None = None
+    runway_after_debt: float | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -113,6 +122,21 @@ def _apply_financing(result: Runway, financing: tuple[float, float, list[dict]] 
     return confirmed
 
 
+def _sum(facts: list[Fact], kind: str) -> float:
+    return sum(f.value for f in facts if f.kind == kind and f.value > 0)
+
+
+def _debt_warning(result: Runway, facts: list[Fact], cash_today: float) -> None:
+    """Lån som förfaller inom 12 mån: varning med runway efter amortering."""
+    debt = _sum(facts, "debt_due_12m")
+    if debt <= 0 or not result.monthly_burn:
+        return
+    result.debt_due_12m = debt
+    result.runway_after_debt = round(max(0.0, cash_today - debt) / result.monthly_burn, 1)
+    if result.runway_after_debt < (result.runway_today or 0) - 1:
+        result.flags.append("debt_due_within_12m")
+
+
 def compute(facts: list[Fact], period_end: str, *, today: str,
             financing: tuple[float, float, list[dict]] | None = None) -> Runway:
     result = Runway(status="ok", period_end=period_end)
@@ -127,6 +151,12 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
         result.flags.append("includes_short_term_investments")
         cash += placements
     result.cash = cash
+    outflows = _sum(facts, "post_period_outflow")
+    result.post_period_outflows = outflows
+    result.reported_inflows_after_period = _sum(facts, "post_period_inflow")
+    if outflows:
+        result.flags.append("post_period_outflows")
+        extra -= outflows
     result.periods = _periods(facts, period_end)
     if not result.periods:
         result.status = "missing_cash_flow"
@@ -154,4 +184,5 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
         # Kassan borde redan vara slut: nästan alltid ny finansiering efter rapporten.
         result.flags.append("cash_exhausted_since_report")
     result.runway_today = round(max(0.0, cash + extra - chosen.monthly_burn * since) / chosen.monthly_burn, 1)
+    _debt_warning(result, facts, max(0.0, cash + extra - chosen.monthly_burn * since))
     return result

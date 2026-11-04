@@ -197,7 +197,7 @@ def test_detail_has_qualification_and_ui_has_prospect_view(client):
     detail = client.get("/api/companies/1").json()
     assert detail["qualification"]["score"] == 100 and len(detail["qualification"]["checks"]) == 7
     html = client.get("/").text
-    assert 'data-view="prospects"' in html and "prospectRows" in html and "app.js?v=5" in html
+    assert 'data-view="prospects"' in html and "prospectRows" in html and "app.js?v=6" in html
 
 
 def test_sector_rewards_life_science_and_tech():

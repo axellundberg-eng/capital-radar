@@ -11,6 +11,7 @@ from typing import Any, Protocol
 from .units import parse_unit
 
 KINDS = ("operating_cash_flow", "capex", "operating_investments", "investing_cash_flow")
+POST_PERIOD_KINDS = {"out": "post_period_outflow", "in": "post_period_inflow"}
 KEYWORDS = (
     "kassaflöde", "kassaflödesanalys", "likvida medel", "den löpande verksamheten",
     "investeringsverksamheten", "cash flow", "cash and cash equivalents",
@@ -36,7 +37,12 @@ Svara med enbart ett JSON-objekt:
     {"kind": "operating_cash_flow | capex | operating_investments | investing_cash_flow",
      "value": tal, "period_start": "YYYY-MM-DD", "period_end": "YYYY-MM-DD",
      "page": sidnummer, "quote": "kort citat"}
-  ]
+  ],
+  "events_after_period": [
+    {"description": "kort text", "direction": "out | in", "amount": tal, "date": "YYYY-MM-DD" eller null,
+     "page": sidnummer, "quote": "kort citat"}
+  ],
+  "debt_due_12m": {"value": tal, "page": sidnummer, "quote": "kort citat"} eller null
 }
 
 Regler:
@@ -53,6 +59,13 @@ Regler:
   eller joint venture-bolag. Försäljning av inventarier räknas med (netto). Ange det
   beräknade talet och citera raderna du använt.
 - investing_cash_flow = kassaflöde från investeringsverksamheten totalt.
+- events_after_period = kassapåverkande händelser som rapporten säger inträffat EFTER periodens
+  slut (t.ex. under "Väsentliga händelser efter periodens utgång"). direction "out" =
+  amortering/återbetalning av lån, utdelning, återköp, lösen av konvertibel; "in" = nyemission,
+  upptaget lån. "amount" är ett positivt tal i angiven enhet; riktningen anger tecknet. Tom lista
+  om inga finns. Ta inte med händelser före periodens slut.
+- debt_due_12m = räntebärande skulder som förfaller inom 12 månader (kortfristiga räntebärande
+  skulder) vid periodens slut, exklusive leasing om det går att skilja. Annars null.
 - Ta med varje periodkolumn för innevarande år som finns (t.ex. både kvartalet och hittills i år).
 - Hoppa över en siffra hellre än att gissa.
 """
@@ -197,7 +210,30 @@ def parse_response(raw: str) -> Extraction:
             continue
         facts.append(ExtractedFact(item["kind"], value * multiplier, currency, parse_date(item.get("period_start")),
                                    parse_date(item.get("period_end")) or end, item.get("page"), item.get("quote")))
+    facts.extend(_post_period_facts(data, multiplier, currency, end))
     return Extraction(parse_date(data.get("report_period_start")), end, currency, tuple(facts))
+
+
+def _post_period_facts(data: dict, multiplier: float, currency: str | None, end: str
+                       ) -> list[ExtractedFact]:
+    """Händelser efter perioden och kortfristig skuld. Händelsens datum lagras i period_start."""
+    facts = []
+    for item in data.get("events_after_period") or []:
+        kind = POST_PERIOD_KINDS.get(str(item.get("direction", "")).lower()) if isinstance(item, dict) else None
+        amount = parse_number(item.get("amount")) if kind else None
+        if not amount:
+            continue
+        try:
+            when = parse_date(item.get("date"))
+        except ExtractionError:
+            when = None
+        text = ": ".join(str(t) for t in (item.get("description"), item.get("quote")) if t)
+        facts.append(ExtractedFact(kind, abs(amount) * multiplier, currency, when, end, item.get("page"), text))
+    debt = data.get("debt_due_12m")
+    if isinstance(debt, dict) and parse_number(debt.get("value")):
+        facts.append(ExtractedFact("debt_due_12m", abs(parse_number(debt["value"])) * multiplier, currency,
+                                   None, end, debt.get("page"), debt.get("quote")))
+    return facts
 
 
 def extract(client: ChatClient, page_texts: list[str], *, attempts: int = 2

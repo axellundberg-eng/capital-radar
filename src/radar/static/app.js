@@ -11,7 +11,9 @@ const BANDS = [
   ["all", "Alla", ""],
 ];
 const KIND = { cash: "Likvida medel", short_term_investments: "Kortfristiga placeringar", operating_cash_flow: "Kassaflöde, löpande verksamhet",
-  capex: "Investeringar (capex)", investing_cash_flow: "Kassaflöde, investeringar" };
+  capex: "Investeringar (capex)", investing_cash_flow: "Kassaflöde, investeringar",
+  post_period_outflow: "Utbetalning efter perioden", post_period_inflow: "Inbetalning efter perioden",
+  debt_due_12m: "Lån som förfaller inom 12 mån" };
 
 const TYPE = { rights_issue: "Företrädesemission", directed_issue: "Riktad emission", loan: "Lån",
   convertible: "Konvertibel", warrants: "Teckningsoptioner", other: "Övrigt" };
@@ -167,6 +169,17 @@ function financingSection(d) {
   return `<h3>Finansiering efter rapporten</h3><ul class="facts">${items}</ul>`;
 }
 
+function afterPeriodSection(d) {
+  const rows = d.facts.filter((f) => f.kind === "post_period_outflow" || f.kind === "post_period_inflow");
+  const debt = d.debt_due_12m > 0
+    ? `<p class="source warn">Lån som förfaller inom 12 mån: ${msek(d.debt_due_12m)} — runway efter amortering ${months(d.runway_after_debt)}</p>` : "";
+  if (!rows.length) return debt;
+  const items = rows.map((f) => `<li><div><strong>${f.kind === "post_period_outflow" ? "Ut" : "In"} · ${msek(f.value)}</strong>
+    <span>${f.period_start ? date(f.period_start) + " · " : ""}${pdfLink(d, f.page)}</span></div>
+    ${f.quote ? `<q>${escapeHtml(f.quote)}</q>` : ""}</li>`).join("");
+  return `<h3>Händelser efter perioden</h3><ul class="facts">${items}</ul>${debt}`;
+}
+
 function pdfLink(d, page) {
   if (!d.pdf_url) return "";
   const label = page ? `s. ${page}` : "PDF";
@@ -195,6 +208,7 @@ function renderDetail(d) {
     <p class="explain">${explanation(d)}${financingNote(d)}</p>
     ${flags ? `<ul class="flags">${flags}</ul>` : ""}
     ${qualificationSection(d)}
+    ${afterPeriodSection(d)}
     ${financingSection(d)}
     <h3>Perioder</h3>
     <table class="mini"><thead><tr><th>Period</th><th class="num">Löpande</th><th class="num">Investeringar</th><th class="num">Burn / mån</th></tr></thead>
