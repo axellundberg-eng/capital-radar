@@ -229,3 +229,9 @@ def test_batch_takes_latest_report_per_company_and_respects_budget(tmp_path, leg
     assert calls == [1] and done.get("ok") == 1
     again = batch.run_latest(settings, CountingClient(answer), today=END, log=lines.append)
     assert calls == [1] and again.get("ok") == 1  # redan extraherad: inget nytt AI-anrop
+
+
+def test_parse_response_accepts_fenced_or_wrapped_json():
+    body = json.dumps({"report_period_end": END, "unit": "SEK", "cash": {"value": 5, "date": END}})
+    for raw in (f"```json\n{body}\n```", f"Här är svaret:\n{body}\nKlart."):
+        assert parse_response(raw).facts[0].value == 5

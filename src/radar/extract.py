@@ -134,10 +134,16 @@ def _number(value: Any) -> float | None:
 
 
 def parse_response(raw: str) -> Extraction:
+    text = raw.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text)
+    start, end_brace = text.find("{"), text.rfind("}")
+    if start > 0 or (end_brace != -1 and end_brace < len(text) - 1):
+        text = text[start:end_brace + 1] if start != -1 and end_brace > start else text
     try:
-        data = json.loads(raw)
+        data = json.loads(text)
     except json.JSONDecodeError as error:
-        raise ExtractionError("svaret är inte JSON") from error
+        raise ExtractionError(f"svaret är inte JSON ({len(raw)} tecken)") from error
     if not isinstance(data, dict):
         raise ExtractionError("svaret är inte ett objekt")
     end = _date(data.get("report_period_end"))
