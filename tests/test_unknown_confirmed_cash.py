@@ -64,7 +64,7 @@ class UnknownCashTests(unittest.TestCase):
             self.assertIsNone(event['amount']);self.assertIsNone(event['cash_effect'])
             self.assertEqual(event['exclusion_reason'],UNKNOWN_CASH_REASON)
             self.assertEqual(result['pro_forma_cash_adjustment'],0)
-            self.assertEqual(result['adjusted_runway_months'],6)
+            self.assertEqual(result['adjusted_runway_months'],result['runway_from_today_months'])
             self.assertEqual(result['reported_runway_months'],6)
             self.assertIn(UNKNOWN_CASH_REASON,result['pro_forma_comment'])
 

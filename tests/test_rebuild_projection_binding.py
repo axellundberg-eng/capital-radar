@@ -155,7 +155,9 @@ class RebuildProjectionBindingTests(unittest.TestCase):
             correction = self.correction(c)
             apply_transaction_correction(c,correction,actor='fixture')
             self.assertEqual(current_analysis(c,[379])[0]['reported_runway_months'],10)
-            self.assertEqual(current_analysis(c,[379])[0]['adjusted_runway_months'],10)
+            # Utan post-report-finansiering är adjusted samma som framrullad runway.
+            row=current_analysis(c,[379])[0]
+            self.assertEqual(row['adjusted_runway_months'],row['runway_from_today_months'])
             self.assertEqual([tuple(row) for row in c.execute('SELECT * FROM runway_assessments')],original)
             revert_transaction_correction(c,correction,actor='fixture')
             self.assertEqual(current_analysis(c,[379])[0]['reported_runway_months'],10)

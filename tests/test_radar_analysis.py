@@ -28,43 +28,61 @@ class RadarAnalysisTests(unittest.TestCase):
         return calculate(self.assessment, transactions if transactions is not None else [self.tx],
                          weights or {}, as_of="2026-08-31")
 
-    def test_default_full_and_overrides_preserve_input_and_screening(self):
+    def test_cash_rolls_forward_and_manual_weights_apply(self):
+        # 62 dagar efter periodslut: 60 - 10 * 2,04 = 39,6 kvar idag.
         original = copy.deepcopy(self.assessment)
-        for weight, expected in [(1, 9), (.5, 7.5), (0, 6)]:
+        for weight, expected in [(1, 7.0), (.5, 5.5), (0, 4.0)]:
             result = self.calc(weights={self.tx["id"]: weight})
             self.assertEqual(result["adjusted_runway_months"], expected)
+            self.assertEqual(result["runway_from_today_months"], 4.0)
+            self.assertEqual(result["months_since_report"], 2.0)
             self.assertEqual(result["reported_runway_months"], 6)
+            self.assertEqual(result["events"][0]["weight_source"], "manual")
             self.assertEqual(result["events"][0]["source_document_ids"], [3])
-        self.assertEqual(self.calc()["adjusted_runway_months"], 9)
         self.assertEqual(self.assessment, original)
 
+    def test_announced_financing_is_not_cash_by_default(self):
+        result = self.calc()
+        self.assertEqual(result["adjusted_runway_months"], 4.0)
+        self.assertEqual(result["events"][0]["weight"], 0.0)
+        self.assertEqual(result["events"][0]["weight_source"], "default_unconfirmed")
+
+    def test_completed_financing_counts_in_full_by_default(self):
+        result = self.calc([{**self.tx, "status": "completed"}])
+        self.assertEqual(result["adjusted_runway_months"], 7.0)
+        self.assertEqual(result["delta_runway_months"], 3.0)
+        self.assertEqual(result["events"][0]["weight_source"], "default_confirmed")
+
     def test_canonical_group_counted_once(self):
-        self.assertEqual(self.calc([self.tx, copy.deepcopy(self.tx)])["adjusted_runway_months"], 9)
+        completed = {**self.tx, "status": "completed"}
+        self.assertEqual(self.calc([completed, copy.deepcopy(completed)])["adjusted_runway_months"], 7.0)
 
     def test_pro_forma_comment_tracks_exact_weights_and_exclusions(self):
         included = self.calc(weights={self.tx["id"]: .5})
         self.assertEqual(included["pro_forma_cash_adjustment"], 15)
-        self.assertIn("Adjusted runway 7,5 mån", included["pro_forma_comment"])
+        self.assertIn("Runway från idag 5,5 mån", included["pro_forma_comment"])
+        self.assertIn("2,0 mån sedan", included["pro_forma_comment"])
         self.assertIn("15 SEK vid 50 %", included["pro_forma_comment"])
         excluded = self.calc([{**self.tx, "status": "cancelled"}])
-        self.assertIn("Adjusted runway 6 mån", excluded["pro_forma_comment"])
+        self.assertIn("Runway från idag 4 mån", excluded["pro_forma_comment"])
         self.assertIn("Undantaget", excluded["pro_forma_comment"])
 
     def test_other_issuer_bridge_loan_cannot_change_comment_or_cash(self):
         result = self.calc([{**self.tx, "issuer_id": 2, "category": "bridge_loan"}])
-        self.assertEqual(result["adjusted_runway_months"], 6)
+        self.assertEqual(result["adjusted_runway_months"], 4.0)
         self.assertEqual(result["pro_forma_cash_adjustment"], 0)
         self.assertIn("Ingen post-report-finansiering", result["pro_forma_comment"])
 
     def test_cash_bridge_loan_is_included_when_same_release_mentions_setoff(self):
         bridge = {**self.tx, "id": "transaction:1:bridge_loan:3", "category": "bridge_loan",
-                  "category_label": "Brygglån", "amount": 5_000_000,
+                  "category_label": "Brygglån", "amount": 5_000_000, "status": "completed",
                   "_source_text": ("Bolaget har ingått ett brygglån om 5 MSEK. "
                                    "Företrädesemissionen omfattar även kvittning av andra skulder.")}
         assessment = {**self.assessment, "baseline_cash": 2_000_000,
                       "monthly_operating_burn": 1_000_000, "operating_runway_months": 2}
         result = calculate(assessment, [bridge], {}, as_of="2026-08-31")
-        self.assertEqual(result["adjusted_runway_months"], 7)
+        # Kassan är förbrukad idag (2 - 2,04 MSEK); brygglånet ger 5 MSEK.
+        self.assertEqual(result["adjusted_runway_months"], 5.0)
         self.assertEqual(result["pro_forma_cash_adjustment"], 5_000_000)
         self.assertIn("Brygglån 5 MSEK vid 100 %", result["pro_forma_comment"])
 
@@ -91,8 +109,8 @@ class RadarAnalysisTests(unittest.TestCase):
                     dict(history=self.tx["history"] + [dict(published_at="2026-09-02", title="Utfall")])]
         for fields in variants:
             with self.subTest(fields=fields):
-                result = self.calc([{**self.tx, **fields}])
-                self.assertEqual(result["adjusted_runway_months"], 6)
+                result = self.calc([{**self.tx, "status": "completed", **fields}])
+                self.assertEqual(result["adjusted_runway_months"], 4.0)
                 self.assertTrue(result["events"][0]["exclusion_reason"])
 
     def test_report_included_and_future_announcements_do_not_adjust(self):
@@ -117,7 +135,7 @@ class RadarAnalysisTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 capture_month_end(connection, now=datetime(2026, 7, 31, 23, 59, tzinfo=timezone.utc))
         stored = json.loads(connection.execute("SELECT calculation_json FROM issuer_runway_snapshots").fetchone()[0])
-        self.assertEqual(stored["events"][0]["weight"], 1)
+        self.assertEqual(stored["events"][0]["weight"], 0.0)
         for sql in ["UPDATE issuer_runway_snapshots SET cash=999", "DELETE FROM issuer_runway_snapshots"]:
             with self.assertRaises(sqlite3.IntegrityError):
                 connection.execute(sql)

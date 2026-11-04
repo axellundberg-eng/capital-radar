@@ -114,7 +114,7 @@ test("overview and company list render while feed, runway and health are delayed
   assert.match(app.node("#issuerList").innerHTML, /Exempel AB/);
   assert.match(app.node("#homeTransactions").innerHTML, /laddas/);
   assert.doesNotMatch(app.node("#homeTransactions").innerHTML, /Inga finansieringsaffärer/);
-  assert.match(app.node("#radarCount").textContent, /Adjusted runway laddas/);
+  assert.match(app.node("#radarCount").textContent, /Runway idag laddas/);
   slowFeed.resolve(feed()); slowAnalysis.resolve(analysis()); slowHealth.resolve({ months: [] });
   await loading; await flush();
   assert.match(app.node("#homeTransactions").innerHTML, /Verifierat källreferat/);
@@ -134,7 +134,7 @@ test("failed finance views do not discard successful overview and issuer records
   assert.doesNotMatch(app.node("#homeTransactions").innerHTML, /Inga finansieringsaffärer/);
   assert.match(app.node("#dealChart").innerHTML, /kunde inte laddas/);
   assert.doesNotMatch(app.node("#dealChart").innerHTML, /Historiska månadsslut saknas/);
-  assert.match(app.node("#notice").textContent, /Adjusted runway/);
+  assert.match(app.node("#notice").textContent, /Runway idag/);
   assert.equal(app.state.proForma[1], undefined);
 });
 
@@ -148,7 +148,7 @@ test("issuer detail shows base records before runway and keeps them after runway
   assert.match(app.node("#issuerDetailContent").innerHTML, /Dokument 17/);
   slow.reject(new Error("timeout"));
   await loading;
-  assert.match(app.node("#issuerDetailContent").innerHTML, /Adjusted runway kunde inte laddas/);
+  assert.match(app.node("#issuerDetailContent").innerHTML, /Runway idag kunde inte laddas/);
   assert.match(app.node("#issuerDetailContent").innerHTML, /Dokument 17/);
   assert.equal(app.state.issuerDetail.issuer.canonical_name, "Exempel AB");
 });

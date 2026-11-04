@@ -210,18 +210,15 @@ def _calculate_assessment(
     def _normalize_amount(value: float, currency: str | None) -> float:
         """Konvertera orimligt små belopp till kronor.
         
-        Heuristik:
-        - < 1000: troligen MSEK (miljoner) → multiplicera med 1 000 000
-        - 1000-500000: troligen kSEK (tusentals) → multiplicera med 1 000
-        - >= 500000: troligen redan SEK → behåll
+        Heuristik: belopp under 1 000 SEK är i praktiken angivna i MSEK.
+        Allt annat antas redan vara kronor; den tidigare kSEK-gissningen
+        (1 000–500 000 × 1 000) gjorde t.ex. 400 000 kr till 400 MSEK.
         """
         amount = abs(float(value))
         if currency != "SEK":
             return amount
         if amount < 1000:
             return amount * 1_000_000  # MSEK → SEK
-        if amount < 500000:
-            return amount * 1_000  # kSEK → SEK
         return amount
 
     for event in unique_events:

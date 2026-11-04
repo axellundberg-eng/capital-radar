@@ -14,7 +14,11 @@ from typing import Any
 
 from .transaction_feed import _RX, _transaction_items, _money
 
-VERSION = "radar-pro-forma-v3"
+VERSION = "radar-pro-forma-v4"
+# Status där kassan anses inbetald; annonserade affärer viktas 0 tills någon
+# sätter en vikt manuellt.
+CONFIRMED_STATUSES = frozenset({"completed", "registered", "preliminary_outcome"})
+DAYS_PER_MONTH = 30.4375
 UNKNOWN_CASH_REASON = "Mottagen kontantlikvid är okänd"
 BANDS = ("0–3", "3–6", "6–12", "12–18", "18+")
 SCHEMA = """
@@ -180,13 +184,22 @@ def _cash_amount(tx: dict, details: dict, text: str) -> tuple[float | None, str 
     return _number(tx.get("amount")), basis, None
 
 
+def _months_between(start: str | None, end: str | None) -> float:
+    try:
+        days = (date.fromisoformat(str(end)[:10]) - date.fromisoformat(str(start)[:10])).days
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, days / DAYS_PER_MONTH)
+
+
 def calculate(assessment: dict, transactions: list[dict], weights: dict,
               *, as_of: str) -> dict:
-    """Use reported cash/burn, with canonical post-report financing once.
+    """Runway från idag: rapporterad kassa rullas fram med burn till `as_of`,
+    plus post-report-finansiering räknad en gång.
 
-    Gross advertised proceeds remain explicitly gross pro forma assumptions.
-    Non-cash capital and incompatible/unknown currencies are never cash.
-    Existing runway scores and confirmed-liquidity calculations are untouched.
+    Endast genomförd finansiering räknas som kassa som standard; annonserade
+    belopp får vikt 0 tills en manuell vikt sätts. Bruttobelopp är fortsatt
+    före kostnader. Icke-kontant kapital och okända valutor är aldrig kassa.
     """
     cash = _number(assessment.get("baseline_cash"))
     burn = _number(assessment.get("monthly_operating_burn"))
@@ -195,6 +208,9 @@ def calculate(assessment: dict, transactions: list[dict], weights: dict,
     reported = _number(assessment.get("operating_runway_months"))
     period = assessment.get("report_period_end")
     currency = assessment.get("currency")
+    months_since_report = _months_between(period, as_of)
+    rolled_cash = (cash - burn * months_since_report
+                   if cash is not None and burn is not None and burn > 0 else cash)
     events = []
     seen = set()
     seen_rounds = set()
@@ -230,7 +246,12 @@ def calculate(assessment: dict, transactions: list[dict], weights: dict,
             reason = "Valutan kan inte förenas med rapporten"
         elif amount is None or amount < 0:
             reason = "Belopp saknas eller kan inte användas"
-        weight = weights.get(tx["id"], 1.0)
+        if tx["id"] in weights:
+            weight, weight_source = weights[tx["id"]], "manual"
+        elif tx.get("status") in CONFIRMED_STATUSES:
+            weight, weight_source = 1.0, "default_confirmed"
+        else:
+            weight, weight_source = 0.0, "default_unconfirmed"
         if type(weight) not in (int, float) or not math.isfinite(weight) or not 0 <= weight <= 1:
             raise ValueError("Vikten måste vara 0–100 %")
         effect = (None if cash_reason == UNKNOWN_CASH_REASON
@@ -239,19 +260,24 @@ def calculate(assessment: dict, transactions: list[dict], weights: dict,
                        "category_label": tx.get("category_label"), "status": tx.get("status"),
                        "announcement_date": first, "amount": amount, "amount_basis": basis,
                        "currency": tx.get("currency"), "weight": weight,
+                       "weight_source": weight_source,
                        "cash_effect": effect, "exclusion_reason": reason,
                        "correction_ids": tx.get("applied_transaction_correction_ids", []),
                        "source_document_ids": tx.get("source_document_ids", [])})
     adjustment = sum(e["cash_effect"] for e in events if e["cash_effect"] is not None)
-    adjusted = round(max(0, cash + adjustment) / burn, 1) if cash is not None and burn is not None and burn > 0 else None
+    has_burn = cash is not None and burn is not None and burn > 0
+    adjusted = round(max(0, rolled_cash + adjustment) / burn, 1) if has_burn else None
+    from_today = round(max(0, rolled_cash) / burn, 1) if has_burn else None
     included_events = [event for event in events if event["exclusion_reason"] is None]
     excluded_events = [event for event in events if event["exclusion_reason"] is not None]
     if adjusted is None:
         comment = "Adjusted runway kan inte beräknas med tillgänglig kassa och burn."
     else:
         adjusted_label = f"{adjusted:g}".replace(".", ",")
-        reported_part = "" if reported is None else f" från reported {reported:g} mån".replace(".", ",")
-        comment = f"Adjusted runway {adjusted_label} mån{reported_part}."
+        reported_part = "" if reported is None else f" Rapporten angav {reported:g} mån".replace(".", ",")
+        elapsed = f"{months_since_report:.1f}".replace(".", ",")
+        comment = (f"Runway från idag {adjusted_label} mån.{reported_part}"
+                   f" vid periodslut, {elapsed} mån sedan.")
         if included_events:
             included_labels = ", ".join(
                 f"{event.get('category_label') or event['category']} "
@@ -270,14 +296,16 @@ def calculate(assessment: dict, transactions: list[dict], weights: dict,
         comment += f" Undantaget: {excluded_labels}."
     return {"issuer_id": assessment.get("issuer_id"), "reported_runway_months": reported,
             "adjusted_runway_months": adjusted,
-            "delta_runway_months": round(adjusted - reported, 1) if adjusted is not None and reported is not None else None,
+            "delta_runway_months": round(adjustment / burn, 1) if has_burn else None,
+            "runway_from_today_months": from_today, "months_since_report": round(months_since_report, 1),
             "cash": cash, "monthly_burn": burn, "currency": currency,
             "cash_flow_positive": positive, "runway_band": runway_band(adjusted, positive=positive),
             "report_period_end": period, "report_document_id": assessment.get("report_document_id"),
             "assessment_id": assessment.get("id"), "events": events,
             "pro_forma_comment": comment, "pro_forma_cash_adjustment": adjustment,
             "calculation_version": VERSION, "as_of": as_of,
-            "basis": "Rapporterad kassa och burn; annonserat belopp viktas separat. Bruttobelopp är före kostnader."}
+            "basis": ("Rapporterad kassa framrullad med burn till idag; genomförd finansiering räknas, "
+                      "annonserad viktas 0 tills vikt sätts. Bruttobelopp är före kostnader.")}
 
 
 def current_analysis(connection: sqlite3.Connection, issuer_ids: list[int] | None = None,

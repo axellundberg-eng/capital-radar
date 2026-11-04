@@ -314,7 +314,8 @@ class TransactionGroupingCorrectionTests(unittest.TestCase):
                 as_of="2026-09-22",
             )
             self.assertEqual(analysis["reported_runway_months"], 2.0)
-            self.assertEqual(analysis["pro_forma_cash_adjustment"], 51_000_000)
+            # Annonserat utfall räknas inte som kassa utan manuell vikt; beloppet följer med.
+            self.assertEqual(analysis["events"][0]["amount"], 51_000_000)
             self.assertEqual(len(analysis["events"]), 1)
             warrant_terms = connection.execute(
                 """SELECT e.liquidity_effect_kind
