@@ -22,15 +22,16 @@ def test_period_months_handles_quarter_half_year_and_full_year():
     assert period_months("2024-01-01", "2025-12-31") is None
 
 
-def test_burn_uses_each_facts_own_period_and_picks_the_higher():
+def test_burn_uses_each_facts_own_period_and_the_longest_period():
     # YTD 6 mån: -6 MSEK (1 MSEK/mån). Kvartal 3 mån: -4,5 MSEK (1,5 MSEK/mån).
     result = evaluate(report(CASH, fact("operating_cash_flow", -6_000_000, "2026-01-01"),
                              fact("operating_cash_flow", -4_500_000, "2026-04-01")), [], as_of="2026-06-30")
     assert result.status == "ok"
-    assert result.monthly_burn == 1_500_000
+    assert result.monthly_burn == 1_000_000
     assert [c.months for c in result.burn_candidates] == [3, 6]
-    assert result.runway_at_report_months == 8.0
-    assert any("högsta burn" in text for text in result.assumptions)
+    assert result.runway_at_report_months == 12.0
+    assert any("6 mån används" in text for text in result.assumptions)
+    assert "recent_period_burn_higher" not in result.flags
 
 
 def test_old_logic_bug_quarter_fact_in_half_year_report():
@@ -82,10 +83,29 @@ def test_missing_data_and_stale_reports_are_explicit():
     assert stale.safe_runway_months == 0.0
 
 
-def test_diverging_periods_are_flagged():
+def test_much_higher_recent_quarter_is_flagged():
     result = evaluate(report(CASH, fact("operating_cash_flow", -600_000, "2026-01-01"),
                              fact("operating_cash_flow", -3_000_000, "2026-04-01")), [], as_of="2026-06-30")
-    assert "burn_periods_diverge" in result.flags
+    # Kvartalet bränner tio gånger mer än halvåret: kvartalet används.
+    assert result.monthly_burn == 1_000_000
+    assert "recent_period_burn_higher" in result.flags
+
+
+def test_seasonal_negative_quarter_does_not_override_positive_year():
+    result = evaluate(report(CASH, fact("operating_cash_flow", 3_000_000, "2026-01-01"),
+                             fact("operating_cash_flow", -900_000, "2026-04-01")), [], as_of="2026-06-30")
+    assert result.cash_flow_positive is True
+    assert "recent_period_burn_higher" in result.flags
+
+
+def test_positive_capex_sign_and_investing_fallback():
+    positive_sign = evaluate(report(CASH, fact("operating_cash_flow", 1_200_000, "2026-01-01"),
+                                    fact("capex", 7_200_000, "2026-01-01")), [], as_of="2026-06-30")
+    assert positive_sign.monthly_burn == 1_000_000
+    fallback = evaluate(report(CASH, fact("operating_cash_flow", -1_200_000, "2026-01-01"),
+                               fact("investing_cash_flow", -4_800_000, "2026-01-01")), [], as_of="2026-06-30")
+    assert fallback.monthly_burn == 1_000_000
+    assert "investing_as_capex" in fallback.flags
 
 
 def test_compare_runs_on_empty_database(tmp_path):

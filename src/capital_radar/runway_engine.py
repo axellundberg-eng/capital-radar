@@ -6,9 +6,14 @@ Ersätter på sikt de två parallella spåren i `runway.py` (assessment) och
 Regler:
 - Kassa = `cash_and_cash_equivalents` per rapportens periodslut.
 - Burn räknas per fakta utifrån faktans *egen* period (kvartal, H1, YTD,
-  helår), inte rapportens. Finns flera perioder väljs den högsta burnen
-  (försiktigt antagande) och alla redovisas.
-- Investeringar (`capex`) för samma period läggs till burnen.
+  helår), inte rapportens. Finns flera perioder används den längsta (minst
+  säsongsbrus). Bränner den senaste perioden mer än 1,5 gånger så mycket
+  används den i stället (försiktigt), utom när den längsta perioden är
+  kassaflödespositiv.
+- Investeringar för samma period läggs till burnen. Capex används, men om
+  capex verkar ofullständig (minst en fjärdedel av ett större negativt
+  investeringskassaflöde) används hela investeringskassaflödet. Är capex
+  mindre än så består resten troligen av förvärv och placeringar.
 - Kassan rullas fram med burn från periodslut till `as_of`.
 - Säker runway räknar bara genomförd finansiering efter rapporten.
   Förväntad runway lägger till annonserad finansiering.
@@ -22,7 +27,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date
 from typing import Any, Iterable
 
-ENGINE_VERSION = "runway-engine-v1"
+ENGINE_VERSION = "runway-engine-v2"
 DAYS_PER_MONTH = 30.4375
 STALE_AFTER_MONTHS = 7.0
 CONFIRMED_STATUSES = frozenset({"completed", "registered", "preliminary_outcome"})
@@ -30,6 +35,10 @@ EXPECTED_STATUSES = frozenset({"announced", "approved", "subscription_period", "
 CASH_FACT = "cash_and_cash_equivalents"
 CFO_FACT = "operating_cash_flow"
 CAPEX_FACT = "capex"
+INVESTING_FACT = "investing_cash_flow"
+RECENT_BURN_RATIO = 1.5
+# Capex under denna andel av investeringskassaflödet tolkas som att resten är förvärv.
+CAPEX_SHARE_OF_INVESTING = 0.25
 
 
 @dataclass(frozen=True)
@@ -75,6 +84,7 @@ class BurnCandidate:
     capex: float
     monthly_burn: float
     document_id: int
+    capex_basis: str = "none"
 
 
 @dataclass
@@ -128,6 +138,7 @@ def _best(facts: Iterable[Fact]) -> Fact | None:
 def _burn_candidates(report: Report, assumptions: list[str]) -> list[BurnCandidate]:
     cfo_facts = [f for f in report.facts if f.fact_type == CFO_FACT and f.period_end == report.period_end]
     capex_facts = [f for f in report.facts if f.fact_type == CAPEX_FACT and f.period_end == report.period_end]
+    investing_facts = [f for f in report.facts if f.fact_type == INVESTING_FACT and f.period_end == report.period_end]
     by_period: dict[tuple[str, str], Fact] = {}
     for fact in cfo_facts:
         start = fact.period_start
@@ -147,9 +158,22 @@ def _burn_candidates(report: Report, assumptions: list[str]) -> list[BurnCandida
         if months is None:
             continue
         capex_fact = _best(f for f in capex_facts if (f.period_start or start) == start)
-        capex = abs(capex_fact.value) if capex_fact else 0.0
-        burn = max(0.0, (-fact.value + capex) / months)
-        candidates.append(BurnCandidate(start, end, months, fact.value, capex, burn, fact.document_id))
+        investing_fact = _best(f for f in investing_facts if (f.period_start or start) == start)
+        # Tecknet på capex varierar i extraktionen; capex är alltid ett utflöde.
+        capex_value = abs(capex_fact.value) if capex_fact is not None else None
+        investing_out = -investing_fact.value if investing_fact is not None and investing_fact.value < 0 else None
+        capex_looks_partial = (capex_value is not None and investing_out is not None
+                               and CAPEX_SHARE_OF_INVESTING * investing_out <= capex_value < investing_out)
+        if investing_out is not None and (capex_value is None or capex_looks_partial):
+            capex, capex_basis = investing_out, "investing_cash_flow"
+        elif capex_value is not None:
+            capex, capex_basis = capex_value, "capex"
+        else:
+            capex, capex_basis = 0.0, "none"
+        net_flow = fact.value - capex
+        burn = max(0.0, -net_flow / months)
+        candidates.append(BurnCandidate(start, end, months, fact.value, capex, burn,
+                                        fact.document_id, capex_basis))
     return sorted(candidates, key=lambda c: c.months)
 
 
@@ -176,16 +200,22 @@ def evaluate(report: Report | None, events: Iterable[FinancingEvent], *, as_of: 
         result.status = "missing_cash_flow"
         assumptions.append("Operativt kassaflöde med känd period saknas.")
         return result
-    burns = [c.monthly_burn for c in candidates]
-    burn = max(burns)
+    chosen = candidates[-1]  # längsta perioden
     if len(candidates) > 1:
+        recent = candidates[0]
+        if chosen.monthly_burn > 0 and recent.monthly_burn > chosen.monthly_burn * RECENT_BURN_RATIO:
+            result.flags.append("recent_period_burn_higher")
+            chosen = recent
+        elif chosen.monthly_burn == 0 and recent.monthly_burn > 0:
+            result.flags.append("recent_period_burn_higher")
         assumptions.append(
             "Flera perioder finns (" + ", ".join(f"{c.months:g} mån" for c in candidates)
-            + "); högsta burn används.")
-        positive_burns = [b for b in burns if b > 0]
-        if positive_burns and min(positive_burns) > 0 and max(positive_burns) / min(positive_burns) > 2:
-            result.flags.append("burn_periods_diverge")
-    if not any(c.capex for c in candidates):
+            + f"); {chosen.months:g} mån används.")
+    burn = chosen.monthly_burn
+    if chosen.capex_basis == "investing_cash_flow":
+        result.flags.append("investing_as_capex")
+        assumptions.append("Hela investeringskassaflödet räknas som investering (capex saknas eller är lägre).")
+    elif chosen.capex_basis == "none":
         assumptions.append("Capex saknas för perioden; burn är bara operativt kassaflöde.")
     since = months_between(report.period_end, as_of) or 0.0
     since = max(0.0, since)
@@ -197,7 +227,7 @@ def evaluate(report: Report | None, events: Iterable[FinancingEvent], *, as_of: 
         result.cash_flow_positive = True
         result.monthly_burn = 0.0
         result.estimated_cash_today = cash_fact.value
-        assumptions.append("Positivt kassaflöde i alla perioder; ingen burn.")
+        assumptions.append("Positivt kassaflöde efter investeringar; ingen burn.")
         _apply_events(result, events, report)
         return result
     result.monthly_burn = burn

@@ -1,0 +1,2280 @@
+[
+ {
+  "category": "burn_diverge",
+  "comparison": {
+   "issuer_id": 83,
+   "name": "Sedana Medical",
+   "status": "ok",
+   "flags": [
+    "burn_periods_diverge"
+   ],
+   "old_reported": 44.9,
+   "old_today": 43.8,
+   "new_at_report": 7.0,
+   "new_safe": 5.9,
+   "new_expected": 5.9,
+   "old_burn": 884111.1111111111,
+   "new_burn": 5645111.111111111,
+   "months_since_report": 1.1,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    9.0
+   ],
+   "report_document_id": 24906
+  },
+  "report": {
+   "title": "Sedana Medical AB’s Interim report January-September 2026",
+   "url": "https://www.mfn.se/a/sedana-medical/sedana-medical-abs-interim-report-january-september-2026",
+   "period_start": "2026-01-01",
+   "period_end": "2026-09-30",
+   "period_months": 9.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 39724.0,
+    "unit": "KSEK",
+    "normalized_value": 39724000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-09-30",
+    "page": 15,
+    "excerpt": "Cash and cash equivalents 39,724 111,962 90,980",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 39724.0,
+    "unit": "KSEK",
+    "normalized_value": 39724000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-09-30",
+    "page": 17,
+    "excerpt": "Cash and cash equivalents at the end of the period 39,724 111,962 39,724 111,962 90,980",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -7957.0,
+    "unit": "KSEK",
+    "normalized_value": -7957000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 17,
+    "excerpt": "Cash flow from operating activities -2,975 -1,101 -7,957 -7,533 -12,780",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -2975.0,
+    "unit": "KSEK",
+    "normalized_value": -2975000.0,
+    "currency": "SEK",
+    "period_start": "2026-07-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 17,
+    "excerpt": "Cash flow from operating activities -2,975 -1,101 -7,957 -7,533 -12,780",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -43845.0,
+    "unit": "KSEK",
+    "normalized_value": -43845000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 17,
+    "excerpt": "Cash flow from investing activities -9,424 -15,236 -43,845 -50,295 -63,029",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": -42849.0,
+    "unit": "KSEK",
+    "normalized_value": -42849000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 17,
+    "excerpt": "Investments in intangible assets -9,298 -14,850 -42,849 -48,970 -60,007",
+    "confidence": 0.95
+   }
+  ]
+ },
+ {
+  "category": "burn_diverge",
+  "comparison": {
+   "issuer_id": 103,
+   "name": "2cureX",
+   "status": "ok",
+   "flags": [
+    "burn_periods_diverge",
+    "stale_report",
+    "cash_likely_exhausted"
+   ],
+   "old_reported": 8.4,
+   "old_today": 0.0,
+   "new_at_report": 4.2,
+   "new_safe": 0.0,
+   "new_expected": 9.1,
+   "old_burn": 249916.66666666666,
+   "new_burn": 499833.3333333333,
+   "months_since_report": 10.1,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    6.0,
+    12.0
+   ],
+   "report_document_id": 59
+  },
+  "report": {
+   "title": "THIS PRESS RELEASE IS AN ENGLISH TRANSLATION OF THE LEGALLY BINDING SWEDISH PRESS RELEASE: “PUBLICERING AV ÅRSREDOVISNINGEN FÖR 2CUREX AB (publ)”.",
+   "url": "https://www.mfn.se/a/2curex/this-press-release-is-an-english-translation-of-the-legally-binding-swedish-press-release-publicering-av-arsredovisningen-for-2curex-ab-publ",
+   "period_start": "2025-01-01",
+   "period_end": "2025-12-31",
+   "period_months": 12.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 2096.0,
+    "unit": "thousands",
+    "normalized_value": 2096000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": "2025-12-31",
+    "as_of_date": "2025-12-31",
+    "page": 9,
+    "excerpt": "Cash and bank balances 2 096",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -941.0,
+    "unit": "thousands",
+    "normalized_value": -941000.0,
+    "currency": "SEK",
+    "period_start": "2025-01-01",
+    "period_end": "2025-12-31",
+    "as_of_date": null,
+    "page": 10,
+    "excerpt": "Cash flow from operating activities -2 999 -941",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -2999.0,
+    "unit": "thousands",
+    "normalized_value": -2999000.0,
+    "currency": "SEK",
+    "period_start": "2025-07-01",
+    "period_end": "2025-12-31",
+    "as_of_date": null,
+    "page": 10,
+    "excerpt": "Cash flow from operating activities -2 999 -941",
+    "confidence": 0.97
+   }
+  ]
+ },
+ {
+  "category": "burn_diverge",
+  "comparison": {
+   "issuer_id": 136,
+   "name": "BoMill",
+   "status": "ok",
+   "flags": [
+    "burn_periods_diverge"
+   ],
+   "old_reported": 1.5,
+   "old_today": 0.3,
+   "new_at_report": 4.1,
+   "new_safe": 2.9,
+   "new_expected": 2.9,
+   "old_burn": 3012333.3333333335,
+   "new_burn": 1087000.0,
+   "months_since_report": 1.1,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    9.0
+   ],
+   "report_document_id": 24922
+  },
+  "report": {
+   "title": "BoMill Q3 Report July - September 2026",
+   "url": "https://www.mfn.se/cis/a/bomill/bomill-q3-report-july-september-2026-4f92c56a",
+   "period_start": "2026-07-01",
+   "period_end": "2026-09-30",
+   "period_months": 3.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 4440.0,
+    "unit": "KSEK",
+    "normalized_value": 4440000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-09-30",
+    "page": 22,
+    "excerpt": "Cash and bank 4 440 1 248 2 961",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 4440.0,
+    "unit": "KSEK",
+    "normalized_value": 4440000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-09-30",
+    "page": 2,
+    "excerpt": "Cash and cash equivalents end of period 4 440 1 248",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -55.0,
+    "unit": "KSEK",
+    "normalized_value": -55000.0,
+    "currency": "SEK",
+    "period_start": "2026-07-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 25,
+    "excerpt": "Cash flow from operating activities -55 -5 852 -9 037 -16 366 -14 183",
+    "confidence": 0.93
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -9037.0,
+    "unit": "KSEK",
+    "normalized_value": -9037000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 25,
+    "excerpt": "Cash flow from operating activities -55 -5 852 -9 037 -16 366 -14 183",
+    "confidence": 0.93
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -804.0,
+    "unit": "KSEK",
+    "normalized_value": -804000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 25,
+    "excerpt": "Cash flow from investing activities -699 -207 -804 0 -470",
+    "confidence": 0.9
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": -746.0,
+    "unit": "KSEK",
+    "normalized_value": -746000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 25,
+    "excerpt": "Acquisition of intangible fixed assets -641 -75 -746 -171 -245",
+    "confidence": 0.85
+   }
+  ]
+ },
+ {
+  "category": "burn_diverge",
+  "comparison": {
+   "issuer_id": 151,
+   "name": "ChargePanel",
+   "status": "ok",
+   "flags": [
+    "burn_periods_diverge"
+   ],
+   "old_reported": 3.8,
+   "old_today": 0.0,
+   "new_at_report": 7.5,
+   "new_safe": 3.4,
+   "new_expected": 3.4,
+   "old_burn": 1194333.3333333333,
+   "new_burn": 597166.6666666666,
+   "months_since_report": 4.2,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    6.0
+   ],
+   "report_document_id": 4474
+  },
+  "report": {
+   "title": "Halvårsrapport Januari – Juni 2026",
+   "url": "https://www.mfn.se/a/chargepanel/halvarsrapport-januari-juni-2026",
+   "period_start": "2026-04-01",
+   "period_end": "2026-06-30",
+   "period_months": 3.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 4501.0,
+    "unit": "KSEK",
+    "normalized_value": 4501000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-06-30",
+    "page": 7,
+    "excerpt": "Likvida medel* 4 501 4 086 3 602",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -693.0,
+    "unit": "KSEK",
+    "normalized_value": -693000.0,
+    "currency": "SEK",
+    "period_start": "2026-04-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 9,
+    "excerpt": "Kassaflöde från den löpande verksamheten -693 -2 946 -3 583 -6 918 -9 237",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -3583.0,
+    "unit": "KSEK",
+    "normalized_value": -3583000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 9,
+    "excerpt": "Kassaflöde från den löpande verksamheten -693 -2 946 -3 583 -6 918 -9 237",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -663.0,
+    "unit": "KSEK",
+    "normalized_value": -663000.0,
+    "currency": "SEK",
+    "period_start": "2026-04-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 9,
+    "excerpt": "Kassaflöde från investeringsverksamheten -663 - 5 97 -1 287 -1 218 -2 508",
+    "confidence": 0.95
+   }
+  ]
+ },
+ {
+  "category": "burn_diverge",
+  "comparison": {
+   "issuer_id": 232,
+   "name": "Kentima Holding",
+   "status": "ok",
+   "flags": [
+    "burn_periods_diverge",
+    "cash_likely_exhausted"
+   ],
+   "old_reported": 25.5,
+   "old_today": 21.4,
+   "new_at_report": 0.5,
+   "new_safe": 0.0,
+   "new_expected": 0.0,
+   "old_burn": 5166.666666666667,
+   "new_burn": 268333.3333333333,
+   "months_since_report": 4.2,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    6.0
+   ],
+   "report_document_id": 10937
+  },
+  "report": {
+   "title": "HALVÅRSRAPPORT Q1-Q2, januari - juni 2026, Kentima Holding AB (publ)",
+   "url": "https://www.mfn.se/beq/a/kentima-holding/halvarsrapport-q1-q2-januari-juni-2026-kentima-holding-ab-publ-26037c53",
+   "period_start": "2026-01-01",
+   "period_end": "2026-06-30",
+   "period_months": 6.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 132.0,
+    "unit": "thousands",
+    "normalized_value": 132000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-06-30",
+    "page": 23,
+    "excerpt": "Likvida medel vid årets/periodens slut 132 39 132 39 351 ... Kassa och bank 132 39 132 39 351",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 1372.0,
+    "unit": "thousands",
+    "normalized_value": 1372000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 23,
+    "excerpt": "Kassaflöde från den löpande verksamheten -31 1 584 1 372 557 9 043",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -31.0,
+    "unit": "thousands",
+    "normalized_value": -31000.0,
+    "currency": "SEK",
+    "period_start": "2026-04-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 23,
+    "excerpt": "Kassaflöde från den löpande verksamheten -31 1 584 1 372 557 9 043",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -2982.0,
+    "unit": "thousands",
+    "normalized_value": -2982000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 23,
+    "excerpt": "Kassaflöde från investeringsverksamheten -1 746 -1 737 -2 982 -3 002 -5 107",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": 2982.0,
+    "unit": "thousands",
+    "normalized_value": 2982000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 23,
+    "excerpt": "Investeringsverksamheten Förvärv av materiella anläggningstillgångar -56 -27 -118 -65 -111 Förvärv av immateriella anläggningstillgångar -1 690 -1 710 -2 864 -2 937 -6 001",
+    "confidence": 0.9
+   }
+  ]
+ },
+ {
+  "category": "burn_diverge",
+  "comparison": {
+   "issuer_id": 236,
+   "name": "Klimator",
+   "status": "ok",
+   "flags": [
+    "burn_periods_diverge",
+    "cash_likely_exhausted"
+   ],
+   "old_reported": 2.6,
+   "old_today": 0.0,
+   "new_at_report": 2.6,
+   "new_safe": 0.0,
+   "new_expected": 0.0,
+   "old_burn": 2128666.6666666665,
+   "new_burn": 2128666.6666666665,
+   "months_since_report": 4.2,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    6.0
+   ],
+   "report_document_id": 11130
+  },
+  "report": {
+   "title": "Klimator AB (publ) - Interim Report for Second Quater 2026",
+   "url": "https://www.mfn.se/a/klimator/klimator-ab-publ-interim-report-for-second-quater-2026",
+   "period_start": "2026-04-01",
+   "period_end": "2026-06-30",
+   "period_months": 3.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 5441.0,
+    "unit": "thousands",
+    "normalized_value": 5441000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": "2026-06-30",
+    "as_of_date": "2026-06-30",
+    "page": 1,
+    "excerpt": "At the end of the period, cash and cash equivalents amounted to SEK 5,441 thousand (2,859) and net cash amounted to SEK 696 thousand (-4,144)",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -6386.0,
+    "unit": "thousands",
+    "normalized_value": -6386000.0,
+    "currency": "SEK",
+    "period_start": "2026-04-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 1,
+    "excerpt": "Cash flow from operating activities amounted to SEK -6,386 thousand (-5,388)",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -4815.0,
+    "unit": "thousands",
+    "normalized_value": -4815000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 1,
+    "excerpt": "Cash flow from operating activities for the second half of the year amounted to SEK -4,815 thousand (-3,981)",
+    "confidence": 0.85
+   }
+  ]
+ },
+ {
+  "category": "burn_diverge",
+  "comparison": {
+   "issuer_id": 266,
+   "name": "Newbury Pharmaceuticals",
+   "status": "ok",
+   "flags": [
+    "burn_periods_diverge",
+    "cash_likely_exhausted"
+   ],
+   "old_reported": 12.8,
+   "old_today": 7.7,
+   "new_at_report": 4.3,
+   "new_safe": 0.0,
+   "new_expected": 0.0,
+   "old_burn": 1142888.888888889,
+   "new_burn": 3428666.6666666665,
+   "months_since_report": 5.2,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    9.0
+   ],
+   "report_document_id": 13856
+  },
+  "report": {
+   "title": "Newbury Pharmaceuticals interim report September 2025 – May 2026",
+   "url": "https://www.mfn.se/a/newbury-pharmaceuticals-ab/newbury-pharmaceuticals-interim-report-september-2025-may-2026",
+   "period_start": "2025-09-01",
+   "period_end": "2026-05-31",
+   "period_months": 9.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 14679.0,
+    "unit": "tkr",
+    "normalized_value": 14679000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-05-31",
+    "page": 1,
+    "excerpt": "Cash position in the end of period was 14 679 (11 672) tkr.",
+    "confidence": 0.9
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -14575.0,
+    "unit": "tkr",
+    "normalized_value": -14575000.0,
+    "currency": "SEK",
+    "period_start": "2025-09-01",
+    "period_end": "2026-05-31",
+    "as_of_date": null,
+    "page": 1,
+    "excerpt": "Operating cash flow was -14 575 (-7 366) tkr.",
+    "confidence": 0.9
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -10286.0,
+    "unit": "tkr",
+    "normalized_value": -10286000.0,
+    "currency": "SEK",
+    "period_start": "2026-03-01",
+    "period_end": "2026-05-31",
+    "as_of_date": null,
+    "page": 1,
+    "excerpt": "Operating cash flow was -10 286 (-5 787) tkr.",
+    "confidence": 0.9
+   }
+  ]
+ },
+ {
+  "category": "flipped_positive",
+  "comparison": {
+   "issuer_id": 15,
+   "name": "Bong",
+   "status": "ok",
+   "flags": [],
+   "old_reported": null,
+   "old_today": null,
+   "new_at_report": 62.9,
+   "new_safe": 58.7,
+   "new_expected": 58.7,
+   "old_burn": null,
+   "new_burn": 1100000.0,
+   "months_since_report": 4.2,
+   "cash_flow_positive_old": true,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    6.0
+   ],
+   "report_document_id": 3209
+  },
+  "report": {
+   "title": "Bong AB: Interim Report Q2, January-June 2026",
+   "url": "https://www.mfn.se/cis/a/bong/bong-ab-interim-report-q2-january-june-2026-e50ca9f7",
+   "period_start": "2026-01-01",
+   "period_end": "2026-06-30",
+   "period_months": 6.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 69.2,
+    "unit": "MSEK",
+    "normalized_value": 69200000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-06-30",
+    "page": 5,
+    "excerpt": "Cash and cash equivalents at 30 June 2026 amounted to SEK 69 million",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 2.9,
+    "unit": "MSEK",
+    "normalized_value": 2900000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 8,
+    "excerpt": "Cash flow from operating activities 2.9",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -7.4,
+    "unit": "MSEK",
+    "normalized_value": -7400000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 8,
+    "excerpt": "Cash flow from investing activities -7.4",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": -9.5,
+    "unit": "MSEK",
+    "normalized_value": -9500000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 8,
+    "excerpt": "Aquisition of intangible and tangible assets -9.5",
+    "confidence": 0.95
+   }
+  ]
+ },
+ {
+  "category": "flipped_positive",
+  "comparison": {
+   "issuer_id": 36,
+   "name": "Ferronordic",
+   "status": "ok",
+   "flags": [],
+   "old_reported": null,
+   "old_today": null,
+   "new_at_report": 12.0,
+   "new_safe": 7.8,
+   "new_expected": 7.8,
+   "old_burn": null,
+   "new_burn": 13666666.666666666,
+   "months_since_report": 4.2,
+   "cash_flow_positive_old": true,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    6.0
+   ],
+   "report_document_id": 7227
+  },
+  "report": {
+   "title": "Delårsrapport 1 april - 30 juni 2026",
+   "url": "https://www.mfn.se/cis/a/ferronordic/delarsrapport-1-april-30-juni-2026-81fef519",
+   "period_start": "2026-01-01",
+   "period_end": "2026-06-30",
+   "period_months": 6.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 164.0,
+    "unit": "MSEK",
+    "normalized_value": 164000000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-06-30",
+    "page": 4,
+    "excerpt": "Den 30 juni 2026 uppgick likvida medel till 164 MSEK, en ökning med 11 MSEK jämfört med utgången av 2025 och 47 MSEK jämfört med utgången av Q1 2026.",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 62.0,
+    "unit": "MSEK",
+    "normalized_value": 62000000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 14,
+    "excerpt": "Kassaflöde från den löpande verksamheten 62",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -123.0,
+    "unit": "MSEK",
+    "normalized_value": -123000000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 14,
+    "excerpt": "Kassaflöde från investeringsverksamheten -123",
+    "confidence": 0.96
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": -144.0,
+    "unit": "MSEK",
+    "normalized_value": -144000000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 14,
+    "excerpt": "Förvärv av materiella anläggningstillgångar -144",
+    "confidence": 0.96
+   }
+  ]
+ },
+ {
+  "category": "flipped_positive",
+  "comparison": {
+   "issuer_id": 39,
+   "name": "Garo",
+   "status": "ok",
+   "flags": [],
+   "old_reported": null,
+   "old_today": null,
+   "new_at_report": 4.4,
+   "new_safe": 0.3,
+   "new_expected": 0.3,
+   "old_burn": null,
+   "new_burn": 1416666.6666666667,
+   "months_since_report": 4.2,
+   "cash_flow_positive_old": true,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    6.0
+   ],
+   "report_document_id": 8277
+  },
+  "report": {
+   "title": "Interim report January – June 2026",
+   "url": "https://www.mfn.se/a/garo/interim-report-january-june-2026",
+   "period_start": "2026-01-01",
+   "period_end": "2026-06-30",
+   "period_months": 6.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 6.3,
+    "unit": "MSEK",
+    "normalized_value": 6300000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-06-30",
+    "page": 16,
+    "excerpt": "Cash and cash equivalents, end of the period 6.3",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 5.8,
+    "unit": "MSEK",
+    "normalized_value": 5800000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 3,
+    "excerpt": "Cash flow from operating activities, MSEK ... Jan–Jun 2026 5.8",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -15.7,
+    "unit": "MSEK",
+    "normalized_value": -15700000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 16,
+    "excerpt": "Cash flow from investing activities -15.7 -4.7",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": 14.3,
+    "unit": "MSEK",
+    "normalized_value": 14300000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 3,
+    "excerpt": "Investments, MSEK ... Jan–Jun 2026 14.3",
+    "confidence": 0.9
+   }
+  ]
+ },
+ {
+  "category": "flipped_positive",
+  "comparison": {
+   "issuer_id": 67,
+   "name": "Nyorda",
+   "status": "ok",
+   "flags": [],
+   "old_reported": null,
+   "old_today": null,
+   "new_at_report": 11.5,
+   "new_safe": 7.3,
+   "new_expected": 7.3,
+   "old_burn": null,
+   "new_burn": 5666666.666666667,
+   "months_since_report": 4.2,
+   "cash_flow_positive_old": true,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    6.0
+   ],
+   "report_document_id": 14625
+  },
+  "report": {
+   "title": "Nyorda delårsrapport januari - juni 2026",
+   "url": "https://www.mfn.se/a/nyorda/tradedoubler-delarsrapport-januari-juni-2026",
+   "period_start": "2026-01-01",
+   "period_end": "2026-06-30",
+   "period_months": 6.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 65.0,
+    "unit": "MSEK",
+    "normalized_value": 65000000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": "2026-06-30",
+    "as_of_date": "2026-06-30",
+    "page": 1,
+    "excerpt": "Likvida medel vid periodens utgång 65 45 65 45",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -17.0,
+    "unit": "MSEK",
+    "normalized_value": -17000000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 1,
+    "excerpt": "Kassaflödet från den löpande verksamheten var -17 (7) MSEK.",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 4.0,
+    "unit": "MSEK",
+    "normalized_value": 4000000.0,
+    "currency": "SEK",
+    "period_start": "2026-04-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 1,
+    "excerpt": "Kassaflödet från den löpande verksamheten var 4 (17) MSEK.",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": -17.0,
+    "unit": "MSEK",
+    "normalized_value": -17000000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 1,
+    "excerpt": "Investeringar i icke-finansiella anläggningstillgångar -8 -8 -17 -16",
+    "confidence": 0.85
+   }
+  ]
+ },
+ {
+  "category": "flipped_positive",
+  "comparison": {
+   "issuer_id": 74,
+   "name": "Pricer",
+   "status": "ok",
+   "flags": [],
+   "old_reported": null,
+   "old_today": null,
+   "new_at_report": 89.2,
+   "new_safe": 88.1,
+   "new_expected": 88.1,
+   "old_burn": null,
+   "new_burn": 3022222.222222222,
+   "months_since_report": 1.1,
+   "cash_flow_positive_old": true,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    9.0
+   ],
+   "report_document_id": 24900
+  },
+  "report": {
+   "title": "Interim report January-September 2026 - Pricer AB",
+   "url": "https://www.mfn.se/cis/a/pricer/interim-report-january-september-2026-pricer-ab-b0645c9c",
+   "period_start": "2026-01-01",
+   "period_end": "2026-09-30",
+   "period_months": 9.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 269.7,
+    "unit": "SEK M",
+    "normalized_value": 269700000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-09-30",
+    "page": 13,
+    "excerpt": "Cash and cash equivalents 269.7 174.9 308.1",
+    "confidence": 0.96
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 7.4,
+    "unit": "SEK M",
+    "normalized_value": 7400000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 14,
+    "excerpt": "Cash flow from operating activities 7.4 0.6 160.0",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -47.4,
+    "unit": "SEK M",
+    "normalized_value": -47400000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 14,
+    "excerpt": "Cash flow from investing activities -47.4 -38.9 -64.7",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": -34.6,
+    "unit": "SEK M",
+    "normalized_value": -34600000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 14,
+    "excerpt": "Acquisition of intangible assets -34.6 -28.4 -40.9",
+    "confidence": 0.88
+   }
+  ]
+ },
+ {
+  "category": "flipped_positive",
+  "comparison": {
+   "issuer_id": 84,
+   "name": "Sensys Gatso Group",
+   "status": "ok",
+   "flags": [
+    "stale_report"
+   ],
+   "old_reported": null,
+   "old_today": null,
+   "new_at_report": 44.1,
+   "new_safe": 22.0,
+   "new_expected": 22.0,
+   "old_burn": null,
+   "new_burn": 3748500.0,
+   "months_since_report": 22.1,
+   "cash_flow_positive_old": true,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    12.0
+   ],
+   "report_document_id": 18365
+  },
+  "report": {
+   "title": "Sensys Gatso Group AB: Sensys Gatso Group publicerar årsredovisning för 2024",
+   "url": "https://www.mfn.se/cis/a/sensys-gatso-group/sensys-gatso-group-ab-sensys-gatso-group-publicerar-arsredovisning-for-2024-1afb5a83",
+   "period_start": "2024-01-01",
+   "period_end": "2024-12-31",
+   "period_months": 12.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 165322.0,
+    "unit": "TSEK",
+    "normalized_value": 165322000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2024-12-31",
+    "page": 42,
+    "excerpt": "LIKVIDA MEDEL Kassa och bank 21, 23 165 322 48 753",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 44207.0,
+    "unit": "TSEK",
+    "normalized_value": 44207000.0,
+    "currency": "SEK",
+    "period_start": "2024-01-01",
+    "period_end": "2024-12-31",
+    "as_of_date": null,
+    "page": 43,
+    "excerpt": "Kassaflöde från den löpande verksamheten 44 207 -18 324",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -93395.0,
+    "unit": "TSEK",
+    "normalized_value": -93395000.0,
+    "currency": "SEK",
+    "period_start": "2024-01-01",
+    "period_end": "2024-12-31",
+    "as_of_date": null,
+    "page": 43,
+    "excerpt": "Kassaflöde från investeringsverksamheten -93 395 -102 616",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": -89189.0,
+    "unit": "TSEK",
+    "normalized_value": -89189000.0,
+    "currency": "SEK",
+    "period_start": "2024-01-01",
+    "period_end": "2024-12-31",
+    "as_of_date": null,
+    "page": 43,
+    "excerpt": "Investeringar i immateriella tillgångar -27 686 -26 528 / Investeringar i materiella tillgångar -61 503 -65 871",
+    "confidence": 0.95
+   }
+  ]
+ },
+ {
+  "category": "flipped_positive",
+  "comparison": {
+   "issuer_id": 88,
+   "name": "Sleep Cycle",
+   "status": "ok",
+   "flags": [],
+   "old_reported": null,
+   "old_today": null,
+   "new_at_report": 9.8,
+   "new_safe": 8.6,
+   "new_expected": 8.6,
+   "old_burn": null,
+   "new_burn": 7707333.333333333,
+   "months_since_report": 1.1,
+   "cash_flow_positive_old": true,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    9.0
+   ],
+   "report_document_id": 25046
+  },
+  "report": {
+   "title": "Sleep Cycle delårsrapport juli–september 2026: Redo för nästa kapitel",
+   "url": "https://www.mfn.se/a/sleep-cycle/sleep-cycle-delarsrapport-juli-september-2026-redo-for-nasta-kapitel",
+   "period_start": "2026-07-01",
+   "period_end": "2026-09-30",
+   "period_months": 3.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 75165.0,
+    "unit": "Tkr",
+    "normalized_value": 75165000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-09-30",
+    "page": 14,
+    "excerpt": "Likvida medel 75 165 114 639 120 846",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -12725.0,
+    "unit": "Tkr",
+    "normalized_value": -12725000.0,
+    "currency": "SEK",
+    "period_start": "2026-07-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 15,
+    "excerpt": "Kassaflöde från den löpande verksamheten -12 725 5 510 2 053 42 139 52 931",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 2053.0,
+    "unit": "Tkr",
+    "normalized_value": 2053000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 15,
+    "excerpt": "Kassaflöde från den löpande verksamheten -12 725 5 510 2 053 42 139 52 931",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -10397.0,
+    "unit": "Tkr",
+    "normalized_value": -10397000.0,
+    "currency": "SEK",
+    "period_start": "2026-07-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 15,
+    "excerpt": "Kassaflöde från investeringsverksamheten -10 397 -2 565 -34 615 -9 339 -13 153",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": 10397.0,
+    "unit": "Tkr",
+    "normalized_value": 10397000.0,
+    "currency": "SEK",
+    "period_start": "2026-07-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 15,
+    "excerpt": "Aktivering av utvecklingsutgifter -10 397 -2 565 -34 615 -9 339 -13 104",
+    "confidence": 0.9
+   }
+  ]
+ },
+ {
+  "category": "big_diff",
+  "comparison": {
+   "issuer_id": 18,
+   "name": "C-RAD",
+   "status": "ok",
+   "flags": [],
+   "old_reported": 162.2,
+   "old_today": 161.1,
+   "new_at_report": 72.1,
+   "new_safe": 71.0,
+   "new_expected": 71.0,
+   "old_burn": 888888.8888888889,
+   "new_burn": 2000000.0,
+   "months_since_report": 1.1,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    9.0
+   ],
+   "report_document_id": 24923
+  },
+  "report": {
+   "title": "C-RAD AB:s Delårsrapport Q3'26",
+   "url": "https://www.mfn.se/a/c-rad/c-rad-ab-s-delarsrapport-q326",
+   "period_start": "2026-01-01",
+   "period_end": "2026-09-30",
+   "period_months": 9.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 144.2,
+    "unit": "Mkr",
+    "normalized_value": 144200000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-09-30",
+    "page": 12,
+    "excerpt": "Likvida medel 144,2 172,9 171,2",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 144.2,
+    "unit": "Mkr",
+    "normalized_value": 144200000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-09-30",
+    "page": 13,
+    "excerpt": "Likvida medel vid periodens slut 144,2 172,9 144,2 172,9 171,2",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 9.4,
+    "unit": "Mkr",
+    "normalized_value": 9400000.0,
+    "currency": "SEK",
+    "period_start": "2026-07-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 13,
+    "excerpt": "Kassaflöde från den löpande verksamheten 9,4 24,4 -7,7 50,5 71,1",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -7.7,
+    "unit": "Mkr",
+    "normalized_value": -7700000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 13,
+    "excerpt": "Kassaflöde från den löpande verksamheten 9,4 24,4 -7,7 50,5 71,1",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -8.0,
+    "unit": "Mkr",
+    "normalized_value": -8000000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 1,
+    "excerpt": "Kassaflöde från löpande verksamheten 9 24 -62% -8 51 -115% 13 71",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -17.2,
+    "unit": "Mkr",
+    "normalized_value": -17200000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 13,
+    "excerpt": "Kassaflöde från investeringsverksamheten -5,4 -7,0 -17,2 -15,6 -20,8",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": 10.3,
+    "unit": "Mkr",
+    "normalized_value": 10300000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 6,
+    "excerpt": "För delårsperioden uppgick aktiveringarna till 10,3 (6,9) MSEK",
+    "confidence": 0.85
+   }
+  ]
+ },
+ {
+  "category": "big_diff",
+  "comparison": {
+   "issuer_id": 276,
+   "name": "Nosa Plugs",
+   "status": "ok",
+   "flags": [],
+   "old_reported": 354.9,
+   "old_today": 350.8,
+   "new_at_report": 272.7,
+   "new_safe": 268.6,
+   "new_expected": 268.6,
+   "old_burn": 45333.333333333336,
+   "new_burn": 59000.0,
+   "months_since_report": 4.2,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    6.0
+   ],
+   "report_document_id": 14520
+  },
+  "report": {
+   "title": "Nosa Plugs AB Interim Report for the Second Quarter 2026",
+   "url": "https://www.mfn.se/a/nosa-plugs/nosa-plugs-ab-interim-report-for-the-second-quarter-2026",
+   "period_start": "2026-01-01",
+   "period_end": "2026-06-30",
+   "period_months": 6.0
+  },
+  "facts": [
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -272.0,
+    "unit": "TSEK",
+    "normalized_value": -272000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 1,
+    "excerpt": "January 1 - June 30, 2026 ... Cash flow from operating activities: -272 TSEK (-2,356)",
+    "confidence": 0.9
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -177.0,
+    "unit": "TSEK",
+    "normalized_value": -177000.0,
+    "currency": "SEK",
+    "period_start": "2026-04-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 1,
+    "excerpt": "1 April - 30 Juni 2026 ... Cash flow from operating activities: -177 TSEK (-3,204)",
+    "confidence": 0.88
+   },
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 16091.0,
+    "unit": "TSEK",
+    "normalized_value": 16091000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": "2026-06-30",
+    "as_of_date": "2026-06-30",
+    "page": 1,
+    "excerpt": "Cash and cash equivalents: 16,091 TSEK (33,638)",
+    "confidence": 0.9
+   }
+  ]
+ },
+ {
+  "category": "big_diff",
+  "comparison": {
+   "issuer_id": 383,
+   "name": "CAG Group",
+   "status": "ok",
+   "flags": [],
+   "old_reported": 114.4,
+   "old_today": 113.3,
+   "new_at_report": 38.1,
+   "new_safe": 37.0,
+   "new_expected": 37.0,
+   "old_burn": 791333.3333333334,
+   "new_burn": 2374000.0,
+   "months_since_report": 1.1,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    9.0
+   ],
+   "report_document_id": 24884
+  },
+  "report": {
+   "title": "CAG Group AB: CAG Delårsrapport Q3 2026",
+   "url": "https://www.mfn.se/cis/a/cag-group/cag-group-ab-cag-delarsrapport-q3-2026-b17202a1",
+   "period_start": "2026-01-01",
+   "period_end": "2026-09-30",
+   "period_months": 9.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 90529.0,
+    "unit": "KSEK",
+    "normalized_value": 90529000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-09-30",
+    "page": 8,
+    "excerpt": "Likvida medel vid periodens slut 90 529 83 848",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 33227.0,
+    "unit": "KSEK",
+    "normalized_value": 33227000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": "2026-09-30",
+    "page": 17,
+    "excerpt": "Kassaflöde från den löpande verksamheten -7 122 -6 125 33 227 38 542 87 198",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -7122.0,
+    "unit": "KSEK",
+    "normalized_value": -7122000.0,
+    "currency": "SEK",
+    "period_start": "2026-07-01",
+    "period_end": "2026-09-30",
+    "as_of_date": "2026-09-30",
+    "page": 17,
+    "excerpt": "Kassaflöde från den löpande verksamheten -7 122 -6 125 33 227 38 542 87 198",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -54541.0,
+    "unit": "KSEK",
+    "normalized_value": -54541000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": "2026-09-30",
+    "page": 17,
+    "excerpt": "Kassaflöde från investeringsverksamheten -126 11 -54 541 -2 646 -3 043",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": -1924.0,
+    "unit": "KSEK",
+    "normalized_value": -1924000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": "2026-09-30",
+    "page": 17,
+    "excerpt": "Förvärv av materiella anläggningstillgångar -104 14 -1 924 -2 058 -2 443",
+    "confidence": 0.93
+   }
+  ]
+ },
+ {
+  "category": "big_diff",
+  "comparison": {
+   "issuer_id": 164,
+   "name": "Diamyd Medical",
+   "status": "ok",
+   "flags": [],
+   "old_reported": 90.7,
+   "old_today": 88.6,
+   "new_at_report": 18.8,
+   "new_safe": 16.6,
+   "new_expected": 16.6,
+   "old_burn": 3367083.3333333335,
+   "new_burn": 16275916.666666666,
+   "months_since_report": 2.1,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    12.0
+   ],
+   "report_document_id": 24158
+  },
+  "report": {
+   "title": "Diamyd Medical AB: Year-End Report 25/26",
+   "url": "https://www.mfn.se/cis/a/diamyd-medical/diamyd-medical-ab-year-end-report-25-26-be418f95",
+   "period_start": "2025-09-01",
+   "period_end": "2026-08-31",
+   "period_months": 12.0
+  },
+  "facts": [
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -195311.0,
+    "unit": "KSEK",
+    "normalized_value": -195311000.0,
+    "currency": "SEK",
+    "period_start": "2025-09-01",
+    "period_end": "2026-08-31",
+    "as_of_date": null,
+    "page": 10,
+    "excerpt": "NET CASH FLOW FROM OPERATING ACTIVITIES ... -195 311 -169 683",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -40405.0,
+    "unit": "KSEK",
+    "normalized_value": -40405000.0,
+    "currency": "SEK",
+    "period_start": "2026-06-01",
+    "period_end": "2026-08-31",
+    "as_of_date": null,
+    "page": 10,
+    "excerpt": "3 months Jun-Aug 2025/26 ... NET CASH FLOW FROM OPERATING ACTIVITIES -40 405",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 305426.0,
+    "unit": "KSEK",
+    "normalized_value": 305426000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-08-31",
+    "page": 8,
+    "excerpt": "Liquid as set s 305 426 277 185",
+    "confidence": 0.96
+   },
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": null,
+    "unit": "MSEK",
+    "normalized_value": null,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-08-31",
+    "page": 2,
+    "excerpt": "Cash and short -term investme nts on Au gus t 31, 2026 : MSEK 305. 4 (27 7.2)",
+    "confidence": 0.55
+   }
+  ]
+ },
+ {
+  "category": "big_diff",
+  "comparison": {
+   "issuer_id": 277,
+   "name": "Observit",
+   "status": "ok",
+   "flags": [],
+   "old_reported": 134.5,
+   "old_today": 130.3,
+   "new_at_report": 67.3,
+   "new_safe": 63.1,
+   "new_expected": 156.5,
+   "old_burn": 142833.33333333334,
+   "new_burn": 285666.6666666667,
+   "months_since_report": 4.2,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    6.0
+   ],
+   "report_document_id": 14808
+  },
+  "report": {
+   "title": "Delårsrapport Q2 2026 - Stark tillväxt i återkommande intäkter och lönsamhet",
+   "url": "https://www.mfn.se/a/observit/delarsrapport-q2-2026-stark-tillvaxt-i-aterkommande-intakter-och-lonsamhet",
+   "period_start": "2026-01-01",
+   "period_end": "2026-06-30",
+   "period_months": 6.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 19212.0,
+    "unit": "thousands",
+    "normalized_value": 19212000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": "2026-06-30",
+    "page": 9,
+    "excerpt": "Kassa och bank 19 212",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 19212.0,
+    "unit": "thousands",
+    "normalized_value": 19212000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-06-30",
+    "page": 10,
+    "excerpt": "Likvida medel vid periodens slut 19 212",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 1009.0,
+    "unit": "thousands",
+    "normalized_value": 1009000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 10,
+    "excerpt": "Kassaflöde från den löpande verksamheten ... 1 009",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -857.0,
+    "unit": "thousands",
+    "normalized_value": -857000.0,
+    "currency": "SEK",
+    "period_start": "2026-04-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 10,
+    "excerpt": "Kassaflöde från den löpande verksamheten -857",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -3885.0,
+    "unit": "thousands",
+    "normalized_value": -3885000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 10,
+    "excerpt": "Kassaflöde från investeringsverksamheten -3 885",
+    "confidence": 0.95
+   }
+  ]
+ },
+ {
+  "category": "big_diff",
+  "comparison": {
+   "issuer_id": 105,
+   "name": "Acconeer",
+   "status": "ok",
+   "flags": [],
+   "old_reported": 73.3,
+   "old_today": 72.1,
+   "new_at_report": 15.3,
+   "new_safe": 14.1,
+   "new_expected": 14.1,
+   "old_burn": 426444.44444444444,
+   "new_burn": 2048111.111111111,
+   "months_since_report": 1.1,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    3.0,
+    9.0
+   ],
+   "report_document_id": 25057
+  },
+  "report": {
+   "title": "Correction: Interim report Q3 2026 – record volume shipped and continued revenue growth",
+   "url": "https://www.mfn.se/a/acconeer/interim-report-q3-2026-record-volume-shipped-and-continued-revenue-growth-1",
+   "period_start": "2026-01-01",
+   "period_end": "2026-09-30",
+   "period_months": 9.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 31250.0,
+    "unit": "kSEK",
+    "normalized_value": 31250000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-09-30",
+    "page": 8,
+    "excerpt": "Cash and bank balances 31,250 55,454 43,372",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -18433.0,
+    "unit": "kSEK",
+    "normalized_value": -18433000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 11,
+    "excerpt": "Cash flow from operating activities -3,838 1,022 -18,433 -13,147 -16,911",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -3838.0,
+    "unit": "kSEK",
+    "normalized_value": -3838000.0,
+    "currency": "SEK",
+    "period_start": "2026-07-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 11,
+    "excerpt": "Cash flow from operating activities -3,838 1,022 -18,433 -13,147 -16,911",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -16289.0,
+    "unit": "kSEK",
+    "normalized_value": -16289000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-09-30",
+    "as_of_date": null,
+    "page": 11,
+    "excerpt": "Cash flow from investing activities -2,939 -10,201 -16,289 -30,781 -38,955",
+    "confidence": 0.95
+   }
+  ]
+ },
+ {
+  "category": "stale",
+  "comparison": {
+   "issuer_id": 2,
+   "name": "Actic Group",
+   "status": "ok",
+   "flags": [
+    "stale_report"
+   ],
+   "old_reported": null,
+   "old_today": null,
+   "new_at_report": null,
+   "new_safe": null,
+   "new_expected": null,
+   "old_burn": null,
+   "new_burn": 0.0,
+   "months_since_report": 10.1,
+   "cash_flow_positive_old": true,
+   "cash_flow_positive_new": true,
+   "burn_periods": [
+    12.0
+   ],
+   "report_document_id": 682
+  },
+  "report": {
+   "title": "Actic Groups årsredovisning och hållbarhetsrapport 2025",
+   "url": "https://www.mfn.se/a/actic-group/actic-groups-arsredovisning-och-hallbarhetsrapport-2025",
+   "period_start": "2025-01-01",
+   "period_end": "2025-12-31",
+   "period_months": 12.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 90213.0,
+    "unit": "TSEK",
+    "normalized_value": 90213000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2025-12-31",
+    "page": 62,
+    "excerpt": "Likvida medel vid årets slut 13 90 213 48 269",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 48269.0,
+    "unit": "TSEK",
+    "normalized_value": 48269000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2024-12-31",
+    "page": 62,
+    "excerpt": "Likvida medel vid årets slut 13 90 213 48 269",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 183400.0,
+    "unit": "TSEK",
+    "normalized_value": 183400000.0,
+    "currency": "SEK",
+    "period_start": "2025-01-01",
+    "period_end": "2025-12-31",
+    "as_of_date": null,
+    "page": 62,
+    "excerpt": "Kassaflöde från den löpande verksamheten 183 400 190 438",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 190438.0,
+    "unit": "TSEK",
+    "normalized_value": 190438000.0,
+    "currency": "SEK",
+    "period_start": "2024-01-01",
+    "period_end": "2024-12-31",
+    "as_of_date": null,
+    "page": 62,
+    "excerpt": "Kassaflöde från den löpande verksamheten 183 400 190 438",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": 38958.0,
+    "unit": "TSEK",
+    "normalized_value": 38958000.0,
+    "currency": "SEK",
+    "period_start": "2025-01-01",
+    "period_end": "2025-12-31",
+    "as_of_date": null,
+    "page": 62,
+    "excerpt": "Kassaflöde från investeringsverksamheten 38 958 -18 404",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "capex",
+    "reported_value": 20644.0,
+    "unit": "TSEK",
+    "normalized_value": 20644000.0,
+    "currency": "SEK",
+    "period_start": "2025-01-01",
+    "period_end": "2025-12-31",
+    "as_of_date": null,
+    "page": 62,
+    "excerpt": "Förvärv av materiella anläggningstillgångar -20 850 -16 446",
+    "confidence": 0.9
+   }
+  ]
+ },
+ {
+  "category": "stale",
+  "comparison": {
+   "issuer_id": 11,
+   "name": "Balco Group",
+   "status": "ok",
+   "flags": [
+    "stale_report"
+   ],
+   "old_reported": null,
+   "old_today": null,
+   "new_at_report": null,
+   "new_safe": null,
+   "new_expected": null,
+   "old_burn": null,
+   "new_burn": 0.0,
+   "months_since_report": 10.1,
+   "cash_flow_positive_old": true,
+   "cash_flow_positive_new": true,
+   "burn_periods": [
+    12.0
+   ],
+   "report_document_id": 2495
+  },
+  "report": {
+   "title": "Balco Group AB: Balco Groups Årsredovisning med hållbarhetsredovisning för 2025 publicerad",
+   "url": "https://www.mfn.se/cis/a/balco-group/balco-group-ab-balco-groups-arsredovisning-med-hallbarhetsredovisning-for-2025-publicerad-255222d5",
+   "period_start": "2025-01-01",
+   "period_end": "2025-12-31",
+   "period_months": 12.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 158066.0,
+    "unit": "tkr",
+    "normalized_value": 158066000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2025-12-31",
+    "page": 69,
+    "excerpt": "Likvida medel vid årets slut 23 158 066 103 061",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 15031.0,
+    "unit": "tkr",
+    "normalized_value": 15031000.0,
+    "currency": "SEK",
+    "period_start": "2025-01-01",
+    "period_end": "2025-12-31",
+    "as_of_date": null,
+    "page": 69,
+    "excerpt": "Kassaflöde från den löpande verksamheten 15 031 85 283",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 85283.0,
+    "unit": "tkr",
+    "normalized_value": 85283000.0,
+    "currency": "SEK",
+    "period_start": "2024-01-01",
+    "period_end": "2024-12-31",
+    "as_of_date": null,
+    "page": 69,
+    "excerpt": "Kassaflöde från den löpande verksamheten 15 031 85 283",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -49111.0,
+    "unit": "tkr",
+    "normalized_value": -49111000.0,
+    "currency": "SEK",
+    "period_start": "2025-01-01",
+    "period_end": "2025-12-31",
+    "as_of_date": null,
+    "page": 69,
+    "excerpt": "Kassaflöde från investeringsverksamheten -49 111 -95 690",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 103061.0,
+    "unit": "tkr",
+    "normalized_value": 103061000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2024-12-31",
+    "page": 69,
+    "excerpt": "Likvida medel vid årets slut 23 158 066 103 061",
+    "confidence": 0.97
+   }
+  ]
+ },
+ {
+  "category": "stale",
+  "comparison": {
+   "issuer_id": 21,
+   "name": "Catena Media",
+   "status": "ok",
+   "flags": [
+    "stale_report"
+   ],
+   "old_reported": null,
+   "old_today": null,
+   "new_at_report": null,
+   "new_safe": null,
+   "new_expected": null,
+   "old_burn": null,
+   "new_burn": 0.0,
+   "months_since_report": 22.1,
+   "cash_flow_positive_old": true,
+   "cash_flow_positive_new": true,
+   "burn_periods": [
+    12.0
+   ],
+   "report_document_id": 4311
+  },
+  "report": {
+   "title": "Catena Media publishes its 2024 annual report",
+   "url": "https://www.mfn.se/cis/a/catena-media/catena-media-publishes-its-2024-annual-report-b3b40cb0",
+   "period_start": "2024-01-01",
+   "period_end": "2024-12-31",
+   "period_months": 12.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 8.5,
+    "unit": "millions",
+    "normalized_value": 8500000.0,
+    "currency": "EUR",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2024-12-31",
+    "page": 37,
+    "excerpt": "Cash and cash equivalents at year-end were EUR 8.5m (38.5).",
+    "confidence": 0.95
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": 2883.0,
+    "unit": "thousands",
+    "normalized_value": 2883000.0,
+    "currency": "EUR",
+    "period_start": "2024-01-01",
+    "period_end": "2024-12-31",
+    "as_of_date": null,
+    "page": 3,
+    "excerpt": "Operating cash flow (EUR ’000) 2,883 19,656 - 85%",
+    "confidence": 0.95
+   }
+  ]
+ },
+ {
+  "category": "agree",
+  "comparison": {
+   "issuer_id": 3,
+   "name": "Active Biotech",
+   "status": "ok",
+   "flags": [],
+   "old_reported": 15.5,
+   "old_today": 11.3,
+   "new_at_report": 15.5,
+   "new_safe": 11.3,
+   "new_expected": 11.3,
+   "old_burn": 2833333.3333333335,
+   "new_burn": 2833333.3333333335,
+   "months_since_report": 4.2,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    6.0
+   ],
+   "report_document_id": 746
+  },
+  "report": {
+   "title": "Active Biotech Delårsrapport Q2 2026",
+   "url": "https://www.mfn.se/a/active-biotech/active-biotech-delarsrapport-q2-2026",
+   "period_start": "2026-01-01",
+   "period_end": "2026-06-30",
+   "period_months": 6.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 43.9,
+    "unit": "MSEK",
+    "normalized_value": 43900000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-06-30",
+    "page": 12,
+    "excerpt": "Likvida medel uppgick vid periodens slut till 43,9 MSEK",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -17.0,
+    "unit": "MSEK",
+    "normalized_value": -17000000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 12,
+    "excerpt": "Kassaflödet från den löpande verksamheten uppgick till -17,0 (-18,0) MSEK",
+    "confidence": 0.95
+   }
+  ]
+ },
+ {
+  "category": "agree",
+  "comparison": {
+   "issuer_id": 7,
+   "name": "Arla Plast",
+   "status": "ok",
+   "flags": [],
+   "old_reported": 129.1,
+   "old_today": 124.9,
+   "new_at_report": 129.1,
+   "new_safe": 124.9,
+   "new_expected": 124.9,
+   "old_burn": 866666.6666666666,
+   "new_burn": 866666.6666666666,
+   "months_since_report": 4.2,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    6.0
+   ],
+   "report_document_id": 1808
+  },
+  "report": {
+   "title": "Delårsrapport januari - juni 2026",
+   "url": "https://www.mfn.se/cis/a/arla-plast/delarsrapport-januari-juni-2026-333cb2d1",
+   "period_start": "2026-01-01",
+   "period_end": "2026-06-30",
+   "period_months": 6.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 111.9,
+    "unit": "MSEK",
+    "normalized_value": 111900000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-06-30",
+    "page": 8,
+    "excerpt": "Likvida medel 5 111,9 153,1 183,5",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -5.2,
+    "unit": "MSEK",
+    "normalized_value": -5200000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 1,
+    "excerpt": "Kassaflödet från den löpande verksamheten uppgick till - 5,2 MSEK (74,5).",
+    "confidence": 0.97
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": -20.5,
+    "unit": "MSEK",
+    "normalized_value": -20500000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 4,
+    "excerpt": "För det första halvåret 2026 uppgick kassaflödet från investeringsverksamheten till - 20,5 MSEK (-12,7)",
+    "confidence": 0.95
+   }
+  ]
+ },
+ {
+  "category": "agree",
+  "comparison": {
+   "issuer_id": 8,
+   "name": "Ascelia Pharma",
+   "status": "ok",
+   "flags": [],
+   "old_reported": 7.6,
+   "old_today": 3.5,
+   "new_at_report": 7.6,
+   "new_safe": 3.5,
+   "new_expected": 3.5,
+   "old_burn": 4973833.333333333,
+   "new_burn": 4973833.333333333,
+   "months_since_report": 4.2,
+   "cash_flow_positive_old": false,
+   "cash_flow_positive_new": false,
+   "burn_periods": [
+    6.0
+   ],
+   "report_document_id": 22716
+  },
+  "report": {
+   "title": "Half-Year Report 2026: Focus on the Path Forward for Orviglance",
+   "url": "https://www.mfn.se/a/ascelia-pharma/focus-on-the-path-forward-for-orviglance",
+   "period_start": "2026-01-01",
+   "period_end": "2026-06-30",
+   "period_months": 6.0
+  },
+  "facts": [
+   {
+    "fact_type": "cash_and_cash_equivalents",
+    "reported_value": 38046.0,
+    "unit": "thousands",
+    "normalized_value": 38046000.0,
+    "currency": "SEK",
+    "period_start": null,
+    "period_end": null,
+    "as_of_date": "2026-06-30",
+    "page": 18,
+    "excerpt": "Cash and cash equivalents at end of period 38,046 ... 38,046",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "operating_cash_flow",
+    "reported_value": -29843.0,
+    "unit": "thousands",
+    "normalized_value": -29843000.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 18,
+    "excerpt": "Cash flow used in operating activities -29,843 -34,902",
+    "confidence": 0.98
+   },
+   {
+    "fact_type": "investing_cash_flow",
+    "reported_value": 0.0,
+    "unit": "thousands",
+    "normalized_value": 0.0,
+    "currency": "SEK",
+    "period_start": "2026-01-01",
+    "period_end": "2026-06-30",
+    "as_of_date": null,
+    "page": 18,
+    "excerpt": "Cash flow from investing activities – -57 – -57",
+    "confidence": 0.9
+   }
+  ]
+ }
+]
