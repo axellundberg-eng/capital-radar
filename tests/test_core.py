@@ -184,3 +184,15 @@ def test_web_lists_companies_by_band_and_explains_detail(tmp_path, legacy_db, mo
     assert client.get("/api/companies/999").status_code == 404
     assert "Capital Radar" in client.get("/").text
     assert client.get("/static/app.js").status_code == 200
+
+
+def test_facit_line_handles_missing_values(capsys, monkeypatch, tmp_path):
+    import radar.__main__ as cli
+
+    facit = tmp_path / "facit.json"
+    facit.write_text(json.dumps([{"company_id": 1, "name": "X", "document_id": 1,
+                                  "expected_monthly_burn": None, "cash_flow_positive": None}]), encoding="utf-8")
+    monkeypatch.setattr(cli, "FACIT", facit)
+    monkeypatch.setattr(cli, "process", lambda *a, **k: {"runway": {"status": "missing_cash"}})
+    cli.run_facit(None, None, None, END)
+    assert "saknas" in capsys.readouterr().out

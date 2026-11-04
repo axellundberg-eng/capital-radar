@@ -54,8 +54,10 @@ def run_facit(connection, settings: Settings, client, today: str) -> int:
         counts[verdict] = counts.get(verdict, 0) + 1
         burn = runway.get("monthly_burn")
         expected = case.get("expected_monthly_burn")
-        print(f"{verdict:14} {case['name'][:24]:24} burn {burn if burn is None else round(burn):>12} "
-              f"facit {expected if expected is None else round(expected):>12}  {outcome.get('error') or ''}")
+        def fmt(value):
+            return "—" if value is None else f"{round(value):,}".replace(",", " ")
+        print(f"{verdict:14} {case['name'][:24]:24} burn {fmt(burn):>12} facit {fmt(expected):>12}  "
+              f"{outcome.get('error') or ''}", flush=True)
     print(json.dumps(counts, ensure_ascii=False))
     return 0
 
