@@ -194,5 +194,5 @@ def test_facit_line_handles_missing_values(capsys, monkeypatch, tmp_path):
                                   "expected_monthly_burn": None, "cash_flow_positive": None}]), encoding="utf-8")
     monkeypatch.setattr(cli, "FACIT", facit)
     monkeypatch.setattr(cli, "process", lambda *a, **k: {"runway": {"status": "missing_cash"}})
-    cli.run_facit(None, None, None, END)
+    cli.run_facit(None, Settings.from_env(), None, END)
     assert "saknas" in capsys.readouterr().out
