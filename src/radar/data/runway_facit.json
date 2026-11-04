@@ -1,0 +1,262 @@
+[
+ {
+  "company_id": 83,
+  "name": "Sedana Medical",
+  "document_id": 24906,
+  "report_period_end": "2026-09-30",
+  "expected_monthly_burn": 5645111,
+  "cash_flow_positive": false,
+  "basis": "9M YTD (CFO -7.957M + intangibles capex -42.849M)/9; Q3 alone ~4.09M",
+  "verdict": "new"
+ },
+ {
+  "company_id": 103,
+  "name": "2cureX",
+  "document_id": 59,
+  "report_period_end": "2025-12-31",
+  "expected_monthly_burn": null,
+  "cash_flow_positive": null,
+  "basis": "unclear: either FY2025 -2,999k (250k/mo) or -941k (78k/mo)",
+  "verdict": "unverifiable"
+ },
+ {
+  "company_id": 136,
+  "name": "BoMill",
+  "document_id": 24922,
+  "report_period_end": "2026-09-30",
+  "expected_monthly_burn": 1087000,
+  "cash_flow_positive": false,
+  "basis": "9M YTD (CFO -9.037M + capex -0.746M)/9; Q3 alone only ~0.23M",
+  "verdict": "new"
+ },
+ {
+  "company_id": 151,
+  "name": "ChargePanel",
+  "document_id": 4474,
+  "report_period_end": "2026-06-30",
+  "expected_monthly_burn": 597167,
+  "cash_flow_positive": false,
+  "basis": "H1 2026 CFO -3,583k/6 (incl. investing -1,287k: ~812k/mo); Q2 CFO only 231k/mo",
+  "verdict": "new"
+ },
+ {
+  "company_id": 232,
+  "name": "Kentima Holding",
+  "document_id": 10937,
+  "report_period_end": "2026-06-30",
+  "expected_monthly_burn": 268333,
+  "cash_flow_positive": false,
+  "basis": "H1 2026: CFO +1,372k, capex -2,982k => -1,610k/6; Q2 alone (-31k CFO, -1,746k investing) ~592k/mo",
+  "verdict": "new"
+ },
+ {
+  "company_id": 236,
+  "name": "Klimator",
+  "document_id": 11130,
+  "report_period_end": "2026-06-30",
+  "expected_monthly_burn": 2128667,
+  "cash_flow_positive": false,
+  "basis": "Q2 2026 CFO -6,386k/3 (H1 -4,815k/6 = 0.80M/mo; capex unknown)",
+  "verdict": "both_ok"
+ },
+ {
+  "company_id": 266,
+  "name": "Newbury Pharmaceuticals",
+  "document_id": 13856,
+  "report_period_end": "2026-05-31",
+  "expected_monthly_burn": 3428667,
+  "cash_flow_positive": false,
+  "basis": "Q3 (Mar-May 2026) CFO -10,286k/3; 9M -14,575k/9 = 1.62M/mo",
+  "verdict": "new"
+ },
+ {
+  "company_id": 15,
+  "name": "Bong",
+  "document_id": 3209,
+  "report_period_end": "2026-06-30",
+  "expected_monthly_burn": 1100000,
+  "cash_flow_positive": false,
+  "basis": "H1 2026 FCF: CFO +2.9M - capex 9.5M = -6.6M/6 (using net investing -7.4M: 0.75M)",
+  "verdict": "new"
+ },
+ {
+  "company_id": 36,
+  "name": "Ferronordic",
+  "document_id": 7227,
+  "report_period_end": "2026-06-30",
+  "expected_monthly_burn": 10166667,
+  "cash_flow_positive": false,
+  "basis": "H1 2026: CFO +62M + net investing -123M = -61M/6 (gross capex -144M gives 13.7M)",
+  "verdict": "new"
+ },
+ {
+  "company_id": 39,
+  "name": "Garo",
+  "document_id": 8277,
+  "report_period_end": "2026-06-30",
+  "expected_monthly_burn": 1416667,
+  "cash_flow_positive": false,
+  "basis": "H1 2026: CFO +5.8M - investments 14.3M = -8.5M/6 (investing -15.7M: 1.65M)",
+  "verdict": "new"
+ },
+ {
+  "company_id": 67,
+  "name": "Nyorda",
+  "document_id": 14625,
+  "report_period_end": "2026-06-30",
+  "expected_monthly_burn": 5666667,
+  "cash_flow_positive": false,
+  "basis": "H1 2026: CFO -17M + capex -17M = -34M/6 (Q2 alone: +4M -8M = -4M => 1.3M/mo)",
+  "verdict": "new"
+ },
+ {
+  "company_id": 74,
+  "name": "Pricer",
+  "document_id": 24900,
+  "report_period_end": "2026-09-30",
+  "expected_monthly_burn": 4444444,
+  "cash_flow_positive": false,
+  "basis": "9M 2026: CFO +7.4M + investing -47.4M = -40.0M/9",
+  "verdict": "new"
+ },
+ {
+  "company_id": 84,
+  "name": "Sensys Gatso Group",
+  "document_id": 18365,
+  "report_period_end": "2024-12-31",
+  "expected_monthly_burn": 3748500,
+  "cash_flow_positive": false,
+  "basis": "FY2024: CFO +44.2M - capex 89.2M = -45.0M/12 (investing -93.4M: 4.1M)",
+  "verdict": "new"
+ },
+ {
+  "company_id": 88,
+  "name": "Sleep Cycle",
+  "document_id": 25046,
+  "report_period_end": "2026-09-30",
+  "expected_monthly_burn": 3618000,
+  "cash_flow_positive": false,
+  "basis": "9M 2026 FCF: CFO +2.05M - capitalised dev 34.6M = -32.6M/9; Q3 alone 7.7M/mo",
+  "verdict": "new"
+ },
+ {
+  "company_id": 18,
+  "name": "C-RAD",
+  "document_id": 24923,
+  "report_period_end": "2026-09-30",
+  "expected_monthly_burn": 2767000,
+  "cash_flow_positive": false,
+  "basis": "9M 2026: CFO -7.7M + investing -17.2M = -24.9M/9 (Q3 alone is FCF positive ~+4M)",
+  "verdict": "new"
+ },
+ {
+  "company_id": 276,
+  "name": "Nosa Plugs",
+  "document_id": 14520,
+  "report_period_end": "2026-06-30",
+  "expected_monthly_burn": null,
+  "cash_flow_positive": null,
+  "basis": "unclear",
+  "verdict": "unverifiable"
+ },
+ {
+  "company_id": 383,
+  "name": "CAG Group",
+  "document_id": 24884,
+  "report_period_end": "2026-09-30",
+  "expected_monthly_burn": 0,
+  "cash_flow_positive": true,
+  "basis": "9M 2026 CFO +33.2M, capex -1.9M => positive; Q3 alone -7.1M is seasonal",
+  "verdict": "both_wrong"
+ },
+ {
+  "company_id": 164,
+  "name": "Diamyd Medical",
+  "document_id": 24158,
+  "report_period_end": "2026-08-31",
+  "expected_monthly_burn": 16275917,
+  "cash_flow_positive": false,
+  "basis": "FY 2025/26 CFO -195.3M/12 (Q4 -40.4M/3 = 13.5M)",
+  "verdict": "new"
+ },
+ {
+  "company_id": 277,
+  "name": "Observit",
+  "document_id": 14808,
+  "report_period_end": "2026-06-30",
+  "expected_monthly_burn": 285667,
+  "cash_flow_positive": false,
+  "basis": "Q2 2026 CFO -857k/3 (H1 CFO +1,009k; incl. investing -3,885k H1: ~479k/mo if investing is capex)",
+  "verdict": "new"
+ },
+ {
+  "company_id": 105,
+  "name": "Acconeer",
+  "document_id": 25057,
+  "report_period_end": "2026-09-30",
+  "expected_monthly_burn": 3858000,
+  "cash_flow_positive": false,
+  "basis": "9M 2026: CFO -18.4M + investing -16.3M = -34.7M/9 (CFO only: 2.05M)",
+  "verdict": "new"
+ },
+ {
+  "company_id": 2,
+  "name": "Actic Group",
+  "document_id": 682,
+  "report_period_end": "2025-12-31",
+  "expected_monthly_burn": 0,
+  "cash_flow_positive": true,
+  "basis": "FY2025 CFO +183.4M (IFRS16: lease payments sit in financing)",
+  "verdict": "both_ok"
+ },
+ {
+  "company_id": 11,
+  "name": "Balco Group",
+  "document_id": 2495,
+  "report_period_end": "2025-12-31",
+  "expected_monthly_burn": null,
+  "cash_flow_positive": null,
+  "basis": "FY2025 CFO +15.0M, investing -49.1M (FCF -34M => 2.8M/mo if investing is capex)",
+  "verdict": "unverifiable"
+ },
+ {
+  "company_id": 21,
+  "name": "Catena Media",
+  "document_id": 4311,
+  "report_period_end": "2024-12-31",
+  "expected_monthly_burn": 0,
+  "cash_flow_positive": true,
+  "basis": "FY2024 CFO +EUR 2.9M (down 85%)",
+  "verdict": "both_ok"
+ },
+ {
+  "company_id": 3,
+  "name": "Active Biotech",
+  "document_id": 746,
+  "report_period_end": "2026-06-30",
+  "expected_monthly_burn": 2833333,
+  "cash_flow_positive": false,
+  "basis": "H1 2026 CFO -17.0M/6",
+  "verdict": "both_ok"
+ },
+ {
+  "company_id": 7,
+  "name": "Arla Plast",
+  "document_id": 1808,
+  "report_period_end": "2026-06-30",
+  "expected_monthly_burn": 4283333,
+  "cash_flow_positive": false,
+  "basis": "H1 2026: CFO -5.2M + investing -20.5M = -25.7M/6",
+  "verdict": "both_wrong"
+ },
+ {
+  "company_id": 8,
+  "name": "Ascelia Pharma",
+  "document_id": 22716,
+  "report_period_end": "2026-06-30",
+  "expected_monthly_burn": 4973833,
+  "cash_flow_positive": false,
+  "basis": "H1 2026 CFO -29.8M/6",
+  "verdict": "both_ok"
+ }
+]
