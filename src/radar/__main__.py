@@ -3,6 +3,7 @@
     python -m radar import                 läs bolag och rapportlänkar ur gamla databasen
     python -m radar run --document 123     kör kedjan för en rapport
     python -m radar run --facit            kör kedjan för facitsetet och jämför
+    python -m radar run --latest           senaste rapporten per bolag (--workers, --limit, --token-budget)
     python -m radar status                 antal rapporter per status
     python -m radar serve                  webbgränssnitt (RADAR_PORT, RADAR_BASE_PATH)
 """
@@ -17,6 +18,7 @@ from pathlib import Path
 from .credentials import Credentials
 from .db import connect
 from .extract import DeepSeekClient
+from .batch import run_latest
 from .importer import import_legacy
 from .pipeline import process
 from .settings import Settings
@@ -90,6 +92,10 @@ def main(argv: list[str] | None = None) -> int:
     run = sub.add_parser("run")
     run.add_argument("--document", type=int, action="append", default=[])
     run.add_argument("--facit", action="store_true")
+    run.add_argument("--latest", action="store_true", help="senaste rapporten per bolag")
+    run.add_argument("--workers", type=int, default=4)
+    run.add_argument("--limit", type=int)
+    run.add_argument("--token-budget", type=int, default=8_000_000)
     sub.add_parser("status")
     sub.add_parser("serve")
     args = parser.parse_args(argv)
@@ -111,6 +117,12 @@ def main(argv: list[str] | None = None) -> int:
         print("DEEPSEEK_API_KEY saknas; kör bara hämtning och text.")
     if args.facit:
         return run_facit(connection, settings, client, today)
+    if args.latest:
+        connection.close()
+        counts = run_latest(settings, client, today=today, workers=args.workers, limit=args.limit,
+                            token_budget=args.token_budget, log=lambda line: print(line, flush=True))
+        print(json.dumps(counts, ensure_ascii=False), flush=True)
+        return 0
     for document_id in args.document:
         print(json.dumps(process(connection, settings, client, document_id, today=today,
                                  model=settings.deepseek_model), ensure_ascii=False, default=str))

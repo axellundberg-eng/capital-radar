@@ -196,3 +196,36 @@ def test_facit_line_handles_missing_values(capsys, monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "process", lambda *a, **k: {"runway": {"status": "missing_cash"}})
     cli.run_facit(None, Settings.from_env(), None, END)
     assert "saknas" in capsys.readouterr().out
+
+
+def test_batch_takes_latest_report_per_company_and_respects_budget(tmp_path, legacy_db, monkeypatch):
+    from radar import batch
+
+    with sqlite3.connect(legacy_db) as db:
+        db.execute("INSERT INTO documents VALUES (9, 1, 'Delårsrapport Q1', '2026-05-20', 'report')")
+        db.execute("INSERT INTO attachments VALUES (2, 9, 'https://storage.mfn.se/x/q1.pdf')")
+    settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "files")
+    connection = connect(settings.db_path)
+    import_legacy(connection, legacy_db)
+    assert batch.latest_reports(connection) == [(10, "Exempel AB")]
+    connection.close()
+
+    monkeypatch.setattr(pipeline, "fetch_pdf", lambda url, target, **_: (target, "abc"))
+    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde"])
+    calls = []
+
+    class CountingClient(FakeClient):
+        def complete(self, system, user):
+            calls.append(1)
+            return super().complete(system, user)
+
+    answer = {"report_period_end": END, "unit": "MSEK", "cash": {"value": 12, "date": END},
+              "cash_flows": [{"kind": "operating_cash_flow", "value": -6, "period_start": "2026-01-01",
+                              "period_end": END}]}
+    lines = []
+    exhausted = batch.run_latest(settings, CountingClient(answer), today=END, token_budget=0, log=lines.append)
+    assert calls == [] and exhausted.get("budget_slut") == 1
+    done = batch.run_latest(settings, CountingClient(answer), today=END, log=lines.append)
+    assert calls == [1] and done.get("ok") == 1
+    again = batch.run_latest(settings, CountingClient(answer), today=END, log=lines.append)
+    assert calls == [1] and again.get("ok") == 1  # redan extraherad: inget nytt AI-anrop
