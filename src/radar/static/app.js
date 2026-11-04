@@ -13,7 +13,11 @@ const BANDS = [
 const KIND = { cash: "Likvida medel", short_term_investments: "Kortfristiga placeringar", operating_cash_flow: "Kassaflöde, löpande verksamhet",
   capex: "Investeringar (capex)", investing_cash_flow: "Kassaflöde, investeringar" };
 
-const state = { items: [], band: "3_9", query: "", hideStale: false, selected: null, overview: null };
+const TYPE = { rights_issue: "Företrädesemission", directed_issue: "Riktad emission", loan: "Lån",
+  convertible: "Konvertibel", warrants: "Teckningsoptioner", other: "Övrigt" };
+const STATUS = { announced: "Annonserad", completed: "Genomförd", cancelled: "Avbruten" };
+
+const state = { items: [], band: "3_9", query: "", hideStale: false, hideRaise: true, selected: null, overview: null };
 const $ = (selector) => document.querySelector(selector);
 
 function escapeHtml(value) {
@@ -35,9 +39,13 @@ async function api(path) {
   return response.json();
 }
 
+function pool() {
+  return state.items.filter((item) => !state.hideRaise || !item.flags.includes("raise_announced"));
+}
+
 function visible() {
   const q = state.query.trim().toLowerCase();
-  return state.items.filter((item) =>
+  return pool().filter((item) =>
     (state.band === "all" || item.band === state.band)
     && (!q || item.name.toLowerCase().includes(q))
     && (!state.hideStale || !item.flags.includes("stale_report")));
@@ -49,13 +57,15 @@ function runwayCell(item) {
   if (item.band === "exhausted") return '<span class="pill band-exhausted" title="Kassan borde vara slut sedan rapporten">Slut?</span>';
   const recent = item.recent_runway_today != null
     ? `<small title="I senaste periodens takt">${months(item.recent_runway_today)} i senaste takt</small>` : "";
-  return `<span class="pill band-${item.band}">${months(item.runway_today)}</span>${recent}`;
+  const raise = item.flags.includes("raise_announced") ? '<small><span class="pill raise">Emission annonserad</span></small>' : "";
+  return `<span class="pill band-${item.band}">${months(item.runway_today)}</span>${recent}${raise}`;
 }
 
 function renderBands() {
-  const counts = state.overview?.bands || {};
+  const counts = {};
+  pool().forEach((item) => { counts[item.band] = (counts[item.band] || 0) + 1; });
   $("#bands").innerHTML = BANDS.map(([key, label, hint]) => {
-    const count = key === "all" ? state.items.length : (counts[key] || 0);
+    const count = key === "all" ? pool().length : (counts[key] || 0);
     return `<button class="band ${state.band === key ? "active" : ""}" data-band="${key}">
       <strong>${count}</strong><span>${label}</span>${hint ? `<small>${hint}</small>` : ""}</button>`;
   }).join("");
@@ -88,6 +98,23 @@ function explanation(d) {
       + ` i den takten räcker kassan ${months(d.recent_runway_today)}.` : "");
 }
 
+function financingNote(d) {
+  const parts = [];
+  if (d.confirmed_financing > 0) parts.push(` Bekräftad finansiering efter rapporten på ${msek(d.confirmed_financing)} ingår i beräkningen.`);
+  if (d.flags.includes("raise_announced")) parts.push(` En ytterligare finansiering på ${msek(d.announced_financing)} är annonserad men inte genomförd och ingår inte.`);
+  return parts.join("");
+}
+
+function financingSection(d) {
+  const events = d.financing_events || [];
+  if (!events.length) return '<h3>Finansiering efter rapporten</h3><p class="source">Inga finansieringshändelser funna.</p>';
+  const items = events.map((e) => `<li><div><strong>${TYPE[e.type] || e.type} · ${STATUS[e.status] || e.status}</strong>
+    <span>${e.amount != null ? msek(e.amount) : "belopp saknas"} · ${date(e.date)}</span></div>
+    ${e.quote ? `<q>${escapeHtml(e.quote)}</q>` : ""}
+    ${e.url ? `<a href="${escapeHtml(e.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(e.title || "Pressmeddelande")}</a>` : escapeHtml(e.title || "")}</li>`).join("");
+  return `<h3>Finansiering efter rapporten</h3><ul class="facts">${items}</ul>`;
+}
+
 function pdfLink(d, page) {
   if (!d.pdf_url) return "";
   const label = page ? `s. ${page}` : "PDF";
@@ -113,8 +140,9 @@ function renderDetail(d) {
       <div><span>Burn / mån</span><strong>${d.cash_flow_positive ? "—" : msek(d.monthly_burn)}</strong></div>
       <div><span>Kassa</span><strong>${msek(d.cash)}</strong></div>
     </div>
-    <p class="explain">${explanation(d)}</p>
+    <p class="explain">${explanation(d)}${financingNote(d)}</p>
     ${flags ? `<ul class="flags">${flags}</ul>` : ""}
+    ${financingSection(d)}
     <h3>Perioder</h3>
     <table class="mini"><thead><tr><th>Period</th><th class="num">Löpande</th><th class="num">Investeringar</th><th class="num">Burn / mån</th></tr></thead>
       <tbody>${periods || '<tr><td colspan="4">Inga perioder</td></tr>'}</tbody></table>
@@ -159,5 +187,6 @@ document.addEventListener("keydown", (event) => {
   if (row && event.key === "Enter") select(Number(row.dataset.id));
 });
 $("#search").addEventListener("input", (event) => { state.query = event.target.value; renderRows(); });
+$("#hideRaise").addEventListener("change", (event) => { state.hideRaise = event.target.checked; renderBands(); renderRows(); });
 $("#hideStale").addEventListener("change", (event) => { state.hideStale = event.target.checked; renderRows(); });
 load();

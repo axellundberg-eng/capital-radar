@@ -59,6 +59,32 @@ CREATE TABLE IF NOT EXISTS runway_results (
     result_json TEXT NOT NULL,
     PRIMARY KEY (company_id, document_id)
 );
+CREATE TABLE IF NOT EXISTS news (
+    document_id INTEGER PRIMARY KEY,   -- samma id som i den gamla databasen
+    company_id INTEGER NOT NULL REFERENCES companies(id),
+    title TEXT NOT NULL,
+    published_at TEXT,
+    url TEXT,
+    status TEXT NOT NULL DEFAULT 'new', -- new, checked, financing, failed
+    error TEXT,
+    text TEXT,
+    tokens INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT
+);
+CREATE INDEX IF NOT EXISTS news_company ON news(company_id, published_at);
+CREATE TABLE IF NOT EXISTS financing_events (
+    id INTEGER PRIMARY KEY,
+    news_document_id INTEGER NOT NULL REFERENCES news(document_id),
+    company_id INTEGER NOT NULL,
+    type TEXT NOT NULL,                -- rights_issue, directed_issue, loan, convertible, warrants, other
+    status TEXT NOT NULL,              -- announced, completed, cancelled
+    gross_amount REAL, net_amount REAL, -- hela valutaenheter
+    currency TEXT,
+    event_date TEXT NOT NULL,
+    quote TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS financing_company ON financing_events(company_id, event_date);
 """
 
 

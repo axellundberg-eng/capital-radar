@@ -104,12 +104,12 @@ def legacy_db(tmp_path: Path) -> Path:
             CREATE TABLE securities (id INTEGER PRIMARY KEY, issuer_id INT, isin TEXT, symbol TEXT,
                                      market TEXT, segment TEXT, active INT);
             CREATE TABLE documents (id INTEGER PRIMARY KEY, issuer_id INT, title TEXT, published_at TEXT,
-                                    profile_category TEXT);
+                                    profile_category TEXT, canonical_url TEXT);
             CREATE TABLE attachments (id INTEGER PRIMARY KEY, document_id INT, url TEXT);
             INSERT INTO issuers VALUES (1, 'Exempel AB');
             INSERT INTO securities VALUES (1, 1, 'SE0000000001', 'EX', 'First North', 'Growth', 1);
-            INSERT INTO documents VALUES (10, 1, 'Delårsrapport Q2', '2026-08-20', 'report');
-            INSERT INTO documents VALUES (11, 1, 'Pressmeddelande', '2026-08-21', 'other');
+            INSERT INTO documents VALUES (10, 1, 'Delårsrapport Q2', '2026-08-20', 'report', NULL);
+            INSERT INTO documents VALUES (11, 1, 'Pressmeddelande', '2026-08-21', 'other', 'https://mfn.se/a/11');
             INSERT INTO attachments VALUES (1, 10, 'https://storage.mfn.se/x/rapport.pdf');
         """)
     return path
@@ -128,7 +128,7 @@ def test_import_then_pipeline_end_to_end(tmp_path, legacy_db, monkeypatch):
     settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "files",
                        legacy_db_path=legacy_db)
     connection = connect(settings.db_path)
-    assert import_legacy(connection, legacy_db) == {"companies": 1, "reports": 1, "reports_with_pdf": 1}
+    assert import_legacy(connection, legacy_db) == {"companies": 1, "reports": 1, "reports_with_pdf": 1, "news": 1}
 
     def fake_fetch(url, target, **_):
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -208,7 +208,7 @@ def test_batch_takes_latest_report_per_company_and_respects_budget(tmp_path, leg
     from radar import batch
 
     with sqlite3.connect(legacy_db) as db:
-        db.execute("INSERT INTO documents VALUES (9, 1, 'Delårsrapport Q1', '2026-05-20', 'report')")
+        db.execute("INSERT INTO documents VALUES (9, 1, 'Delårsrapport Q1', '2026-05-20', 'report', NULL)")
         db.execute("INSERT INTO attachments VALUES (2, 9, 'https://storage.mfn.se/x/q1.pdf')")
     settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "files")
     connection = connect(settings.db_path)
@@ -278,7 +278,7 @@ def test_one_report_per_company_when_published_in_two_languages(tmp_path, legacy
     from radar import batch
 
     with sqlite3.connect(legacy_db) as db:
-        db.execute("INSERT INTO documents VALUES (12, 1, 'Interim report Q2', '2026-08-20', 'report')")
+        db.execute("INSERT INTO documents VALUES (12, 1, 'Interim report Q2', '2026-08-20', 'report', NULL)")
         db.execute("INSERT INTO attachments VALUES (3, 12, 'https://storage.mfn.se/x/q2-en.pdf')")
     connection = connect(tmp_path / "radar.db")
     import_legacy(connection, legacy_db)

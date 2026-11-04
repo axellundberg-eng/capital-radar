@@ -26,6 +26,8 @@ FLAG_TEXT = {
     "investing_as_capex": "Investeringar uppskattade från investeringsflödet",
     "includes_short_term_investments": "Likviditeten inkluderar kortfristiga placeringar",
     "cash_exhausted_since_report": "Kassan borde vara slut sedan rapporten: kontrollera ny finansiering",
+    "raise_announced": "En emission eller finansiering är annonserad men inte genomförd",
+    "financing_received": "Genomförd finansiering efter rapporten ingår i runway",
 }
 
 
@@ -34,9 +36,10 @@ def band(row: dict) -> str:
         return "missing"
     if row["cash_flow_positive"]:
         return "positive"
-    if "cash_exhausted_since_report" in row["flags"]:
-        return "exhausted"
     value = row["runway_today"]
+    refinanced = "financing_received" in row["flags"] and (value or 0) > 0
+    if "cash_exhausted_since_report" in row["flags"] and not refinanced:
+        return "exhausted"
     for name, low, high in BANDS:
         if value >= low and (high is None or value < high):
             return name
@@ -67,6 +70,9 @@ def latest_rows(connection: sqlite3.Connection) -> list[dict]:
             "period_end": result.get("period_end"), "flags": result.get("flags", []),
             "recent_monthly_burn": result.get("recent_monthly_burn"),
             "recent_runway_today": result.get("recent_runway_today"),
+            "confirmed_financing": result.get("confirmed_financing", 0.0),
+            "announced_financing": result.get("announced_financing", 0.0),
+            "financing_events": result.get("financing_events", []),
         }
         item["band"] = band(item)
         items.append(item)

@@ -124,7 +124,7 @@ def build_user_message(page_texts: list[str], pages: list[int]) -> str:
     return "Rapportens sidor:\n\n" + "\n\n".join(parts)
 
 
-def _date(value: Any) -> str | None:
+def parse_date(value: Any) -> str | None:
     if value in (None, ""):
         return None
     try:
@@ -133,7 +133,7 @@ def _date(value: Any) -> str | None:
         raise ExtractionError(f"ogiltigt datum: {value!r}") from error
 
 
-def _number(value: Any) -> float | None:
+def parse_number(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
@@ -145,7 +145,8 @@ def _number(value: Any) -> float | None:
         return None
 
 
-def parse_response(raw: str) -> Extraction:
+def json_object(raw: str) -> dict:
+    """Plocka ut JSON-objektet ur ett svar (tål kodstaket och text runt)."""
     text = raw.strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text)
@@ -158,7 +159,12 @@ def parse_response(raw: str) -> Extraction:
         raise ExtractionError(f"svaret är inte JSON ({len(raw)} tecken)") from error
     if not isinstance(data, dict):
         raise ExtractionError("svaret är inte ett objekt")
-    end = _date(data.get("report_period_end"))
+    return data
+
+
+def parse_response(raw: str) -> Extraction:
+    data = json_object(raw)
+    end = parse_date(data.get("report_period_end"))
     if not end:
         raise ExtractionError("rapportperiodens slut saknas")
     unit = parse_unit(data.get("unit"), data.get("currency"))
@@ -167,23 +173,23 @@ def parse_response(raw: str) -> Extraction:
     multiplier, currency = unit
     facts = []
     cash = data.get("cash")
-    if isinstance(cash, dict) and _number(cash.get("value")) is not None:
-        facts.append(ExtractedFact("cash", _number(cash["value"]) * multiplier, currency, None,
-                                   _date(cash.get("date")) or end, cash.get("page"), cash.get("quote")))
+    if isinstance(cash, dict) and parse_number(cash.get("value")) is not None:
+        facts.append(ExtractedFact("cash", parse_number(cash["value"]) * multiplier, currency, None,
+                                   parse_date(cash.get("date")) or end, cash.get("page"), cash.get("quote")))
     placements = data.get("short_term_investments")
-    if isinstance(placements, dict) and _number(placements.get("value")) is not None:
-        facts.append(ExtractedFact("short_term_investments", abs(_number(placements["value"])) * multiplier,
-                                   currency, None, _date(placements.get("date")) or end,
+    if isinstance(placements, dict) and parse_number(placements.get("value")) is not None:
+        facts.append(ExtractedFact("short_term_investments", abs(parse_number(placements["value"])) * multiplier,
+                                   currency, None, parse_date(placements.get("date")) or end,
                                    placements.get("page"), placements.get("quote")))
     for item in data.get("cash_flows") or []:
         if not isinstance(item, dict) or item.get("kind") not in KINDS:
             continue
-        value = _number(item.get("value"))
+        value = parse_number(item.get("value"))
         if value is None:
             continue
-        facts.append(ExtractedFact(item["kind"], value * multiplier, currency, _date(item.get("period_start")),
-                                   _date(item.get("period_end")) or end, item.get("page"), item.get("quote")))
-    return Extraction(_date(data.get("report_period_start")), end, currency, tuple(facts))
+        facts.append(ExtractedFact(item["kind"], value * multiplier, currency, parse_date(item.get("period_start")),
+                                   parse_date(item.get("period_end")) or end, item.get("page"), item.get("quote")))
+    return Extraction(parse_date(data.get("report_period_start")), end, currency, tuple(facts))
 
 
 def extract(client: ChatClient, page_texts: list[str], *, attempts: int = 2

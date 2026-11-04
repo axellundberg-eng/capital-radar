@@ -8,6 +8,8 @@
   förvärv och finansiella placeringar), annars capex, och bara om båda saknas
   hela investeringskassaflödet (flaggas).
 - Kassan rullas fram med burn från periodslut till idag.
+- Bekräftad finansiering efter rapporten (genomförda rundor, se rounds.py) läggs
+  till kassan; annonserade rundor redovisas bara och flaggas.
 """
 
 from __future__ import annotations
@@ -52,6 +54,9 @@ class Runway:
     recent_runway_today: float | None = None
     periods: list[Period] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
+    confirmed_financing: float = 0.0
+    announced_financing: float = 0.0
+    financing_events: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -95,8 +100,23 @@ def _periods(facts: list[Fact], period_end: str) -> list[Period]:
     return sorted(periods, key=lambda p: p.months)
 
 
-def compute(facts: list[Fact], period_end: str, *, today: str) -> Runway:
+def _apply_financing(result: Runway, financing: tuple[float, float, list[dict]] | None) -> float:
+    """Registrerar finansieringen och returnerar den bekräftade kassan som läggs till."""
+    if financing is None:
+        return 0.0
+    confirmed, announced, events = financing
+    result.confirmed_financing, result.announced_financing, result.financing_events = confirmed, announced, events
+    if confirmed > 0:
+        result.flags.append("financing_received")
+    if any(e["status"] == "announced" for e in events):
+        result.flags.append("raise_announced")
+    return confirmed
+
+
+def compute(facts: list[Fact], period_end: str, *, today: str,
+            financing: tuple[float, float, list[dict]] | None = None) -> Runway:
     result = Runway(status="ok", period_end=period_end)
+    extra = _apply_financing(result, financing)
     cash = next((f.value for f in facts if f.kind == "cash" and f.period_end == period_end), None)
     if cash is None:
         result.status = "missing_cash"
@@ -124,13 +144,14 @@ def compute(facts: list[Fact], period_end: str, *, today: str) -> Runway:
     if faster_recent:
         result.flags.append("recent_period_burn_higher")
         result.recent_monthly_burn = recent.monthly_burn
-        result.recent_runway_today = round(max(0.0, cash - recent.monthly_burn * since) / recent.monthly_burn, 1)
+        result.recent_runway_today = round(
+            max(0.0, cash + extra - recent.monthly_burn * since) / recent.monthly_burn, 1)
     if chosen.monthly_burn == 0:
         result.cash_flow_positive = True
         return result
     result.runway_at_report = round(cash / chosen.monthly_burn, 1)
-    if cash / chosen.monthly_burn < since:
+    if (cash + extra) / chosen.monthly_burn < since:
         # Kassan borde redan vara slut: nästan alltid ny finansiering efter rapporten.
         result.flags.append("cash_exhausted_since_report")
-    result.runway_today = round(max(0.0, cash - chosen.monthly_burn * since) / chosen.monthly_burn, 1)
+    result.runway_today = round(max(0.0, cash + extra - chosen.monthly_burn * since) / chosen.monthly_burn, 1)
     return result

@@ -13,7 +13,9 @@ from pathlib import Path
 
 from .extract import ChatClient, ExtractionError, extract
 from .fetch import fetch_pdf
+from .financing import load_events
 from .pdftext import pages as pdf_pages
+from .rounds import summarize
 from .runway import Fact, compute
 from .settings import Settings
 
@@ -88,9 +90,29 @@ def runway_for(connection: sqlite3.Connection, document_id: int, *, today: str) 
     if extraction is None:
         return {"status": "missing_extraction"}
     period_end = json.loads(extraction["response_json"]).get("report_period_end", "")[:10]
-    facts = [Fact(r["kind"], r["value"], r["period_start"], r["period_end"]) for r in connection.execute(
-        "SELECT kind, value, period_start, period_end FROM facts WHERE extraction_id=?", (extraction["id"],))]
-    return compute(facts, period_end, today=today).to_dict()
+    rows = connection.execute(
+        "SELECT kind, value, period_start, period_end, currency FROM facts WHERE extraction_id=?",
+        (extraction["id"],)).fetchall()
+    facts = [Fact(r["kind"], r["value"], r["period_start"], r["period_end"]) for r in rows]
+    company = connection.execute("SELECT company_id FROM reports WHERE document_id=?", (document_id,)).fetchone()
+    currency = next((r["currency"] for r in rows if r["currency"]), None)
+    financing = summarize(load_events(connection, company["company_id"]), period_end, currency)
+    return compute(facts, period_end, today=today, financing=financing).to_dict()
+
+
+def refresh_runway(connection: sqlite3.Connection, document_id: int, *, today: str) -> dict:
+    """Räkna om och spara runway för en redan extraherad rapport (inga AI-anrop)."""
+    result = runway_for(connection, document_id, today=today)
+    if result.get("status") != "missing_extraction":
+        company = connection.execute("SELECT company_id FROM reports WHERE document_id=?",
+                                     (document_id,)).fetchone()
+        with connection:
+            connection.execute(
+                """INSERT INTO runway_results(company_id, document_id, computed_at, result_json) VALUES (?,?,?,?)
+                   ON CONFLICT(company_id, document_id) DO UPDATE SET computed_at=excluded.computed_at,
+                   result_json=excluded.result_json""",
+                (company["company_id"], document_id, _now(), json.dumps(result)))
+    return result
 
 
 def process(connection: sqlite3.Connection, settings: Settings, client: ChatClient | None,
@@ -109,12 +131,5 @@ def process(connection: sqlite3.Connection, settings: Settings, client: ChatClie
                 step(report)
             except Exception as error:  # noqa: BLE001 - felet sparas och visas
                 return _fail(connection, document_id, name, error)
-    result = runway_for(connection, document_id, today=today)
-    if result.get("status") != "missing_extraction":
-        with connection:
-            connection.execute(
-                """INSERT INTO runway_results(company_id, document_id, computed_at, result_json) VALUES (?,?,?,?)
-                   ON CONFLICT(company_id, document_id) DO UPDATE SET computed_at=excluded.computed_at,
-                   result_json=excluded.result_json""",
-                (report["company_id"], document_id, _now(), json.dumps(result)))
+    result = refresh_runway(connection, document_id, today=today)
     return {"document_id": document_id, "report_status": report["status"], "runway": result}

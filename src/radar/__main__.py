@@ -4,6 +4,8 @@
     python -m radar run --document 123     kör kedjan för en rapport
     python -m radar run --facit            kör kedjan för facitsetet och jämför
     python -m radar run --latest           senaste rapporten per bolag (--workers, --limit, --token-budget)
+    python -m radar news --latest          pressmeddelanden efter senaste rapporten: hitta finansiering
+                                           (--max-runway 12, --workers, --token-budget, --max-items, --retry-failed)
     python -m radar status                 antal rapporter per status
     python -m radar serve                  webbgränssnitt (RADAR_PORT, RADAR_BASE_PATH)
 """
@@ -20,6 +22,7 @@ from .db import connect
 from .extract import DeepSeekClient
 from .batch import run_latest
 from .importer import import_legacy
+from .news import run_news
 from .pipeline import process
 from .settings import Settings
 
@@ -73,6 +76,21 @@ def run_facit(connection, settings: Settings, client, today: str, *, force: bool
     return 0
 
 
+def news_command(args, connection, settings: Settings, client, today: str) -> int:
+    if not args.latest:
+        print("Ange --latest.", flush=True)
+        return 2
+    if client is None:
+        print("Nyhetsläsningen kräver modellen (DeepSeek-nyckeln saknas).", flush=True)
+        return 1
+    connection.close()
+    counts = run_news(settings, client, today=today, max_runway=args.max_runway, workers=args.workers,
+                      token_budget=args.token_budget, max_items=args.max_items, retry_failed=args.retry_failed,
+                      log=lambda line: print(line, flush=True))
+    print(json.dumps(counts, ensure_ascii=False), flush=True)
+    return 0
+
+
 def serve() -> int:
     import os
 
@@ -108,6 +126,13 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--workers", type=int, default=4)
     run.add_argument("--limit", type=int)
     run.add_argument("--token-budget", type=int, default=8_000_000)
+    news = sub.add_parser("news")
+    news.add_argument("--latest", action="store_true", help="bolag med kort runway, nyheter efter senaste rapporten")
+    news.add_argument("--max-runway", type=float, default=12.0, metavar="MÅN")
+    news.add_argument("--workers", type=int, default=4)
+    news.add_argument("--token-budget", type=int, default=1_000_000)
+    news.add_argument("--max-items", type=int, default=8, help="högst så många AI-granskade nyheter per bolag")
+    news.add_argument("--retry-failed", action="store_true", help="försök igen med nyheter som misslyckats")
     sub.add_parser("status")
     sub.add_parser("serve")
     args = parser.parse_args(argv)
@@ -127,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     client = _client(settings)
     if client is None:
         print("DEEPSEEK_API_KEY saknas; kör bara hämtning och text.")
+    if args.command == "news":
+        return news_command(args, connection, settings, client, today)
     if args.facit:
         return run_facit(connection, settings, client, today, force=args.reextract)
     if args.latest:

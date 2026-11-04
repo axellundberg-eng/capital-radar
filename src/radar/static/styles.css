@@ -48,6 +48,7 @@ tbody tr[data-id]:hover, tbody tr.selected { background: var(--muted-bg); }
 .pill.band-9_18, .pill.band-over_18 { background: var(--watch-bg); color: var(--watch); }
 .pill.good { background: var(--watch-bg); color: var(--good); }
 .pill.band-exhausted { background: var(--muted-bg); color: var(--urgent); border: 1px dashed var(--urgent); }
+.pill.raise { background: var(--target-bg); color: var(--target); font-size: 11px; padding: 1px 8px; }
 .pill.muted { background: var(--muted-bg); color: var(--muted); }
 .warn { color: var(--target); font-size: 13px; white-space: nowrap; }
 .detail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px;
