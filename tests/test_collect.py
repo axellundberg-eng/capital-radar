@@ -360,3 +360,14 @@ def test_slug_from_url_accepts_every_mfn_channel():
     assert slug_from_url(f"{base}/cis/a/rottneros") is None  # kanalsida utan post är ingen bolagslänk
     assert slug_from_url(f"{base}/other/rottneros/post") is None
     assert slug_from_url("https://example.com/a/x/y") is None
+
+
+def test_definite_form_quarter_report_titles_are_reports():
+    from radar.classify import classify
+
+    for title in ("Oncopeptides publicerar rapporten för det tredje kvartalet 2026",
+                  "Stille AB (publ) redovisar idag rapporten för det tredje kvartalet 2026."):
+        assert str(getattr(classify(title), "kind", classify(title))) == "report", title
+    for title in ("Cantargia bjuder in till presentation av delårsrapport för Q3 2026",
+                  "Observit AB tidigarelägger publicering av kvartalsrapporten för tredje kvartalet 2026"):
+        assert str(getattr(classify(title), "kind", classify(title))) == "calendar", title

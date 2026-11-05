@@ -32,7 +32,7 @@ REPORT = re.compile(
     r"|\bq[1-4]\s*(?:interim |quarterly )?(?:report|rapport|results)\b"
     r"|\b(?:first|second|third|fourth)\s+quarter\s+(?:20\d\d\s+)?(?:report|results)\b"
     r"|report for the (?:first|second|third|fourth) quarter"
-    r"|rapport (?:för|från) (?:det )?(?:första|andra|tredje|fjärde) kvartalet",
+    r"|rapporten? (?:för|från) (?:det )?(?:första|andra|tredje|fjärde) kvartalet",
     re.I)
 FINANCING = re.compile(
     r"nyemission|företrädesemission|emission\b|emissionen|private placement|rights issue|(?:directed )?share issue"
