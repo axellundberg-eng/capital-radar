@@ -127,8 +127,15 @@ def _sum(facts: list[Fact], kind: str) -> float:
 
 
 def _debt_warning(result: Runway, facts: list[Fact], cash_today: float) -> None:
-    """Lån som förfaller inom 12 mån: varning med runway efter amortering."""
-    debt = _sum(facts, "debt_due_12m")
+    """Lån som förfaller inom 12 mån: varning med runway efter amortering.
+
+    Skulden gäller vid periodslut; det som redan amorterats efter perioden (rapportens
+    händelser och pressmeddelanden) dras av, annars räknas samma betalning två gånger.
+    """
+    repaid = result.post_period_outflows + sum(
+        e.get("amount") or 0.0 for e in result.financing_events
+        if e.get("type") == "repayment" and e.get("status") == "completed")
+    debt = max(0.0, _sum(facts, "debt_due_12m") - repaid)
     if debt <= 0 or not result.monthly_burn:
         return
     result.debt_due_12m = debt

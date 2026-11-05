@@ -328,3 +328,13 @@ def test_repayment_in_report_and_news_counts_once():
     assert "raise_announced" not in once.flags
     report_only = compute(facts, end, today=end)
     assert report_only.runway_today == once.runway_today
+
+
+def test_debt_due_is_reduced_by_what_was_already_repaid():
+    from radar.runway import Fact, compute
+
+    end = "2026-06-30"
+    facts = [Fact("cash", 180e6, None, end), Fact("operating_cash_flow", -79e6, "2026-01-01", end),
+             Fact("post_period_outflow", 50e6, "2026-07-15", end), Fact("debt_due_12m", 125e6, None, end)]
+    result = compute(facts, end, today=end)
+    assert result.debt_due_12m == 75e6
