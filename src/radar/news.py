@@ -4,6 +4,10 @@ Kostnadsvakter: bara bolag med kort runway, bara nyheter efter rapportens
 periodslut, förfilter på rubriken, högst `max_items` AI-anrop per bolag,
 texten klipps till 12 000 tecken, redan bedömda nyheter hoppas över och en
 gemensam tokenbudget stoppar nya anrop när den är förbrukad.
+
+Samma körning söker också strukturella händelser (omvänt förvärv, fusion, bud m.fl.,
+se events.py och news_events.py) för bolag med runway under `event_runway` månader
+eller kassa slut enligt rapporten, med samma budget och samma kostnadsvakter.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from .db import connect
 from .extract import ChatClient
 from .fetch import fetch_text
 from .financing import ask, build_message, looks_like_financing
+from .news_events import process_company_events
 from .pipeline import refresh_runway
 from .settings import Settings
 
@@ -31,7 +36,8 @@ WHERE r.document_id = (SELECT r2.document_id FROM reports r2
                        WHERE r2.company_id = c.id ORDER BY r2.published_at DESC, r2.document_id ASC LIMIT 1)
 ORDER BY c.name COLLATE NOCASE
 """
-SIGNALS = ("raise_announced", "financing_received")
+SIGNALS = ("raise_announced", "financing_received", "structural_change", "public_offer", "delisting")
+EVENT_RUNWAY = 18.0   # strukturell kontroll för bolag med runway under så många månader
 
 
 def _now() -> str:
@@ -101,40 +107,54 @@ def process_company_news(connection: sqlite3.Connection, settings: Settings, cli
     return counts
 
 
-def news_targets(connection: sqlite3.Connection, max_runway: float) -> list[tuple[int, str, int, str]]:
-    """(bolag, namn, rapport, periodslut) för bolag med kort runway som bränner kassa."""
+def news_targets(connection: sqlite3.Connection, max_runway: float, event_runway: float = EVENT_RUNWAY
+                 ) -> list[tuple[int, str, int, str, bool]]:
+    """(bolag, namn, rapport, periodslut, finansieringssteg) för bolag som bränner kassa.
+
+    Finansieringsnyheter läses när runway är under `max_runway`; strukturella händelser
+    när den är under `event_runway`. Kassa slut enligt rapporten räknas som kort i båda."""
     targets = []
     for row in connection.execute(LATEST_RESULTS):
         result = json.loads(row["result_json"])
         if result.get("status") != "ok" or result.get("cash_flow_positive") or not result.get("period_end"):
             continue
-        short = (result.get("runway_today") or 0) < max_runway
-        if short or "cash_exhausted_since_report" in result.get("flags", []):
-            targets.append((row["id"], row["name"], row["document_id"], result["period_end"]))
+        runway = result.get("runway_today") or 0
+        exhausted = "cash_exhausted_since_report" in result.get("flags", [])
+        if runway < max(max_runway, event_runway) or exhausted:
+            targets.append((row["id"], row["name"], row["document_id"], result["period_end"],
+                            runway < max_runway or exhausted))
     return targets
 
 
 def run_news(settings: Settings, client: ChatClient, *, today: str, max_runway: float = 12.0,
              workers: int = 4, token_budget: int = 1_000_000, max_items: int = 8,
-             retry_failed: bool = False, log: Callable[[str], None] = print) -> dict[str, int]:
+             retry_failed: bool = False, event_runway: float = EVENT_RUNWAY,
+             log: Callable[[str], None] = print) -> dict[str, int]:
     main = connect(settings.db_path)
     try:
-        jobs = news_targets(main, max_runway)
+        jobs = news_targets(main, max_runway, event_runway)
     finally:
         main.close()
     budget, totals, lock = Budget(token_budget, 0), {"companies": len(jobs)}, threading.Lock()
 
-    def work(company_id: int, name: str, document_id: int, period_end: str) -> dict:
+    def work(company_id: int, name: str, document_id: int, period_end: str, financing: bool) -> dict:
         connection = connect(settings.db_path)
         try:
-            counts = process_company_news(connection, settings, client, company_id, period_end, max_items,
-                                          budget=budget, retry_failed=retry_failed)
+            counts = {"checked": 0, "financing": 0, "failed": 0, "tokens": 0}
+            if financing:
+                counts = process_company_news(connection, settings, client, company_id, period_end, max_items,
+                                              budget=budget, retry_failed=retry_failed)
+            found = process_company_events(connection, settings, client, company_id, period_end, max_items,
+                                           budget=budget, retry_failed=retry_failed)
+            counts["tokens"] += found.pop("events_tokens")
+            counts.update({key: counts.get(key, 0) + value for key, value in found.items()})
             result = refresh_runway(connection, document_id, today=today)
         finally:
             connection.close()
         signals = [flag for flag in result.get("flags", []) if flag in SIGNALS]
         log(f"{counts['checked'] + counts['financing'] + counts['failed']:2} nyheter, "
-            f"{counts['financing']:2} med finansiering, {counts['failed']:2} fel  "
+            f"{counts['financing']:2} med finansiering, {counts['failed']:2} fel, "
+            f"{counts['structural']:2} strukturella  "
             f"runway {result.get('runway_today')}  {','.join(signals):28} {name}")
         return {**counts, **{flag: 1 for flag in signals}}
 

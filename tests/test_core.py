@@ -429,3 +429,36 @@ def test_change_for_detects_new_raise_and_band_moves():
     assert change_for(previous, {"band": "9_18", "flags": ["raise_announced"]}) == "Emission annonserad"
     assert change_for(previous, {"band": "9_18", "flags": []}) is None
     assert change_for(None, {"band": "3_9", "flags": []}) is None
+
+
+def test_cycle_lock_takes_over_a_dead_lock_but_not_a_live_one(tmp_path):
+    import os
+    import time as _time
+
+    from radar import scheduler
+
+    path = tmp_path / "radar.lock"
+    path.write_text("999")
+    old = _time.time() - 2 * scheduler.STALE_LOCK_SECONDS
+    os.utime(path, (old, old))  # övergivet: inget hjärtslag på länge
+    with scheduler.CycleLock(path):
+        assert path.exists()
+        with pytest.raises(FileExistsError):  # levande lås: ett andra varv får inte starta
+            with scheduler.CycleLock(path):
+                pass
+    assert not path.exists()
+
+
+def test_cycle_lock_heartbeat_keeps_a_long_cycle_alive(tmp_path, monkeypatch):
+    import os
+    import time as _time
+
+    from radar import scheduler
+
+    monkeypatch.setattr(scheduler, "HEARTBEAT_SECONDS", 0.05)
+    path = tmp_path / "radar.lock"
+    with scheduler.CycleLock(path):
+        old = _time.time() - 10
+        os.utime(path, (old, old))
+        _time.sleep(0.3)  # hjärtslaget ska ha uppdaterat ändringstiden
+        assert _time.time() - path.stat().st_mtime < 5

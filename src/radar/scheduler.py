@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import sqlite3
+import threading
 import time
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -33,9 +34,11 @@ from .qualify import prospect_companies
 from .settings import Settings
 
 logger = logging.getLogger(__name__)
-STALE_LOCK_SECONDS = 3 * 3600
+STALE_LOCK_SECONDS = 300       # utan hjärtslag på fem minuter är låset övergivet
+HEARTBEAT_SECONDS = 30
+RETRY_AFTER_SKIP_SECONDS = 300
 CHANGE_TEXT = {"3_9": "Ny i 3–9 mån", "under_3": "Ny under 3 mån", "exhausted": "Kassan borde vara slut",
-               "acute": "Akut: under 1 mån"}
+               "acute": "Akut: under 1 mån", "structural": "Strukturell förändring"}
 
 STATUS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS company_status (
@@ -51,19 +54,38 @@ def _now() -> str:
 
 
 class CycleLock:
-    """Lås i en fil bredvid databasen; ett lås äldre än tre timmar räknas som övergivet."""
+    """Lås i en fil bredvid databasen, med hjärtslag.
+
+    Medan ett varv pågår uppdateras filens ändringstid var 30:e sekund. Ett lås som inte
+    rörts på fem minuter hör till en process som dött (t.ex. en container som ersattes
+    mitt i ett varv vid en utrullning) och tas över.
+    """
 
     def __init__(self, path: Path) -> None:
         self.path = path
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
 
     def __enter__(self) -> "CycleLock":
         if self.path.exists() and time.time() - self.path.stat().st_mtime > STALE_LOCK_SECONDS:
             self.path.unlink(missing_ok=True)
         self.fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         os.write(self.fd, str(os.getpid()).encode())
+        self._thread = threading.Thread(target=self._beat, name="radar-lock-heartbeat", daemon=True)
+        self._thread.start()
         return self
 
+    def _beat(self) -> None:
+        while not self._stop.wait(HEARTBEAT_SECONDS):
+            try:
+                os.utime(self.path)
+            except OSError:
+                return
+
     def __exit__(self, *exc) -> None:
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=2)
         os.close(self.fd)
         self.path.unlink(missing_ok=True)
 
@@ -146,7 +168,9 @@ def loop(settings: Settings, client: ChatClient | None, *, interval_minutes: flo
         try:
             run_cycle(settings, client, report_budget=report_budget, news_budget=news_budget)
         except FileExistsError:
-            logger.warning("schedule_skipped: ett annat varv pågår")
+            logger.warning("schedule_skipped: ett annat varv pågår; försöker igen om fem minuter")
+            time.sleep(RETRY_AFTER_SKIP_SECONDS)
+            continue
         except Exception:  # noqa: BLE001 - ett fel får inte stoppa driften
             logger.exception("schedule_cycle_failed")
         time.sleep(max(300.0, interval_minutes * 60))

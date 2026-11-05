@@ -4,6 +4,7 @@ const BANDS = [
   ["3_9", "3–9 mån", "Målgrupp"],
   ["under_3", "Under 3 mån", "Akut"],
   ["acute", "Akut < 1 mån", "Kassan nästan slut"],
+  ["structural", "Strukturell förändring", "Kontrollera manuellt: rapportens siffror kan vara inaktuella"],
   ["raising", "Pågående kapitalanskaffning", "Emission annonserad"],
   ["exhausted", "Kassa slut enl. rapport", "Kolla finansiering"],
   ["9_18", "9–18 mån", "Bevaka"],
@@ -21,6 +22,10 @@ const TYPE = { rights_issue: "Företrädesemission", directed_issue: "Riktad emi
   loan: "Lån", credit_facility: "Kreditfacilitet", convertible: "Konvertibel", warrants: "Teckningsoptioner",
   repayment: "Amortering", other: "Övrigt" };
 const TYPE_ORDER = Object.keys(TYPE);
+const EVENT_TYPE = { reverse_acquisition: "Omvänt förvärv", merger: "Fusion", acquisition: "Förvärv", name_change: "Namnbyte",
+  public_offer: "Offentligt bud", delisting: "Avnotering", bankruptcy: "Konkurs", reorganisation: "Rekonstruktion",
+  liquidation: "Likvidation", spin_off: "Avknoppning", other: "Övrig händelse" };
+const STRUCT_WARNING = "Bolaget har förändrats efter rapporten (se händelserna nedan) och runway bygger på äldre siffror. Kontrollera manuellt.";
 const STATUS = { announced: "Annonserad", completed: "Genomförd", cancelled: "Avbruten" };
 const STATUS_CHIP = { announced: "pågår", completed: "genomförd", cancelled: "avbruten" };
 const ACUTE_TEXT = "Kassan räcker mindre än en månad enligt senaste rapporten. Bolaget behöver kapital nu eller har kreditlöften (visas om de finns i rapporten).";
@@ -51,10 +56,16 @@ function pool() {
   return state.items;
 }
 
+function structuralChips(item) {
+  return (item.structural_events || []).map((e) =>
+    `<span class="chip structural" title="${escapeHtml(date(e.date))}">${EVENT_TYPE[e.type] || e.type} · ${STATUS_CHIP[e.status] || e.status}</span>`).join("");
+}
+
 function chips(item) {
   const events = (item.financing_events || []).filter((e) => e.status !== "cancelled");
-  if (!events.length) return "";
-  return `<small class="chips">${events.map((e) => `<span class="chip ${e.status}" title="${escapeHtml(date(e.date))}">${TYPE[e.type] || e.type} · ${STATUS_CHIP[e.status] || e.status}</span>`).join("")}</small>`;
+  const structural = structuralChips(item);
+  if (!events.length && !structural) return "";
+  return `<small class="chips">${structural}${events.map((e) => `<span class="chip ${e.status}" title="${escapeHtml(date(e.date))}">${TYPE[e.type] || e.type} · ${STATUS_CHIP[e.status] || e.status}</span>`).join("")}</small>`;
 }
 
 function visible() {
@@ -68,6 +79,7 @@ function visible() {
 function runwayCell(item) {
   if (item.status !== "ok") return '<span class="pill muted">Saknar data</span>';
   if (item.cash_flow_positive) return '<span class="pill good">Positivt</span>';
+  if (item.band === "structural") return `<span class="pill band-structural" title="${escapeHtml(STRUCT_WARNING)}">Strukturell förändring</span><small>Gammal runway ${months(item.runway_today)}</small>`;
   if (item.band === "exhausted") return '<span class="pill band-exhausted" title="Kassan borde vara slut sedan rapporten">Slut?</span>';
   if (item.band === "acute") return `<span class="pill band-acute" title="${ACUTE_TEXT}">${months(item.runway_today)}</span><small>Akut: under 1 mån</small>${creditNote(item)}`;
   const recent = item.recent_runway_today != null
@@ -134,9 +146,21 @@ function prospectRow(item) {
     </tr>`;
 }
 
+function structuralRow(item) {
+  return `
+    <tr data-id="${item.id}" class="${state.selected === item.id ? "selected" : ""}" tabindex="0">
+      <td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.market || "")}</small></td>
+      <td><small class="chips">${structuralChips(item)}</small></td>
+      <td>${date(item.period_end)}<small>${months(item.months_since_report)} sedan</small></td>
+      <td class="num">${months(item.runway_today)}</td>
+    </tr>`;
+}
+
 function renderProspects() {
   if (!state.prospects) return;
-  const { items, raising } = state.prospects;
+  const { items, raising, structural } = state.prospects;
+  $("#structuralRows").innerHTML = structural.length ? structural.map(structuralRow).join("")
+    : '<tr><td colspan="4" class="empty">Inga bolag med strukturell förändring.</td></tr>';
   $("#prospectRows").innerHTML = items.length ? items.map(prospectRow).join("")
     : '<tr><td colspan="7" class="empty">Inga prospekt just nu.</td></tr>';
   $("#raisingRows").innerHTML = raising.length ? raising.map(prospectRow).join("")
@@ -156,7 +180,7 @@ function qualificationSection(d) {
 async function loadProspects() {
   try {
     const data = await api("api/prospects");
-    state.prospects = { items: data.items, raising: data.raising || [] };
+    state.prospects = { items: data.items, raising: data.raising || [], structural: data.structural || [] };
     renderProspects();
   } catch (error) {
     $("#prospectRows").innerHTML = `<tr><td colspan="7" class="empty">Prospekten kunde inte läsas (${escapeHtml(error.message)}).</td></tr>`;
@@ -174,6 +198,7 @@ function setView(view) {
 function explanation(d) {
   if (d.status !== "ok") return "Runway kan inte beräknas: rapporten saknar kassa eller kassaflöde.";
   if (d.cash_flow_positive) return "Bolaget har positivt kassaflöde efter investeringar och bränner inte kassa.";
+  if (d.band === "structural") return `${STRUCT_WARNING} Rapporten visade kassa ${msek(d.cash)} den ${date(d.period_end)} och en burn på ${msek(d.monthly_burn)} per månad (${months(d.runway_today)} kvar enligt de siffrorna).`;
   if (d.band === "acute") return `Kassan var ${msek(d.cash)} den ${date(d.period_end)} med en burn på ${msek(d.monthly_burn)} per månad. ${ACUTE_TEXT}`;
   if (d.band === "exhausted") return `Kassan ${msek(d.cash)} den ${date(d.period_end)} räckte ${months(d.runway_at_report)} med en burn på`
     + ` ${msek(d.monthly_burn)} per månad, men ${months(d.months_since_report)} har gått. Bolaget har med stor sannolikhet`
@@ -215,6 +240,21 @@ function financingSection(d) {
   return `<h3>Finansiering efter rapporten</h3>${credit}${groups.join("")}`;
 }
 
+function structuralItem(e) {
+  const counterparty = e.counterparty ? ` · ${escapeHtml(e.counterparty)}` : "";
+  return `<li><div><strong>${EVENT_TYPE[e.type] || e.type} · ${STATUS[e.status] || e.status}</strong>
+    <span>${date(e.date)}${counterparty}</span></div>
+    ${e.quote ? `<q>${escapeHtml(e.quote)}</q>` : ""}
+    ${e.url ? `<a href="${escapeHtml(e.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(e.title || "Pressmeddelande")}</a>` : escapeHtml(e.title || "")}</li>`;
+}
+
+function structuralSection(d) {
+  const events = d.structural_events || [];
+  if (!events.length) return "";
+  const warning = d.flags.includes("structural_change") ? `<p class="explain struct-warning">${escapeHtml(STRUCT_WARNING)}</p>` : "";
+  return `<h3>Företagshändelser efter rapporten</h3>${warning}<ul class="facts">${events.map(structuralItem).join("")}</ul>`;
+}
+
 function afterPeriodSection(d) {
   const rows = d.facts.filter((f) => f.kind === "post_period_outflow" || f.kind === "post_period_inflow");
   const debt = d.debt_due_12m > 0
@@ -254,6 +294,7 @@ function renderDetail(d) {
     <p class="explain">${explanation(d)}${financingNote(d)}</p>
     ${flags ? `<ul class="flags">${flags}</ul>` : ""}
     ${qualificationSection(d)}
+    ${structuralSection(d)}
     ${afterPeriodSection(d)}
     ${financingSection(d)}
     <h3>Perioder</h3>

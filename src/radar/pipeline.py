@@ -11,6 +11,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .events import load_events as load_structural, summarize as summarize_structural
 from .extract import ChatClient, ExtractionError, extract
 from .fetch import fetch_pdf
 from .financing import load_events
@@ -97,7 +98,8 @@ def runway_for(connection: sqlite3.Connection, document_id: int, *, today: str) 
     company = connection.execute("SELECT company_id FROM reports WHERE document_id=?", (document_id,)).fetchone()
     currency = next((r["currency"] for r in rows if r["currency"]), None)
     financing = summarize(load_events(connection, company["company_id"]), period_end, currency)
-    return compute(facts, period_end, today=today, financing=financing).to_dict()
+    structural = summarize_structural(load_structural(connection, company["company_id"]), period_end)
+    return compute(facts, period_end, today=today, financing=financing, structural=structural).to_dict()
 
 
 def refresh_runway(connection: sqlite3.Connection, document_id: int, *, today: str) -> dict:

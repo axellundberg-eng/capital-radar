@@ -15,6 +15,8 @@
 - Kassan rullas fram med burn från periodslut till idag.
 - Kreditfaciliteter är en reserv: outnyttjad kredit (rapport + nyheter) ger `runway_with_credit`
   men ändrar inte huvudtalet. Runway under en månad utan ny finansiering flaggas `acute`.
+- Strukturella händelser efter perioden (omvänt förvärv, fusion m.m.) ändrar inte talen men
+  flaggas (`structural_change`, `public_offer`, `delisting`): rapportens siffror kan vara inaktuella.
 - Bekräftad finansiering efter rapporten (genomförda rundor, se rounds.py) läggs
   till kassan; annonserade rundor redovisas bara och flaggas.
 """
@@ -72,6 +74,7 @@ class Runway:
     runway_after_debt: float | None = None
     available_credit: float = 0.0
     runway_with_credit: float | None = None
+    structural_events: list[dict] = field(default_factory=list)   # se events.py
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -129,6 +132,13 @@ def _apply_financing(result: Runway, financing: tuple | None) -> float:
     return confirmed
 
 
+def _apply_structural(result: Runway, structural: tuple | None) -> None:
+    """Strukturella händelser efter perioden: bara redovisning och flaggor, ingen ändring av talen."""
+    if structural:
+        result.structural_events = list(structural[0])
+        result.flags.extend(structural[1])
+
+
 def _sum(facts: list[Fact], kind: str) -> float:
     return sum(f.value for f in facts if f.kind == kind and f.value > 0)
 
@@ -163,9 +173,10 @@ def _credit_and_acute(result: Runway, cash_today: float) -> None:
 
 
 def compute(facts: list[Fact], period_end: str, *, today: str,
-            financing: tuple | None = None) -> Runway:
+            financing: tuple | None = None, structural: tuple | None = None) -> Runway:
     result = Runway(status="ok", period_end=period_end)
     extra = _apply_financing(result, financing)
+    _apply_structural(result, structural)
     cash = next((f.value for f in facts if f.kind == "cash" and f.period_end == period_end), None)
     if cash is None:
         result.status = "missing_cash"

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Capital Radar</title>
-  <link rel="stylesheet" href="static/styles.css?v=6">
+  <link rel="stylesheet" href="static/styles.css?v=7">
 </head>
 <body>
   <header class="top">
@@ -67,6 +67,14 @@
             <tbody id="prospectRows"><tr><td colspan="7" class="empty">Laddar…</td></tr></tbody>
           </table>
         </div>
+        <h2 class="section-title">Strukturell förändring (kontrollera manuellt)</h2>
+        <p class="source">Bolaget har förändrats efter rapporten (t.ex. omvänt förvärv eller fusion). Rapportens kassa och burn är inaktuella, så bolagen poängsätts inte som vanliga prospekt men döljs inte.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Bolag</th><th>Händelser efter rapporten</th><th>Rapport</th><th class="num">Gammal runway</th></tr></thead>
+            <tbody id="structuralRows"><tr><td colspan="4" class="empty">Laddar…</td></tr></tbody>
+          </table>
+        </div>
         <h2 class="section-title">Pågående kapitalanskaffning (för sent för garanti)</h2>
         <p class="source">Emission annonserad men inte genomförd: garantin är sannolikt redan ordnad.</p>
         <div class="table-wrap">
@@ -82,6 +90,6 @@
     </aside>
   </main>
 
-  <script src="static/app.js?v=8" defer></script>
+  <script src="static/app.js?v=9" defer></script>
 </body>
 </html>

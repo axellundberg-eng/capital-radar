@@ -106,4 +106,7 @@ a { color: var(--accent); }
 .chip.completed { background: var(--watch-bg); color: var(--watch); }
 .credit { color: var(--accent); font-weight: 600; }
 .detail h4 { margin: 12px 0 6px; font-size: 13px; }
+.pill.band-structural { background: var(--muted-bg); color: var(--target); border: 1px dashed var(--target); }
+.chip.structural { background: var(--target-bg); color: var(--target); }
+.struct-warning { border-left: 3px solid var(--target); padding: 6px 10px; background: var(--target-bg); border-radius: 6px; }
 .section-title { font-size: 18px; margin: 24px 0 4px; }

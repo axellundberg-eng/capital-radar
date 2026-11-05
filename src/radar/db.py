@@ -86,6 +86,18 @@ CREATE TABLE IF NOT EXISTS financing_events (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS financing_company ON financing_events(company_id, event_date);
+CREATE TABLE IF NOT EXISTS company_events (
+    id INTEGER PRIMARY KEY,
+    news_document_id INTEGER NOT NULL REFERENCES news(document_id),
+    company_id INTEGER NOT NULL,
+    type TEXT NOT NULL,                -- reverse_acquisition, merger, acquisition, name_change, public_offer, delisting, bankruptcy, reorganisation, liquidation, spin_off, other
+    status TEXT NOT NULL,              -- announced, completed, cancelled
+    event_date TEXT NOT NULL,
+    counterparty TEXT,
+    quote TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS company_events_company ON company_events(company_id, event_date);
 CREATE TABLE IF NOT EXISTS market_data (
     company_id INTEGER PRIMARY KEY,
     isin TEXT,
@@ -128,6 +140,10 @@ def _add_column(connection: sqlite3.Connection, table: str, column: str, ddl: st
 def _migrate(connection: sqlite3.Connection) -> None:
     """Lägg till kolumner som tillkommit efter att databasen skapades (även för nya databaser)."""
     _add_column(connection, "financing_events", "drawn_amount", "REAL")
+    # Strukturella händelser (events.py): NULL = nyheten är aldrig bedömd, annars checked/structural/failed.
+    _add_column(connection, "news", "events_status", "TEXT")
+    _add_column(connection, "news", "events_error", "TEXT")
+    _add_column(connection, "news", "events_tokens", "INTEGER NOT NULL DEFAULT 0")
     _add_column(connection, "companies", "mfn_slug", "TEXT")   # bolagets sida: mfn.se/all/a/<slug>
     for table in ("reports", "news"):
         _add_column(connection, table, "source_url", "TEXT")   # postens sida på MFN, unik per tabell

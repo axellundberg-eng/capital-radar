@@ -32,10 +32,15 @@ FLAG_TEXT = {
     "debt_due_within_12m": "Lån förfaller inom 12 månader: runway efter amortering är klart kortare",
     "financing_received": "Genomförd finansiering efter rapporten ingår i runway",
     "credit_reserve": "Outnyttjad kredit finns: runway inklusive kredit visas separat",
+    "structural_change": "Bolaget har förändrats efter rapporten (t.ex. omvänt förvärv eller fusion): "
+                         "kontrollera manuellt, rapportens siffror kan vara inaktuella",
+    "public_offer": "Ett offentligt bud på bolaget är annonserat eller genomfört",
+    "delisting": "Avnotering eller byte av handelsplats är annonserad eller genomförd",
     "acute": "Akut: under 1 mån. Kassan räcker mindre än en månad enligt senaste rapporten. "
              "Bolaget behöver kapital nu eller har kreditlöften (visas om de finns i rapporten).",
 }
-BAND_TEXT = {"raising": "Pågående kapitalanskaffning", "acute": "Akut: under 1 mån"}
+BAND_TEXT = {"raising": "Pågående kapitalanskaffning", "acute": "Akut: under 1 mån",
+             "structural": "Strukturell förändring: kontrollera manuellt, rapportens siffror kan vara inaktuella"}
 PROSPECT_BANDS = ("3_9", "under_3", "acute")
 
 
@@ -44,6 +49,10 @@ def band(row: dict) -> str:
         return "missing"
     if row["cash_flow_positive"]:
         return "positive"
+    # Bolaget har ändrats efter rapporten (siffrorna är inte tillförlitliga) eller är på väg att
+    # köpas upp eller avnoteras: inget att kontakta förrän någon har tittat manuellt.
+    if any(flag in row["flags"] for flag in ("structural_change", "public_offer", "delisting")):
+        return "structural"
     if "raise_announced" in row["flags"]:
         return "raising"  # annonserad men inte genomförd: egen kategori
     value = row["runway_today"]
@@ -91,6 +100,7 @@ def latest_rows(connection: sqlite3.Connection) -> list[dict]:
             "runway_after_debt": result.get("runway_after_debt"),
             "available_credit": result.get("available_credit", 0.0),
             "runway_with_credit": result.get("runway_with_credit"),
+            "structural_events": result.get("structural_events", []),
         }
         item["band"] = band(item)
         items.append(item)
@@ -180,8 +190,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             market, history = load_market(connection), load_history(connection)
         finally:
             connection.close()
-        out, raising = [], []
+        out, raising, structural = [], [], []
         for item in items:
+            if item["band"] == "structural":
+                structural.append(item)  # inte poängsatt: siffrorna är inte tillförlitliga
+                continue
             is_raising = item["band"] == "raising" and (item["runway_today"] or 0) < 9
             if item["band"] not in PROSPECT_BANDS and not is_raising:
                 continue
@@ -190,7 +203,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 {**item, **q.to_dict(), "market_error": (market.get(item["id"]) or {}).get("error")})
         for group in (out, raising):
             group.sort(key=lambda i: (-i["score"], i["runway_today"] or 0, i["name"].casefold()))
-        return JSONResponse({"items": out, "raising": raising}, headers={"Cache-Control": "no-store"})
+        structural.sort(key=lambda i: i["name"].casefold())
+        return JSONResponse({"items": out, "raising": raising, "structural": structural}, headers={"Cache-Control": "no-store"})
 
     app.mount("/static", StaticFiles(directory=str(static)), name="static")
 
