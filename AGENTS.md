@@ -8,6 +8,19 @@
 - Gör inte ett identiskt nytt försök utan att först ha identifierat orsaken eller
   valt en säkrare metod.
 
+## Användningsgräns: sluta koda vid 95 %
+
+- Läs användningen med verktyget `get_usage` (`mcp__ccd_session_mgmt__get_usage`) före varje
+  ny kodningsomgång, före varje agent, före varje push eller deploy och när en agent
+  rapporterat klart.
+- Når **5-timmarsgränsen eller veckogränsen 95 %**: slutför bara det atomiska steg som är
+  påbörjat (lämna aldrig något halvgjort, till exempel mitt mellan push och verifiering),
+  och sluta sedan koda. Inga nya ändringar, agenter, pushar eller deployer.
+- Säg i en eller två rader vilken gräns, hur många procent, när den nollställs och vad som
+  återstår. Därefter besvaras bara frågor i vanlig chatt, så att användaren kan fortsätta
+  samtala. Fortsätt först när användaren säger till eller gränsen nollställts under 95 %.
+- Agenter som redan körs kan inte stoppas av regeln. Starta inga nya.
+
 ## Ny kod och gammal kod
 
 - `src/radar/` är den nya kärnan, skriven från grunden.
