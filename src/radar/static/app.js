@@ -1,18 +1,16 @@
 "use strict";
 
-const BANDS = [
-  ["3_9", "3–9 mån", "Målgrupp"],
-  ["under_3", "Under 3 mån", "Akut"],
-  ["acute", "Akut < 1 mån", "Kassan nästan slut"],
-  ["structural", "Strukturell förändring", "Kontrollera manuellt: rapportens siffror kan vara inaktuella"],
-  ["raising", "Pågående kapitalanskaffning", "Emission annonserad"],
-  ["exhausted", "Kassa slut enl. rapport", "Kolla finansiering"],
-  ["9_18", "9–18 mån", "Bevaka"],
-  ["over_18", "Över 18 mån", ""],
-  ["positive", "Kassaflödespositiva", ""],
-  ["missing", "Saknar data", ""],
-  ["all", "Alla", ""],
+// [nyckel, etikett, förklaring (visas som tooltip), färgklass]. Grupperna skiljs med ett streck.
+const BAND_GROUPS = [
+  [["3_9", "3–9 mån", "Målgrupp", "target"], ["under_3", "Under 3 mån", "Kassan räcker mindre än 3 månader", "urgent"],
+   ["acute", "Akut", "Kassan räcker mindre än 1 månad", "urgent"]],
+  [["structural", "Strukturell förändring", "Kontrollera manuellt: rapportens siffror kan vara inaktuella", "warn"],
+   ["raising", "Pågående kapitalanskaffning", "Emission annonserad men inte genomförd", "warn"],
+   ["exhausted", "Kassa slut", "Kassan borde vara slut enligt rapporten: kolla finansiering", "warn"]],
+  [["9_18", "9–18 mån", "Bevaka", "watch"], ["over_18", "Över 18 mån", "", "watch"]],
+  [["positive", "Kassaflödespositiva", "", "muted"], ["missing", "Saknar data", "", "muted"], ["all", "Alla", "", "muted"]],
 ];
+const BANDS = BAND_GROUPS.flat();
 const KIND = { cash: "Likvida medel", undrawn_credit: "Outnyttjad kredit", short_term_investments: "Kortfristiga placeringar", operating_cash_flow: "Kassaflöde, löpande verksamhet",
   capex: "Investeringar (capex)", investing_cash_flow: "Kassaflöde, investeringar",
   post_period_outflow: "Utbetalning efter perioden", post_period_inflow: "Inbetalning efter perioden",
@@ -30,7 +28,7 @@ const STATUS = { announced: "Annonserad", completed: "Genomförd", cancelled: "A
 const STATUS_CHIP = { announced: "pågår", completed: "genomförd", cancelled: "avbruten" };
 const ACUTE_TEXT = "Kassan räcker mindre än en månad enligt senaste rapporten. Bolaget behöver kapital nu eller har kreditlöften (visas om de finns i rapporten).";
 
-const state = { items: [], band: "3_9", query: "", hideStale: false, selected: null, overview: null, view: "list", prospects: null };
+const state = { items: [], band: "3_9", query: "", selected: null, overview: null, view: "list", prospects: null };
 const $ = (selector) => document.querySelector(selector);
 
 function escapeHtml(value) {
@@ -72,8 +70,7 @@ function visible() {
   const q = state.query.trim().toLowerCase();
   return pool().filter((item) =>
     (state.band === "all" || item.band === state.band)
-    && (!q || item.name.toLowerCase().includes(q))
-    && (!state.hideStale || !item.flags.includes("stale_report")));
+    && (!q || item.name.toLowerCase().includes(q)));
 }
 
 function runwayCell(item) {
@@ -97,11 +94,11 @@ function creditNote(item) {
 function renderBands() {
   const counts = {};
   pool().forEach((item) => { counts[item.band] = (counts[item.band] || 0) + 1; });
-  $("#bands").innerHTML = BANDS.map(([key, label, hint]) => {
+  $("#bands").innerHTML = BAND_GROUPS.map((group) => `<div class="band-group">${group.map(([key, label, hint, tone]) => {
     const count = key === "all" ? pool().length : (counts[key] || 0);
-    return `<button class="band ${state.band === key ? "active" : ""}" data-band="${key}">
-      <strong>${count}</strong><span>${label}</span>${hint ? `<small>${hint}</small>` : ""}</button>`;
-  }).join("");
+    return `<button class="band tone-${tone} ${state.band === key ? "active" : ""}" data-band="${key}" title="${escapeHtml(hint)}">
+      <span class="band-label">${label}</span><span class="band-count">${count}</span></button>`;
+  }).join("")}</div>`).join("");
 }
 
 function changeBadge(item) {
@@ -344,5 +341,4 @@ document.addEventListener("keydown", (event) => {
   if (row && event.key === "Enter") select(Number(row.dataset.id));
 });
 $("#search").addEventListener("input", (event) => { state.query = event.target.value; renderRows(); });
-$("#hideStale").addEventListener("change", (event) => { state.hideStale = event.target.checked; renderRows(); });
 load();
