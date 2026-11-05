@@ -92,6 +92,7 @@ def latest_rows(connection: sqlite3.Connection) -> list[dict]:
             "period_end": result.get("period_end"), "flags": result.get("flags", []),
             "recent_monthly_burn": result.get("recent_monthly_burn"),
             "recent_runway_today": result.get("recent_runway_today"),
+            "runway_cash_today": result.get("runway_cash_today"),
             "confirmed_financing": result.get("confirmed_financing", 0.0),
             "announced_financing": result.get("announced_financing", 0.0),
             "financing_events": result.get("financing_events", []),
