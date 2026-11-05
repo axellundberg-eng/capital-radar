@@ -1,11 +1,11 @@
 # Kontinuerlig backup av SQLite till S3-kompatibel lagring
 # (Hetzner Object Storage). Uppgifterna läses från .env.
 dbs:
-  - path: /data/screener.db
+  - path: /data/radar.db
     replicas:
       - type: s3
         bucket: ${LITESTREAM_BUCKET}
-        path: screener.db
+        path: radar.db
         endpoint: ${LITESTREAM_ENDPOINT}
         region: ${LITESTREAM_REGION}
         access-key-id: ${LITESTREAM_ACCESS_KEY_ID}

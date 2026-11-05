@@ -1,8 +1,8 @@
 """Steg 6: löpande drift utan manuella körningar.
 
 Varje varv (standard en gång i timmen):
-1. Samla nya dokument: RADAR_COLLECT_SOURCE=legacy (standard) importerar ur den gamla databasen,
-   mfn hämtar och klassificerar bolagens MFN-sidor själv (collect).
+1. Samla nya dokument: RADAR_COLLECT_SOURCE=mfn (standard) hämtar och klassificerar bolagens MFN-sidor själv (collect);
+   legacy importerar ur arkivdatabasen (bara tester och engångsimport).
 2. Extrahera nya rapporter (senaste per bolag; redan extraherade hoppas över).
 3. Läs nya pressmeddelanden för bolag med kort runway.
 4. Hämta marknadsvärde för prospekt som saknar färskt värde.

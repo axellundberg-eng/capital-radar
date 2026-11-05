@@ -1,22 +1,14 @@
-# Drift på Hetzner. Starta grundtjänsten:   docker compose up -d
-# Med backup (kräver S3-uppgifter i .env):  docker compose --profile backup up -d
+# Drift på Hetzner. Starta grundtjänsterna:   docker compose up -d
+# Med backup (kräver S3-uppgifter i .env):    docker compose --profile backup up -d
 # Publik via Cloudflare (kräver tunnel-token): docker compose --profile public up -d
 #
-# Appen lyssnar bara på 127.0.0.1 på servern. Innan Cloudflare är klart nås den
-# via SSH-tunnel:  ssh -L 8000:127.0.0.1:8000 deploy@<server>
+# Webben lyssnar bara på 127.0.0.1:8001 på servern; Cloudflare Tunnel pekar hit.
+# Innan Cloudflare är klart:  ssh -L 8001:127.0.0.1:8001 deploy@<server>  och öppna
+# http://127.0.0.1:8001/v2/
 
 services:
-  app:
-    image: ghcr.io/${GITHUB_REPOSITORY:-axellundberg-eng/capital-radar}:${IMAGE_TAG:-latest}
-    restart: unless-stopped
-    env_file: .env
-    volumes:
-      - /srv/capital-radar/data:/data
-    ports:
-      - "127.0.0.1:8000:8000"
-
   radar:
-    # Ny kärna: webbgränssnitt under /v2 (Cloudflare-routen pekar hit).
+    # Webbgränssnitt och API under /v2 (/ skickar vidare dit). Cloudflare-routen pekar hit.
     image: ghcr.io/${GITHUB_REPOSITORY:-axellundberg-eng/capital-radar}:${IMAGE_TAG:-latest}
     restart: unless-stopped
     command: ["python", "-m", "radar", "serve"]
@@ -55,7 +47,7 @@ services:
       - /srv/capital-radar/data:/data
       - ./deploy/litestream.yml:/etc/litestream.yml:ro
     depends_on:
-      - app
+      - radar
 
   cloudflared:
     profiles: ["public"]
@@ -65,4 +57,4 @@ services:
     environment:
       - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
     depends_on:
-      - app
+      - radar

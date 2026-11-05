@@ -402,7 +402,7 @@ def test_schedule_cycle_imports_processes_and_records_changes(tmp_path, legacy_d
     from radar.web import latest_rows
 
     settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "files",
-                       legacy_db_path=legacy_db)
+                       legacy_db_path=legacy_db, collect_source="legacy")
     monkeypatch.setattr(pipeline, "fetch_pdf", lambda url, target, **_: (target, "abc"))
     monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde", "Balansräkning likvida medel 12"])
     monkeypatch.setattr(scheduler, "refresh_many", lambda *a, **k: {"fetched": 0})

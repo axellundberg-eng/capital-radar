@@ -12,7 +12,7 @@ PREVIOUS="$(cat .deployed-tag 2>/dev/null || true)"
 
 wait_healthy() {
   for _ in $(seq 1 30); do
-    if curl -fsS --max-time 4 http://127.0.0.1:8000/health >/dev/null; then
+    if curl -fsS --max-time 4 http://127.0.0.1:8001/v2/health >/dev/null; then
       return 0
     fi
     sleep 2
@@ -32,7 +32,7 @@ if wait_healthy; then
 fi
 
 echo "Hälsokontrollen misslyckades för $TAG"
-docker compose logs --tail 80 app || true
+docker compose logs --tail 80 radar || true
 if [ -n "$PREVIOUS" ]; then
   echo "Rullar tillbaka till $PREVIOUS"
   IMAGE_TAG="$PREVIOUS" docker compose up -d --remove-orphans

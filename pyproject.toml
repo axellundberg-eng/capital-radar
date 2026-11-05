@@ -25,15 +25,12 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-# src/ = ny kod. legacy/src/ = gammal kod som körs tills den ersatts och sedan raderas.
-where = ["src", "legacy/src"]
+where = ["src"]
 
 [tool.setuptools.package-data]
-capital_radar = ["schema.sql", "web/*"]
 radar = ["data/*.json", "static/*"]
 
 [tool.pytest.ini_options]
-# Bara ny kod. Gamla tester körs med: pytest -c legacy/pytest.ini
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q"

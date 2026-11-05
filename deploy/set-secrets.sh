@@ -28,5 +28,5 @@ if [ -z "$changed" ]; then
   exit 1
 fi
 echo "Uppdaterade:$changed"
-IMAGE_TAG="$(cat .deployed-tag 2>/dev/null || echo latest)" docker compose up -d app >/dev/null 2>&1
+IMAGE_TAG="$(cat .deployed-tag 2>/dev/null || echo latest)" docker compose up -d radar radar-worker >/dev/null 2>&1
 echo "Appen startad om med nya inställningar."

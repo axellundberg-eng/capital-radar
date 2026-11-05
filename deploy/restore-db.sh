@@ -15,17 +15,17 @@ check="$(sqlite3 "$BACKUP" 'PRAGMA integrity_check;')"
 [ "$check" = "ok" ] || { echo "integrity_check misslyckades: $check"; exit 1; }
 echo "Backupen är hel: $(sqlite3 "$BACKUP" 'SELECT COUNT(*) FROM issuers;') bolag, $(sqlite3 "$BACKUP" 'SELECT COUNT(*) FROM documents;') dokument"
 
-docker compose stop app litestream 2>/dev/null || docker compose stop app
+docker compose stop radar radar-worker litestream 2>/dev/null || docker compose stop radar radar-worker
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 for suffix in "" "-wal" "-shm"; do
-  if [ -e "$DATA/screener.db$suffix" ]; then
-    mv "$DATA/screener.db$suffix" "/srv/capital-radar/backups/replaced-$stamp.db$suffix"
+  if [ -e "$DATA/radar.db$suffix" ]; then
+    mv "$DATA/radar.db$suffix" "/srv/capital-radar/backups/replaced-$stamp.db$suffix"
   fi
 done
-rm -f "$DATA"/screener.db.read-model.sqlite3*
+rm -f "$DATA"/radar.db-wal
 
-cp "$BACKUP" "$DATA/screener.db"
+cp "$BACKUP" "$DATA/radar.db"
 if [ -n "$DOCUMENTS" ]; then
   tar -xzf "$DOCUMENTS" -C "$DATA"
 fi
@@ -33,7 +33,7 @@ chown -R 1000:1000 "$DATA"
 
 docker compose up -d
 for _ in $(seq 1 30); do
-  if curl -fsS --max-time 4 http://127.0.0.1:8000/health; then
+  if curl -fsS --max-time 4 http://127.0.0.1:8001/v2/health; then
     echo
     echo "Återställning klar."
     exit 0
@@ -41,5 +41,5 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 echo "Appen blev inte frisk efter återställningen"
-docker compose logs --tail 80 app
+docker compose logs --tail 80 radar
 exit 1

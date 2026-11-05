@@ -153,6 +153,7 @@ def serve() -> int:
     app = create_app()
     if base:
         outer = FastAPI()
+        outer.add_api_route("/", lambda: RedirectResponse(base + "/"), include_in_schema=False)
         outer.add_api_route(base, lambda: RedirectResponse(base + "/"), include_in_schema=False)
         outer.mount(base, app)
         app = outer

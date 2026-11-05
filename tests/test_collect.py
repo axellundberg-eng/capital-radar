@@ -340,13 +340,13 @@ def test_scheduler_switch(settings, legacy_db, monkeypatch, source, expected):
     assert called == [expected] and expected in summary
 
 
-def test_collect_source_defaults_to_legacy(monkeypatch):
+def test_collect_source_defaults_to_mfn(monkeypatch):
     monkeypatch.delenv("RADAR_COLLECT_SOURCE", raising=False)
-    assert Settings.from_env().collect_source == "legacy"
-    monkeypatch.setenv("RADAR_COLLECT_SOURCE", "MFN")
     assert Settings.from_env().collect_source == "mfn"
-    monkeypatch.setenv("RADAR_COLLECT_SOURCE", "något annat")
+    monkeypatch.setenv("RADAR_COLLECT_SOURCE", "LEGACY")
     assert Settings.from_env().collect_source == "legacy"
+    monkeypatch.setenv("RADAR_COLLECT_SOURCE", "något annat")
+    assert Settings.from_env().collect_source == "mfn"
 
 
 def test_slug_from_url_accepts_every_mfn_channel():

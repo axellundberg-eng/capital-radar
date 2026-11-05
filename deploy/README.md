@@ -49,8 +49,8 @@ Repo → Settings:
 Nästa push till `main` bygger, testar och driftsätter. `deploy/remote-deploy.sh`
 väntar på `/health` och rullar tillbaka till förra versionen om den inte blir grön.
 
-Innan Cloudflare är klart: `ssh -L 8000:127.0.0.1:8000 deploy@<server-ip>` och
-öppna `http://127.0.0.1:8000`.
+Innan Cloudflare är klart: `ssh -L 8001:127.0.0.1:8001 deploy@<server-ip>` och
+öppna `http://127.0.0.1:8001/v2/`.
 
 ## 4. Flytta databasen från Railway
 
@@ -79,7 +79,7 @@ Provåterställning (bör göras en gång):
 
 ```bash
 docker run --rm --env-file .env -v "$PWD/deploy/litestream.yml:/etc/litestream.yml:ro" -v /tmp:/restore \
-  litestream/litestream:0.3.13 restore -o /restore/test.db /data/screener.db
+  litestream/litestream:0.3.13 restore -o /restore/test.db /data/radar.db
 sqlite3 /tmp/test.db 'PRAGMA integrity_check;'
 ```
 
@@ -89,7 +89,7 @@ Cloudflare Zero Trust (gratis upp till 50 användare):
 
 1. Networks → Tunnels → Create tunnel (cloudflared) → `capital-radar`.
    Kopiera token till `CLOUDFLARE_TUNNEL_TOKEN` i `.env`.
-2. Public hostname: `radar.perplexinvest.se` → Service `HTTP` → `app:8000`.
+2. Public hostname: `radar.perplexinvest.se` → Service `HTTP` → `radar:8001`.
 3. Access → Applications → Self-hosted → `radar.perplexinvest.se`.
    Policy "Allow" med din e-postadress (One-time PIN eller Google som inloggning).
 4. Lägg till `public` i `COMPOSE_PROFILES` och kör `docker compose up -d`.
