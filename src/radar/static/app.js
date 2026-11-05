@@ -6,7 +6,7 @@ const BANDS = [
   ["under_3", "Under 3 mån", "Kassan räcker mindre än 3 månader", "urgent"],
   ["acute", "Akut", "Kassan räcker mindre än 1 månad", "urgent"],
   ["structural", "Strukturell förändring", "Kontrollera manuellt: rapportens siffror kan vara inaktuella", "warn"],
-  ["raising", "Annonserad finansiering", "Emission eller lån annonserat, utfall inte offentliggjort än. Flyttas när utfallet är klart", "warn"],
+  ["raising", "Pågående kapitalanskaffning", "Emission eller lån annonserat, utfall inte offentliggjort än", "warn"],
   ["exhausted", "Kassa slut", "Kassan borde vara slut enligt rapporten: kolla finansiering", "warn"],
   ["9_18", "9–18 mån", "Bevaka", "watch"],
   ["over_18", "Över 18 mån", "", "watch"],
@@ -97,9 +97,10 @@ function creditNote(item) {
 function renderBands() {
   const counts = {};
   pool().forEach((item) => { counts[item.band] = (counts[item.band] || 0) + 1; });
-  $("#bands").innerHTML = BANDS.map(([key, label, hint, tone]) => {
+  $("#bands").innerHTML = BANDS.map(([key, label, hint]) => {
     const count = key === "all" ? pool().length : (counts[key] || 0);
-    return `<button class="band tone-${tone} ${state.band === key ? "active" : ""}" data-band="${key}" title="${escapeHtml(hint)}">${label} <span class="band-count">${count}</span></button>`;
+    return `<button class="band ${state.band === key ? "active" : ""}" data-band="${key}" title="${escapeHtml(hint)}">
+      <strong>${count}</strong><span>${label}</span></button>`;
   }).join("");
 }
 
