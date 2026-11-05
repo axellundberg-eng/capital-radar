@@ -10,7 +10,7 @@ from .extract import ChatClient, ExtractionError, json_object, parse_date, parse
 from .rounds import Event
 from .units import parse_unit
 
-TYPES = ("rights_issue", "directed_issue", "loan", "convertible", "warrants", "other")
+TYPES = ("rights_issue", "directed_issue", "loan", "convertible", "warrants", "repayment", "other")
 STATUSES = ("announced", "completed", "cancelled")
 
 # Starka ord pekar på finansiering; svaga (utfall, teckning, garanti, outcome) räcker inte
@@ -18,7 +18,8 @@ STATUSES = ("announced", "completed", "cancelled")
 STRONG = re.compile(
     r"emission|kapitalanskaffn|finansier|konvertib|teckningsoption|brygglån"
     r"|\b\w*lån(?:et|en|er|ens)?\b|rights issue|directed (?:share )?issue|share issue|private placement"
-    r"|\bloans?\b|convertible|warrants?|financing|capital raise", re.IGNORECASE)
+    r"|\bloans?\b|convertible|warrants?|financing|capital raise"
+    r"|amorter|återbetal|inlös|kreditfacilitet|repay|redemption|redeem|credit facility", re.IGNORECASE)
 WEAK = re.compile(r"utfall|teckning|garanti|outcome", re.IGNORECASE)
 MEETING = re.compile(r"årsstämma|bolagsstämma|kallelse|annual general meeting|\bagm\b|notice of", re.IGNORECASE)
 REPORT = re.compile(r"rapport|bokslutskommuniké|interim report|year-end report|quarterly report", re.IGNORECASE)
@@ -35,14 +36,15 @@ def looks_like_financing(title: str | None) -> bool:
 
 
 PROMPT = """Du läser ett pressmeddelande från ett börsnoterat bolag och avgör om det beskriver
-en finansieringshändelse: nyemission, företrädesemission, riktad emission, lån, brygglån,
-konvertibel, teckningsoptioner eller annan kapitalanskaffning.
+en finansieringshändelse som påverkar kassan: pengar IN (nyemission, företrädesemission,
+riktad emission, lån eller brygglån som tas upp, konvertibel, teckningsoptioner) eller
+pengar UT (amortering eller återbetalning av lån, inlösen av konvertibel mot kontanter).
 
 Svara med enbart ett JSON-objekt:
 {
   "is_financing": true eller false,
   "events": [
-    {"type": "rights_issue | directed_issue | loan | convertible | warrants | other",
+    {"type": "rights_issue | directed_issue | loan | convertible | warrants | repayment | other",
      "status": "announced | completed | cancelled",
      "gross_amount": tal eller null, "net_amount": tal eller null,
      "unit": "enheten beloppen anges i, t.ex. SEK, TSEK, MSEK", "currency": "SEK",
@@ -51,6 +53,8 @@ Svara med enbart ett JSON-objekt:
 }
 
 Regler:
+- type "loan" = lån som tas upp (pengar in). type "repayment" = amortering, återbetalning
+  av lån eller inlösen av konvertibel mot kontanter (pengar ut). Belopp anges alltid positivt.
 - status "completed": pengarna är mottagna eller registrerade, eller ett utfall med inbetalt belopp
   redovisas. status "announced": beslutat, föreslaget eller teckningstiden har inte avslutats.
   status "cancelled": avbrutet eller återkallat.

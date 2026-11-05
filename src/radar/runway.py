@@ -117,7 +117,7 @@ def _apply_financing(result: Runway, financing: tuple[float, float, list[dict]] 
     result.confirmed_financing, result.announced_financing, result.financing_events = confirmed, announced, events
     if confirmed > 0:
         result.flags.append("financing_received")
-    if any(e["status"] == "announced" for e in events):
+    if any(e["status"] == "announced" and e["type"] != "repayment" for e in events):
         result.flags.append("raise_announced")
     return confirmed
 
@@ -151,7 +151,11 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
         result.flags.append("includes_short_term_investments")
         cash += placements
     result.cash = cash
-    outflows = _sum(facts, "post_period_outflow")
+    # Samma amortering kan stå både i rapporten och i ett pressmeddelande: räkna den en gång.
+    news_repayments = [e.get("amount") or 0.0 for e in result.financing_events
+                       if e.get("type") == "repayment" and e.get("status") == "completed"]
+    outflows = sum(f.value for f in facts if f.kind == "post_period_outflow" and f.value > 0
+                   and not any(abs(f.value - r) <= 0.25 * max(f.value, r) for r in news_repayments))
     result.post_period_outflows = outflows
     result.reported_inflows_after_period = _sum(facts, "post_period_inflow")
     if outflows:

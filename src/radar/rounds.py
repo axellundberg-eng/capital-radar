@@ -15,6 +15,7 @@ WINDOW_DAYS = 120
 AMOUNT_TOLERANCE = 0.25
 EQUITY_COST = 0.9           # ca 10 % emissionskostnader när nettobelopp saknas
 DEBT_TYPES = ("loan", "convertible")
+OUTFLOW_TYPES = ("repayment",)  # amortering, återbetalning, kontant inlösen: pengar ut
 RANK = {"announced": 1, "completed": 2}
 
 
@@ -72,7 +73,10 @@ def dedupe(events: list[Event]) -> list[Event]:
 
 
 def confirmed_cash(event: Event) -> float:
-    """Kassa som tillförs av en genomförd runda: netto, annars brutto minus ca 10 % för aktier."""
+    """Kassaeffekt av en genomförd runda: netto, annars brutto minus ca 10 % för aktier.
+    Återbetalningar ger ett negativt belopp."""
+    if event.type in OUTFLOW_TYPES:
+        return -(event.amount or 0.0)
     if event.net_amount is not None:
         return event.net_amount
     if event.gross_amount is None:
@@ -90,7 +94,7 @@ def summarize(events: list[Event], period_end: str, currency: str | None = None
             continue  # annan valuta kan inte läggas på rapportens kassa
         if event.status == "completed":
             confirmed += confirmed_cash(event)
-        elif event.amount is not None:
+        elif event.amount is not None and event.type not in OUTFLOW_TYPES:
             announced += event.amount
     listing = [{**asdict(e), "amount": e.amount, "cash": confirmed_cash(e) if e.status == "completed" else 0.0}
                for e in sorted(rounds, key=lambda e: e.date, reverse=True)]

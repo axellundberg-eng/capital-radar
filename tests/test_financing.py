@@ -300,3 +300,31 @@ def test_web_flags_announced_round(setup):
     item = TestClient(create_app(settings)).get("/api/companies").json()["items"][0]
     assert "raise_announced" in item["flags"] and item["announced_financing"] == 50e6
     assert item["confirmed_financing"] == 0 and item["runway_today"] == 9.0
+
+
+def test_repayment_reduces_cash_and_prefilter_finds_it():
+    from radar.financing import looks_like_financing
+    from radar.rounds import Event, summarize
+
+    assert looks_like_financing("Bolaget amorterar 50 MSEK på lånet")
+    assert looks_like_financing("Company repays convertible loan")
+    events = [Event("directed_issue", "completed", 30e6, 27e6, "SEK", "2026-08-01"),
+              Event("repayment", "completed", 50e6, None, "SEK", "2026-08-15")]
+    confirmed, announced, listing = summarize(events, "2026-06-30", "SEK")
+    assert confirmed == 27e6 - 50e6
+    assert {row["type"] for row in listing} == {"directed_issue", "repayment"}
+
+
+def test_repayment_in_report_and_news_counts_once():
+    from radar.rounds import Event, summarize
+    from radar.runway import Fact, compute
+
+    end = "2026-06-30"
+    facts = [Fact("cash", 180e6, None, end), Fact("operating_cash_flow", -79e6, "2026-01-01", end),
+             Fact("post_period_outflow", 50e6, "2026-08-01", end)]
+    news = summarize([Event("repayment", "completed", 50e6, None, "SEK", "2026-08-01")], end, "SEK")
+    once = compute(facts, end, today=end, financing=news)
+    assert once.post_period_outflows == 0.0 and once.confirmed_financing == -50e6
+    assert "raise_announced" not in once.flags
+    report_only = compute(facts, end, today=end)
+    assert report_only.runway_today == once.runway_today
