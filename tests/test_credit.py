@@ -94,11 +94,10 @@ def test_raising_band_precedence():
     assert band({**ok, "status": "missing_cash"}) == "missing"
     assert band({**ok, "flags": ["acute"], "runway_today": 0.5}) == "acute"
     assert band({**ok, "flags": []}) == "3_9"
-    # varken återbetalning eller kreditfacilitet ger kategorin pågående kapitalanskaffning
-    for kind in ("repayment", "credit_facility"):
-        pending = summarize([event(kind, "announced")], END, "SEK")
-        assert "raise_announced" not in compute(facts(), END, today=TODAY, financing=pending).flags
-    for kind in ("bridge_loan", "rights_issue", "convertible"):
+    # återbetalning ger inte kategorin; all annonserad tillförsel (även lån och kreditfacilitet) väntar på utfall
+    pending = summarize([event("repayment", "announced")], END, "SEK")
+    assert "raise_announced" not in compute(facts(), END, today=TODAY, financing=pending).flags
+    for kind in ("credit_facility", "loan", "bridge_loan", "rights_issue", "convertible"):
         pending = summarize([event(kind, "announced")], END, "SEK")
         assert "raise_announced" in compute(facts(), END, today=TODAY, financing=pending).flags
 

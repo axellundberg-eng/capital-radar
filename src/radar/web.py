@@ -39,7 +39,7 @@ FLAG_TEXT = {
     "acute": "Akut: under 1 mån. Kassan räcker mindre än en månad enligt senaste rapporten. "
              "Bolaget behöver kapital nu eller har kreditlöften (visas om de finns i rapporten).",
 }
-BAND_TEXT = {"raising": "Pågående kapitalanskaffning", "acute": "Akut: under 1 mån",
+BAND_TEXT = {"raising": "Annonserad finansiering, väntar på utfall", "acute": "Akut: under 1 mån",
              "structural": "Strukturell förändring: kontrollera manuellt, rapportens siffror kan vara inaktuella"}
 PROSPECT_BANDS = ("3_9", "under_3", "acute")
 

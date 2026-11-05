@@ -6,7 +6,7 @@ const BANDS = [
   ["under_3", "Under 3 mån", "Kassan räcker mindre än 3 månader", "urgent"],
   ["acute", "Akut", "Kassan räcker mindre än 1 månad", "urgent"],
   ["structural", "Strukturell förändring", "Kontrollera manuellt: rapportens siffror kan vara inaktuella", "warn"],
-  ["raising", "Kapitalanskaffning", "Emission annonserad men inte genomförd", "warn"],
+  ["raising", "Annonserad finansiering", "Emission eller lån annonserat, utfall inte offentliggjort än. Flyttas när utfallet är klart", "warn"],
   ["exhausted", "Kassa slut", "Kassan borde vara slut enligt rapporten: kolla finansiering", "warn"],
   ["9_18", "9–18 mån", "Bevaka", "watch"],
   ["over_18", "Över 18 mån", "", "watch"],

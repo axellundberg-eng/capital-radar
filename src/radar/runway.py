@@ -26,7 +26,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import date
 
-from .rounds import NO_RAISE_TYPES
+from .rounds import OUTFLOW_TYPES
 
 DAYS_PER_MONTH = 30.4375
 RECENT_RATIO = 1.5
@@ -127,7 +127,8 @@ def _apply_financing(result: Runway, financing: tuple | None) -> float:
     result.available_credit = financing[3] if len(financing) > 3 else 0.0
     if confirmed > 0:
         result.flags.append("financing_received")
-    if any(e["status"] == "announced" and e["type"] not in NO_RAISE_TYPES for e in events):
+    # Allt annonserat som tillför pengar (emission, lån, brygglån, kreditfacilitet) väntar på utfall.
+    if any(e["status"] == "announced" and e["type"] not in OUTFLOW_TYPES for e in events):
         result.flags.append("raise_announced")
     return confirmed
 
