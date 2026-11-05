@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import asdict, dataclass, field
+from datetime import date, timedelta
 
 from .rounds import Event, dedupe
 
@@ -207,6 +208,27 @@ def load_history(connection: sqlite3.Connection) -> dict[int, list[dict]]:
     for row in connection.execute("SELECT * FROM financing_events ORDER BY event_date DESC"):
         history.setdefault(row["company_id"], []).append(dict(row))
     return history
+
+
+RECENT_DAYS = 730  # 24 månader
+
+
+def recent_financing(rows: list[dict], today: str) -> tuple[int, list[dict]]:
+    """(antal emissioner, finansieringshändelser) de senaste 24 månaderna, nyast först.
+
+    Emissioner är företrädes- och riktade emissioner. En runda räknas en gång även om den finns både
+    som annonserad och som genomförd (dedupe). Lån, kreditfaciliteter och konvertibler visas i listan
+    men räknas inte som emissioner."""
+    cutoff = (date.fromisoformat(today[:10]) - timedelta(days=RECENT_DAYS)).isoformat()
+    recent = [r for r in rows if r["status"] != "cancelled" and (r["event_date"] or "")[:10] >= cutoff]
+    events = [Event(r["type"], r["status"], r["gross_amount"], r["net_amount"], r["currency"], r["event_date"],
+                    r.get("quote"), None, None, r.get("drawn_amount"), r.get("advisers")) for r in recent]
+    equity = [e for e in dedupe(events) if e.type in EQUITY_TYPES]
+    listing = [{"type": r["type"], "status": r["status"], "date": (r["event_date"] or "")[:10],
+                "amount": r["gross_amount"] if r["gross_amount"] is not None else r["net_amount"],
+                "currency": r["currency"], "quote": r.get("quote"), "advisers": r.get("advisers")}
+               for r in sorted(recent, key=lambda r: r["event_date"] or "", reverse=True)]
+    return len(equity), listing
 
 
 def prospect_companies(connection: sqlite3.Connection, items: list[dict]) -> list[tuple[dict, str | None]]:

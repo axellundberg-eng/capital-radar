@@ -111,3 +111,5 @@ a { color: var(--accent); }
 .chip.structural { background: var(--target-bg); color: var(--target); }
 .struct-warning { border-left: 3px solid var(--target); padding: 6px 10px; background: var(--target-bg); border-radius: 6px; }
 .section-title { font-size: 18px; margin: 24px 0 4px; }
+
+tr.expand td { background: var(--muted-bg); padding-top: 4px; }

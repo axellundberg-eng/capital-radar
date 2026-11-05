@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import date
 from importlib import resources
 
 from fastapi import FastAPI, HTTPException
@@ -17,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .db import connect
-from .qualify import load_history, load_market, qualify
+from .qualify import load_history, load_market, qualify, recent_financing
 from .settings import Settings
 
 BANDS = (("under_3", 0, 3), ("3_9", 3, 9), ("9_18", 9, 18), ("over_18", 18, None))
@@ -199,8 +200,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if item["band"] not in PROSPECT_BANDS and not is_raising:
                 continue
             q = qualify(item, market.get(item["id"]), history.get(item["id"], []))
+            emissions, recent = recent_financing(history.get(item["id"], []), date.today().isoformat())
             (raising if is_raising else out).append(
-                {**item, **q.to_dict(), "market_error": (market.get(item["id"]) or {}).get("error")})
+                {**item, **q.to_dict(), "market_error": (market.get(item["id"]) or {}).get("error"),
+                 "emissions_24m": emissions, "recent_financing": recent})
         for group in (out, raising):
             group.sort(key=lambda i: (-i["score"], i["runway_today"] or 0, i["name"].casefold()))
         structural.sort(key=lambda i: i["name"].casefold())

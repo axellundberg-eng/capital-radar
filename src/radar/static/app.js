@@ -89,9 +89,10 @@ function runwayCell(item) {
   return `<span class="pill ${pill}">${months(item.runway_today)}</span>${recent}${raise}${creditNote(item)}`;
 }
 
+// Runway idag inkluderar outnyttjad kreditlinje; här visas hur mycket som är kassan utan kredit.
 function creditNote(item) {
-  return item.runway_with_credit != null
-    ? `<small title="Outnyttjad kredit ${msek(item.available_credit)}">${months(item.runway_with_credit)} inkl. kredit</small>` : "";
+  return item.available_credit > 0 && item.runway_cash_today != null
+    ? `<small title="Outnyttjad kredit ${msek(item.available_credit)}">${months(item.runway_cash_today)} utan kredit</small>` : "";
 }
 
 function renderBands() {
@@ -142,8 +143,30 @@ function prospectRow(item) {
       <td class="num">${msek(item.capital_need)}</td>
       <td class="num">${item.market_cap ? msek(item.market_cap) : "okänt"}</td>
       <td class="num">${pct(item.share)}</td>
+      <td class="num">${item.emissions_24m ?? "–"}</td>
       <td>${lastIssue(item)}</td>
     </tr>`;
+}
+
+// Utfällbar rad under ett prospekt: de senaste finansieringshändelserna i detalj.
+function prospectDetail(item) {
+  const list = (item.recent_financing || []).map((e) => `
+    <li><div><span>${escapeHtml(e.date)} · ${TYPE[e.type] || e.type} · ${STATUS[e.status] || e.status}</span>
+      <strong>${e.amount != null ? msek(e.amount) : "belopp saknas"}</strong></div>
+      <small>Rådgivare: ${e.advisers ? escapeHtml(e.advisers) : "ej angivet"}</small>
+      ${e.quote ? `<q>${escapeHtml(e.quote)}</q>` : ""}</li>`).join("");
+  return `
+    <tr class="expand"><td colspan="9">
+      <p class="source">Kassa utan kredit: ${months(item.runway_cash_today)} · Outnyttjad kredit: ${msek(item.available_credit)} ·
+        Emissioner senaste 24 mån: ${item.emissions_24m ?? 0}</p>
+      ${list ? `<ul class="facts">${list}</ul>` : '<p class="source">Inga finansieringshändelser de senaste 24 månaderna.</p>'}
+    </td></tr>`;
+}
+
+const expandedProspects = new Set();
+function toggleProspect(id) {
+  if (expandedProspects.has(id)) expandedProspects.delete(id); else expandedProspects.add(id);
+  renderProspects();
 }
 
 function structuralRow(item) {
@@ -161,8 +184,9 @@ function renderProspects() {
   const { items, raising, structural } = state.prospects;
   $("#structuralRows").innerHTML = structural.length ? structural.map(structuralRow).join("")
     : '<tr><td colspan="4" class="empty">Inga bolag med strukturell förändring.</td></tr>';
-  $("#prospectRows").innerHTML = items.length ? items.map(prospectRow).join("")
-    : '<tr><td colspan="7" class="empty">Inga prospekt just nu.</td></tr>';
+  $("#prospectRows").innerHTML = items.length
+    ? items.map((item) => prospectRow(item) + (expandedProspects.has(item.id) ? prospectDetail(item) : "")).join("")
+    : '<tr><td colspan="8" class="empty">Inga prospekt just nu.</td></tr>';
   $("#raisingRows").innerHTML = raising.length ? raising.map(prospectRow).join("")
     : '<tr><td colspan="7" class="empty">Inga bolag med pågående kapitalanskaffning.</td></tr>';
 }
@@ -183,7 +207,7 @@ async function loadProspects() {
     state.prospects = { items: data.items, raising: data.raising || [], structural: data.structural || [] };
     renderProspects();
   } catch (error) {
-    $("#prospectRows").innerHTML = `<tr><td colspan="7" class="empty">Prospekten kunde inte läsas (${escapeHtml(error.message)}).</td></tr>`;
+    $("#prospectRows").innerHTML = `<tr><td colspan="8" class="empty">Prospekten kunde inte läsas (${escapeHtml(error.message)}).</td></tr>`;
   }
 }
 
@@ -336,6 +360,8 @@ document.addEventListener("click", (event) => {
   if (viewButton) { setView(viewButton.dataset.view); return; }
   const bandButton = event.target.closest("[data-band]");
   if (bandButton) { state.band = bandButton.dataset.band; renderBands(); renderRows(); return; }
+  const prospect = event.target.closest("#prospectRows tr[data-id]");
+  if (prospect) { toggleProspect(Number(prospect.dataset.id)); return; }  // prospekt: klick öppnar en rad under
   const row = event.target.closest("tr[data-id]");
   if (row) select(Number(row.dataset.id));
 });

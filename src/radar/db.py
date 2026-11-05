@@ -140,6 +140,7 @@ def _add_column(connection: sqlite3.Connection, table: str, column: str, ddl: st
 def _migrate(connection: sqlite3.Connection) -> None:
     """Lägg till kolumner som tillkommit efter att databasen skapades (även för nya databaser)."""
     _add_column(connection, "financing_events", "drawn_amount", "REAL")
+    _add_column(connection, "financing_events", "advisers", "TEXT")
     # Strukturella händelser (events.py): NULL = nyheten är aldrig bedömd, annars checked/structural/failed.
     _add_column(connection, "news", "events_status", "TEXT")
     _add_column(connection, "news", "events_error", "TEXT")

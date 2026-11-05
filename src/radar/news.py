@@ -57,9 +57,10 @@ def _store(connection: sqlite3.Connection, item: sqlite3.Row, events: list, toke
         connection.execute("DELETE FROM financing_events WHERE news_document_id=?", (item["document_id"],))
         connection.executemany(
             """INSERT INTO financing_events(news_document_id, company_id, type, status, gross_amount,
-               net_amount, currency, event_date, quote, created_at, drawn_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+               net_amount, currency, event_date, quote, created_at, drawn_amount, advisers)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             [(item["document_id"], item["company_id"], e.type, e.status, e.gross_amount, e.net_amount,
-              e.currency, e.date, e.quote, _now(), e.drawn_amount) for e in events])
+              e.currency, e.date, e.quote, _now(), e.drawn_amount, e.advisers) for e in events])
     _set(connection, item["document_id"], status=status, error=None, tokens=tokens)
     return status
 

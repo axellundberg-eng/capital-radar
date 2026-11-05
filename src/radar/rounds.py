@@ -34,6 +34,7 @@ class Event:
     title: str | None = None
     url: str | None = None
     drawn_amount: float | None = None   # utnyttjad del av en kreditfacilitet
+    advisers: str | None = None         # finansiella rådgivare, emissionsinstitut och garanter, som de nämns
 
     @property
     def amount(self) -> float | None:

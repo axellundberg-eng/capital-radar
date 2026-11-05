@@ -63,15 +63,16 @@ def test_undrawn_credit_fact_is_parsed():
     assert fact.value == 20e6 and fact.period_end == END and fact.page == 7
 
 
-def test_runway_with_credit_leaves_main_runway_unchanged():
+def test_runway_today_includes_credit_and_cash_runway_is_separate():
     base = compute(facts(), END, today=TODAY)
     reserve = compute(facts(12e6, -6e6, Fact("undrawn_credit", 9e6, None, END)), END, today=TODAY)
-    assert reserve.runway_today == base.runway_today == 9.0
-    assert reserve.available_credit == 9e6 and reserve.runway_with_credit == 18.0
+    assert reserve.runway_cash_today == base.runway_cash_today == 9.0
+    assert reserve.runway_today == 18.0 and reserve.available_credit == 9e6
     assert "credit_reserve" in reserve.flags and base.runway_with_credit is None
     news = summarize([event("credit_facility", gross=9e6)], END, "SEK")
     from_news = compute(facts(), END, today=TODAY, financing=news)
     assert from_news.runway_with_credit == 18.0 and from_news.confirmed_financing == 0.0
+    assert from_news.runway_cash_today == 9.0
 
 
 def test_acute_flag_and_band():

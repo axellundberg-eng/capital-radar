@@ -51,7 +51,8 @@ Svara med enbart ett JSON-objekt:
      "status": "announced | completed | cancelled",
      "gross_amount": tal eller null, "net_amount": tal eller null, "drawn_amount": tal eller null,
      "unit": "enheten beloppen anges i, t.ex. SEK, TSEK, MSEK", "currency": "SEK",
-     "date": "YYYY-MM-DD", "quote": "kort citat som styrker beloppet och statusen"}
+     "date": "YYYY-MM-DD", "quote": "kort citat som styrker beloppet och statusen",
+     "advisers": "finansiella rådgivare, emissionsinstitut och garanter som nämns, separerade med semikolon, eller null"}
   ]
 }
 
@@ -69,6 +70,8 @@ Regler:
   net_amount efter, bara om det står uttryckligen. Hoppa över ett belopp hellre än att gissa.
 - date är händelsens datum (beslut, utfall eller betalning); annars pressmeddelandets datum.
 - Om texten inte beskriver finansiering: {"is_financing": false, "events": []}.
+- advisers: skriv bara namn som texten uttryckligen nämner (t.ex. "Carnegie; Redeye" för emissionsinstitut
+  eller finansiell rådgivare). Om inget namn står: null. Gissa inte.
 - En ny rad per separat finansiering. Gissa inte.
 """
 
@@ -95,7 +98,8 @@ def _event(item: dict, top: dict, published: str) -> Event | None:
     multiplier, currency = unit or (1.0, None)
     return Event(kind if kind in TYPES else "other", status, _scaled(gross, multiplier),
                  _scaled(net, multiplier), currency, parse_date(item.get("date")) or published,
-                 (item.get("quote") or "")[:300] or None, drawn_amount=_scaled(drawn, multiplier))
+                 (item.get("quote") or "")[:300] or None, drawn_amount=_scaled(drawn, multiplier),
+                 advisers=(str(item.get("advisers") or "").strip()[:300] or None))
 
 
 def parse_financing(raw: str, published_at: str | None) -> list[Event]:
@@ -127,7 +131,7 @@ def ask(client: ChatClient, message: str, published_at: str | None, *, attempts:
 def load_events(connection: sqlite3.Connection, company_id: int) -> list[Event]:
     rows = connection.execute(
         """SELECT f.type, f.status, f.gross_amount, f.net_amount, f.currency, f.event_date, f.quote,
-                  n.title, n.url, f.drawn_amount
+                  n.title, n.url, f.drawn_amount, f.advisers
            FROM financing_events f JOIN news n ON n.document_id = f.news_document_id
            WHERE f.company_id=?""", (company_id,)).fetchall()
     return [Event(*tuple(row)) for row in rows]

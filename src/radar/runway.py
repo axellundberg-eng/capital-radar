@@ -60,7 +60,8 @@ class Runway:
     cash_flow_positive: bool = False
     months_since_report: float | None = None
     runway_at_report: float | None = None
-    runway_today: float | None = None
+    runway_today: float | None = None          # kassa + outnyttjad kredit, ÷ burn
+    runway_cash_today: float | None = None     # bara kassan (ingen kredit), ÷ burn
     recent_monthly_burn: float | None = None
     recent_runway_today: float | None = None
     periods: list[Period] = field(default_factory=list)
@@ -169,7 +170,8 @@ def _credit_and_acute(result: Runway, cash_today: float) -> None:
         result.flags.append("credit_reserve")
     # Ny finansiering in efter rapporten (emission, lån, brygglån, dragen kredit) häver "akut".
     refinanced = any(e["status"] == "completed" and (e.get("cash") or 0) > 0 for e in result.financing_events)
-    if result.runway_today < 1 and not refinanced:
+    # Akut mäts mot kassan: en kreditlinje som räcker i flera månader gör inte bolaget akut.
+    if (result.runway_cash_today or 0) < 1 and not refinanced:
         result.flags.append("acute")
 
 
@@ -226,7 +228,9 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
         # Kassan borde redan vara slut: nästan alltid ny finansiering efter rapporten.
         result.flags.append("cash_exhausted_since_report")
     cash_today = max(0.0, cash + extra - chosen.monthly_burn * since)
-    result.runway_today = round(cash_today / chosen.monthly_burn, 1)
+    result.runway_cash_today = round(cash_today / chosen.monthly_burn, 1)
+    # Dagens runway räknar in outnyttjad kreditlinje (den är tillgänglig pengar); kassan visas separat.
+    result.runway_today = round((cash_today + result.available_credit) / chosen.monthly_burn, 1)
     _credit_and_acute(result, cash_today)
     _debt_warning(result, facts, cash_today)
     return result
