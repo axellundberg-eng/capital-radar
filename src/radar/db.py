@@ -110,9 +110,40 @@ def connect(path: Path) -> sqlite3.Connection:
     return connection
 
 
-def _migrate(connection: sqlite3.Connection) -> None:
-    """Lägg till kolumner som tillkommit efter att databasen skapades."""
-    columns = {row[1] for row in connection.execute("PRAGMA table_info(financing_events)")}
-    if "drawn_amount" not in columns:
+DOCUMENT_ID_FLOOR = 10_000_000   # egna dokument-id börjar här, så de aldrig krockar med gamla id
+
+
+def _add_column(connection: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+    columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+    if column in columns:
+        return
+    try:
         with connection:
-            connection.execute("ALTER TABLE financing_events ADD COLUMN drawn_amount REAL")
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+    except sqlite3.OperationalError as error:  # en annan arbetare hann före
+        if "duplicate column" not in str(error):
+            raise
+
+
+def _migrate(connection: sqlite3.Connection) -> None:
+    """Lägg till kolumner som tillkommit efter att databasen skapades (även för nya databaser)."""
+    _add_column(connection, "financing_events", "drawn_amount", "REAL")
+    _add_column(connection, "companies", "mfn_slug", "TEXT")   # bolagets sida: mfn.se/all/a/<slug>
+    for table in ("reports", "news"):
+        _add_column(connection, table, "source_url", "TEXT")   # postens sida på MFN, unik per tabell
+        with connection:
+            connection.execute(
+                f"CREATE UNIQUE INDEX IF NOT EXISTS {table}_source_url ON {table}(source_url)")
+
+
+def next_document_id(connection: sqlite3.Connection) -> int:
+    """Nästa lediga dokument-id: högst av största befintliga id och 10 000 000, plus ett.
+
+    Reports och news delar id-rymd (som gamla documents). Anropa inom
+    `BEGIN IMMEDIATE` så att två arbetare inte får samma id.
+    """
+    row = connection.execute(
+        """SELECT MAX(COALESCE((SELECT MAX(document_id) FROM reports), 0),
+                      COALESCE((SELECT MAX(document_id) FROM news), 0), ?)""",
+        (DOCUMENT_ID_FLOOR,)).fetchone()
+    return int(row[0]) + 1

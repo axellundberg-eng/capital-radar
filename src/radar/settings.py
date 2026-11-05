@@ -16,6 +16,7 @@ class Settings:
     deepseek_base_url: str
     http_timeout: float
     user_agent: str
+    collect_source: str = "legacy"   # legacy: importera ur gamla databasen; mfn: samla själv
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -28,4 +29,5 @@ class Settings:
             deepseek_base_url=os.getenv("RADAR_DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
             http_timeout=float(os.getenv("RADAR_HTTP_TIMEOUT", "30")),
             user_agent=os.getenv("RADAR_USER_AGENT", "CapitalRadar/0.2"),
+            collect_source="mfn" if os.getenv("RADAR_COLLECT_SOURCE", "legacy").strip().lower() == "mfn" else "legacy",
         )

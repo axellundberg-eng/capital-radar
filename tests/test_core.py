@@ -128,7 +128,8 @@ def test_import_then_pipeline_end_to_end(tmp_path, legacy_db, monkeypatch):
     settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "files",
                        legacy_db_path=legacy_db)
     connection = connect(settings.db_path)
-    assert import_legacy(connection, legacy_db) == {"companies": 1, "reports": 1, "reports_with_pdf": 1, "news": 1}
+    assert import_legacy(connection, legacy_db) == {"companies": 1, "reports": 1, "reports_with_pdf": 1, "news": 1,
+                                                       "mfn_slugs": 0}
 
     def fake_fetch(url, target, **_):
         target.parent.mkdir(parents=True, exist_ok=True)

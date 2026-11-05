@@ -1,6 +1,8 @@
 """Kommandon för den nya kärnan.
 
     python -m radar import                 läs bolag och rapportlänkar ur gamla databasen
+    python -m radar collect                hämta och klassificera nya MFN-poster (--workers, --limit)
+                                           --dry-run: skriv inget; --compare-legacy DAGAR: jämför mot gamla databasen
     python -m radar run --document 123     kör kedjan för en rapport
     python -m radar run --facit            kör kedjan för facitsetet och jämför
     python -m radar run --latest           senaste rapporten per bolag (--workers, --limit, --token-budget)
@@ -123,6 +125,21 @@ def schedule_command(args) -> int:
     return 0
 
 
+def collect_command(args) -> int:
+    from .collect import collect_all
+    from .compare import compare_legacy
+
+    settings = Settings.from_env()
+    if args.compare_legacy is not None:
+        result = compare_legacy(settings, args.compare_legacy, workers=args.workers,
+                                log=lambda line: print(line, flush=True))
+    else:
+        result = collect_all(settings, args.workers, lambda line: print(line, flush=True),
+                             limit=args.limit, dry_run=args.dry_run)
+    print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
+    return 0
+
+
 def serve() -> int:
     import os
 
@@ -168,6 +185,12 @@ def main(argv: list[str] | None = None) -> int:
     news.add_argument("--retry-failed", action="store_true", help="försök igen med nyheter som misslyckats")
     qualify = sub.add_parser("qualify")
     qualify.add_argument("--refresh-market", action="store_true", help="hämta marknadsvärde igen även om det är färskt")
+    collect = sub.add_parser("collect", help="samla MFN-poster själv i stället för att importera")
+    collect.add_argument("--workers", type=int, default=4)
+    collect.add_argument("--limit", type=int, help="högst så många bolag")
+    collect.add_argument("--dry-run", action="store_true", help="skriv ingenting till radar.db")
+    collect.add_argument("--compare-legacy", type=int, metavar="DAGAR",
+                         help="jämför mot gamla databasens dokument de senaste DAGAR dagarna (skriver inget)")
     sub.add_parser("status")
     sub.add_parser("serve")
     schedule = sub.add_parser("schedule", help="löpande drift: import, rapporter, nyheter, marknadsvärde")
@@ -177,6 +200,8 @@ def main(argv: list[str] | None = None) -> int:
         return serve()
     if args.command == "schedule":
         return schedule_command(args)
+    if args.command == "collect":
+        return collect_command(args)
 
     settings = Settings.from_env()
     connection = connect(settings.db_path)

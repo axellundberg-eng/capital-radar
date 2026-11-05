@@ -1,7 +1,8 @@
 """Steg 6: löpande drift utan manuella körningar.
 
 Varje varv (standard en gång i timmen):
-1. Importera nya dokument ur den gamla databasen (MFN-bevakningen samlar in där).
+1. Samla nya dokument: RADAR_COLLECT_SOURCE=legacy (standard) importerar ur den gamla databasen,
+   mfn hämtar och klassificerar bolagens MFN-sidor själv (collect).
 2. Extrahera nya rapporter (senaste per bolag; redan extraherade hoppas över).
 3. Läs nya pressmeddelanden för bolag med kort runway.
 4. Hämta marknadsvärde för prospekt som saknar färskt värde.
@@ -22,6 +23,7 @@ from pathlib import Path
 from typing import Callable
 
 from .batch import run_latest
+from .collect import collect_all
 from .db import connect
 from .extract import ChatClient
 from .importer import import_legacy
@@ -100,6 +102,17 @@ def record_changes(connection: sqlite3.Connection, items: list[dict]) -> int:
     return changed
 
 
+def _collect_step(settings: Settings) -> dict:
+    """Stegets källa väljs med RADAR_COLLECT_SOURCE; standard är fortfarande den gamla databasen."""
+    if settings.collect_source == "mfn":
+        return {"collect": collect_all(settings, log=lambda _line: None)}
+    connection = connect(settings.db_path)
+    try:
+        return {"import": import_legacy(connection, settings.legacy_db_path)}
+    finally:
+        connection.close()
+
+
 def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: int, news_budget: int,
               log: Callable[[str], None] = logger.info) -> dict:
     from .web import latest_rows
@@ -107,11 +120,7 @@ def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: i
     today = date.today().isoformat()
     summary: dict = {"started_at": _now()}
     with CycleLock(settings.db_path.with_suffix(".lock")):
-        connection = connect(settings.db_path)
-        try:
-            summary["import"] = import_legacy(connection, settings.legacy_db_path)
-        finally:
-            connection.close()
+        summary.update(_collect_step(settings))
         summary["reports"] = run_latest(settings, client, today=today, token_budget=report_budget,
                                         log=lambda _line: None)
         if client is not None:
