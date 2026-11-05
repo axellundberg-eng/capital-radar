@@ -1,16 +1,19 @@
 "use strict";
 
-// [nyckel, etikett, förklaring (visas som tooltip), färgklass]. Grupperna skiljs med ett streck.
-const BAND_GROUPS = [
-  [["3_9", "3–9 mån", "Målgrupp", "target"], ["under_3", "Under 3 mån", "Kassan räcker mindre än 3 månader", "urgent"],
-   ["acute", "Akut", "Kassan räcker mindre än 1 månad", "urgent"]],
-  [["structural", "Strukturell förändring", "Kontrollera manuellt: rapportens siffror kan vara inaktuella", "warn"],
-   ["raising", "Pågående kapitalanskaffning", "Emission annonserad men inte genomförd", "warn"],
-   ["exhausted", "Kassa slut", "Kassan borde vara slut enligt rapporten: kolla finansiering", "warn"]],
-  [["9_18", "9–18 mån", "Bevaka", "watch"], ["over_18", "Över 18 mån", "", "watch"]],
-  [["positive", "Kassaflödespositiva", "", "muted"], ["missing", "Saknar data", "", "muted"], ["all", "Alla", "", "muted"]],
+// [nyckel, etikett, förklaring (tooltip), färgklass]
+const BANDS = [
+  ["3_9", "3–9 mån", "Målgrupp", "target"],
+  ["under_3", "Under 3 mån", "Kassan räcker mindre än 3 månader", "urgent"],
+  ["acute", "Akut", "Kassan räcker mindre än 1 månad", "urgent"],
+  ["structural", "Strukturell förändring", "Kontrollera manuellt: rapportens siffror kan vara inaktuella", "warn"],
+  ["raising", "Kapitalanskaffning", "Emission annonserad men inte genomförd", "warn"],
+  ["exhausted", "Kassa slut", "Kassan borde vara slut enligt rapporten: kolla finansiering", "warn"],
+  ["9_18", "9–18 mån", "Bevaka", "watch"],
+  ["over_18", "Över 18 mån", "", "watch"],
+  ["positive", "Kassaflödespositiva", "", "muted"],
+  ["missing", "Saknar data", "", "muted"],
+  ["all", "Alla", "", "muted"],
 ];
-const BANDS = BAND_GROUPS.flat();
 const KIND = { cash: "Likvida medel", undrawn_credit: "Outnyttjad kredit", short_term_investments: "Kortfristiga placeringar", operating_cash_flow: "Kassaflöde, löpande verksamhet",
   capex: "Investeringar (capex)", investing_cash_flow: "Kassaflöde, investeringar",
   post_period_outflow: "Utbetalning efter perioden", post_period_inflow: "Inbetalning efter perioden",
@@ -94,11 +97,10 @@ function creditNote(item) {
 function renderBands() {
   const counts = {};
   pool().forEach((item) => { counts[item.band] = (counts[item.band] || 0) + 1; });
-  $("#bands").innerHTML = BAND_GROUPS.map((group) => `<div class="band-group">${group.map(([key, label, hint, tone]) => {
+  $("#bands").innerHTML = BANDS.map(([key, label, hint, tone]) => {
     const count = key === "all" ? pool().length : (counts[key] || 0);
-    return `<button class="band tone-${tone} ${state.band === key ? "active" : ""}" data-band="${key}" title="${escapeHtml(hint)}">
-      <span class="band-label">${label}</span><span class="band-count">${count}</span></button>`;
-  }).join("")}</div>`).join("");
+    return `<button class="band tone-${tone} ${state.band === key ? "active" : ""}" data-band="${key}" title="${escapeHtml(hint)}">${label} <span class="band-count">${count}</span></button>`;
+  }).join("");
 }
 
 function changeBadge(item) {
