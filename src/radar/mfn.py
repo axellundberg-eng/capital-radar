@@ -60,17 +60,23 @@ def normalize_url(url: str) -> str:
 
 
 def slug_from_url(url: str | None) -> str | None:
-    """Bolagets slug ur en MFN-länk: /a/<slug>/<post> eller /all/a/<slug>, annars None."""
+    """Bolagets slug ur en MFN-länk.
+
+    Länkarna har formen /<kanal>/a/<slug>/<post>, där kanalen är valfri (cis, one, beq, eqs,
+    nir, ...), eller /all/a/<slug> för bolagets egen sida. Utan kanal: /a/<slug>/<post>.
+    """
     parts = urlsplit(url or "")
     if not (parts.hostname or "").lower().endswith("mfn.se"):
         return None
     segments = [part for part in parts.path.split("/") if part]
-    listing = segments[:1] == ["all"]
-    if listing:
-        segments = segments[1:]
-    if len(segments) < 2 or segments[0] != "a" or not (listing or len(segments) >= 3):
+    marker = next((i for i, part in enumerate(segments[:2]) if part == "a"), None)
+    if marker is None or len(segments) < marker + 2:
         return None
-    return segments[1] if SLUG.fullmatch(segments[1]) else None
+    listing = segments[:marker] == ["all"] and len(segments) == marker + 2
+    if not (listing or len(segments) >= marker + 3):
+        return None
+    slug = segments[marker + 1]
+    return slug if SLUG.fullmatch(slug) else None
 
 
 def detect_language(title: str) -> str:

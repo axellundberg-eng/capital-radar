@@ -347,3 +347,16 @@ def test_collect_source_defaults_to_legacy(monkeypatch):
     assert Settings.from_env().collect_source == "mfn"
     monkeypatch.setenv("RADAR_COLLECT_SOURCE", "något annat")
     assert Settings.from_env().collect_source == "legacy"
+
+
+def test_slug_from_url_accepts_every_mfn_channel():
+    from radar.mfn import slug_from_url
+
+    base = "https://www.mfn.se"
+    assert slug_from_url(f"{base}/a/senzime/post-title-1a2b3c4d") == "senzime"
+    assert slug_from_url(f"{base}/all/a/senzime") == "senzime"
+    for channel in ("cis", "one", "beq", "eqs", "nir", "unk", "ind", "ob", "notc"):
+        assert slug_from_url(f"{base}/{channel}/a/rottneros/post-title-4599a6a5") == "rottneros", channel
+    assert slug_from_url(f"{base}/cis/a/rottneros") is None  # kanalsida utan post är ingen bolagslänk
+    assert slug_from_url(f"{base}/other/rottneros/post") is None
+    assert slug_from_url("https://example.com/a/x/y") is None
