@@ -105,6 +105,24 @@ def qualify_command(args, connection, today: str) -> int:
     return 0
 
 
+def schedule_command(args) -> int:
+    import logging
+    import os
+
+    from .scheduler import loop, run_cycle
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    settings = Settings.from_env()
+    client = _client(settings)
+    budgets = {"report_budget": int(os.getenv("RADAR_CYCLE_REPORT_TOKENS", "500000")),
+               "news_budget": int(os.getenv("RADAR_CYCLE_NEWS_TOKENS", "300000"))}
+    if args.once:
+        print(json.dumps(run_cycle(settings, client, **budgets), ensure_ascii=False, default=str), flush=True)
+        return 0
+    loop(settings, client, interval_minutes=float(os.getenv("RADAR_SCHEDULE_MINUTES", "60")), **budgets)
+    return 0
+
+
 def serve() -> int:
     import os
 
@@ -152,9 +170,13 @@ def main(argv: list[str] | None = None) -> int:
     qualify.add_argument("--refresh-market", action="store_true", help="hämta marknadsvärde igen även om det är färskt")
     sub.add_parser("status")
     sub.add_parser("serve")
+    schedule = sub.add_parser("schedule", help="löpande drift: import, rapporter, nyheter, marknadsvärde")
+    schedule.add_argument("--once", action="store_true", help="kör ett varv och avsluta")
     args = parser.parse_args(argv)
     if args.command == "serve":
         return serve()
+    if args.command == "schedule":
+        return schedule_command(args)
 
     settings = Settings.from_env()
     connection = connect(settings.db_path)

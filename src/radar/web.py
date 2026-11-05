@@ -83,7 +83,19 @@ def latest_rows(connection: sqlite3.Connection) -> list[dict]:
         }
         item["band"] = band(item)
         items.append(item)
+    _attach_changes(connection, items)
     return items
+
+
+def _attach_changes(connection: sqlite3.Connection, items: list[dict]) -> None:
+    """Senaste förändringen per bolag från den löpande driften (steg 6), om den finns."""
+    try:
+        status = {row[0]: (row[1], row[2]) for row in connection.execute(
+            "SELECT company_id, change, changed_at FROM company_status WHERE change IS NOT NULL")}
+    except sqlite3.OperationalError:
+        status = {}  # tabellen skapas av första schemalagda varvet
+    for item in items:
+        item["change"], item["changed_at"] = status.get(item["id"], (None, None))
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

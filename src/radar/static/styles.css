@@ -96,3 +96,5 @@ a { color: var(--accent); }
   .views { margin-bottom: 10px; }
   .tools { gap: 8px; }
 }
+
+.pill.new { background: var(--accent); color: var(--panel); font-size: 11px; margin-left: 6px; }

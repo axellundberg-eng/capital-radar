@@ -73,11 +73,18 @@ function renderBands() {
   }).join("");
 }
 
+function changeBadge(item) {
+  if (!item.change || !item.changed_at) return "";
+  const days = (Date.now() - Date.parse(item.changed_at)) / 86400000;
+  if (days > 7) return "";
+  return ` <span class="pill new" title="Ändrat ${date(item.changed_at)}">${escapeHtml(item.change)}</span>`;
+}
+
 function renderRows() {
   const rows = visible();
   $("#rows").innerHTML = rows.length ? rows.map((item) => `
     <tr data-id="${item.id}" class="${state.selected === item.id ? "selected" : ""}" tabindex="0">
-      <td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.market || "")}</small></td>
+      <td><strong>${escapeHtml(item.name)}</strong>${changeBadge(item)}<small>${escapeHtml(item.market || "")}</small></td>
       <td class="num">${runwayCell(item)}</td>
       <td class="num">${item.cash_flow_positive ? "—" : msek(item.monthly_burn)}</td>
       <td class="num">${msek(item.cash)}</td>

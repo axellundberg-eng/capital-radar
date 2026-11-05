@@ -394,3 +394,37 @@ def test_parse_response_reads_events_after_period_and_debt_with_units():
     assert (out.value, out.period_start, out.page) == (50e6, "2026-07-10", 12) and "amorterade" in out.quote
     assert kinds["post_period_inflow"].value == 20e6 and kinds["debt_due_12m"].value == 60e6
     assert len(kinds) == 4
+
+
+def test_schedule_cycle_imports_processes_and_records_changes(tmp_path, legacy_db, monkeypatch):
+    from radar import scheduler
+    from radar.web import latest_rows
+
+    settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "files",
+                       legacy_db_path=legacy_db)
+    monkeypatch.setattr(pipeline, "fetch_pdf", lambda url, target, **_: (target, "abc"))
+    monkeypatch.setattr(pipeline, "pdf_pages", lambda path: ["Kassaflöde", "Balansräkning likvida medel 12"])
+    monkeypatch.setattr(scheduler, "refresh_many", lambda *a, **k: {"fetched": 0})
+    monkeypatch.setattr(scheduler, "run_news", lambda *a, **k: {"companies": 0})
+    answer = {"report_period_end": END, "unit": "MSEK", "cash": {"value": 30, "date": END},
+              "cash_flows": [{"kind": "operating_cash_flow", "value": -6, "period_start": "2026-01-01",
+                              "period_end": END}]}
+    first = scheduler.run_cycle(settings, FakeClient(answer), report_budget=10000, news_budget=0,
+                                log=lambda _: None)
+    assert first["reports"]["ok"] == 1 and first["changes"] == 0  # första varvet: inget att jämföra mot
+    connection = connect(settings.db_path)
+    with connection:  # låtsas att bolaget tidigare låg i ett annat band
+        connection.execute("UPDATE company_status SET band='over_18'")
+    item = latest_rows(connection)[0]
+    assert scheduler.record_changes(connection, [item]) == (1 if item["band"] in scheduler.CHANGE_TEXT else 0)
+    assert not (tmp_path / "radar.lock").exists()
+
+
+def test_change_for_detects_new_raise_and_band_moves():
+    from radar.scheduler import change_for
+
+    previous = {"band": "9_18", "raise_announced": 0}
+    assert change_for(previous, {"band": "3_9", "flags": []}) == "Ny i 3–9 mån"
+    assert change_for(previous, {"band": "9_18", "flags": ["raise_announced"]}) == "Emission annonserad"
+    assert change_for(previous, {"band": "9_18", "flags": []}) is None
+    assert change_for(None, {"band": "3_9", "flags": []}) is None

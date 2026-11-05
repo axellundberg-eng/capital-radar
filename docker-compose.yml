@@ -29,6 +29,15 @@ services:
     ports:
       - "127.0.0.1:8001:8001"
 
+  radar-worker:
+    # Ny kärna, steg 6: importerar, extraherar och läser nyheter en gång i timmen.
+    image: ghcr.io/${GITHUB_REPOSITORY:-axellundberg-eng/capital-radar}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    command: ["python", "-m", "radar", "schedule"]
+    env_file: .env
+    volumes:
+      - /srv/capital-radar/data:/data
+
   litestream:
     profiles: ["backup"]
     image: litestream/litestream:0.3.13
