@@ -28,6 +28,11 @@ services:
       - /srv/capital-radar/data:/data
     ports:
       - "127.0.0.1:8001:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/v2/health', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   radar-worker:
     # Ny kärna, steg 6: importerar, extraherar och läser nyheter en gång i timmen.
@@ -37,6 +42,8 @@ services:
     env_file: .env
     volumes:
       - /srv/capital-radar/data:/data
+    healthcheck:
+      disable: true  # ingen webbserver; driften syns i loggen och i company_status
 
   litestream:
     profiles: ["backup"]
