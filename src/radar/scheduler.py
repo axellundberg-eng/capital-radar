@@ -32,7 +32,8 @@ from .settings import Settings
 
 logger = logging.getLogger(__name__)
 STALE_LOCK_SECONDS = 3 * 3600
-CHANGE_TEXT = {"3_9": "Ny i 3–9 mån", "under_3": "Ny under 3 mån", "exhausted": "Kassan borde vara slut"}
+CHANGE_TEXT = {"3_9": "Ny i 3–9 mån", "under_3": "Ny under 3 mån", "exhausted": "Kassan borde vara slut",
+               "acute": "Akut: under 1 mån"}
 
 STATUS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS company_status (

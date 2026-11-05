@@ -185,6 +185,8 @@ def client(tmp_path):
 def test_prospects_endpoint_ranks_and_filters(client):
     items = client.get("/api/prospects").json()["items"]
     assert [i["name"] for i in items] == ["Bra AB", "Okänt AB", "Akut AB"]  # ej annonserad, ej lång runway
+    raising = client.get("/api/prospects").json()["raising"]
+    assert [i["name"] for i in raising] == ["Annonserat AB"]  # visas separat i stället för att tas bort
     bra = items[0]
     assert bra["score"] == 100 and bra["capital_need"] == pytest.approx(22e6) and bra["market_cap"] == 150e6
     assert bra["share"] == pytest.approx(22 / 150) and bra["last_issue"]["date"] == "2020-03-01"

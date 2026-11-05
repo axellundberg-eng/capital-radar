@@ -31,7 +31,12 @@ FLAG_TEXT = {
     "post_period_outflows": "Utbetalningar efter perioden (t.ex. amortering) är avdragna från kassan",
     "debt_due_within_12m": "Lån förfaller inom 12 månader: runway efter amortering är klart kortare",
     "financing_received": "Genomförd finansiering efter rapporten ingår i runway",
+    "credit_reserve": "Outnyttjad kredit finns: runway inklusive kredit visas separat",
+    "acute": "Akut: under 1 mån. Kassan räcker mindre än en månad enligt senaste rapporten. "
+             "Bolaget behöver kapital nu eller har kreditlöften (visas om de finns i rapporten).",
 }
+BAND_TEXT = {"raising": "Pågående kapitalanskaffning", "acute": "Akut: under 1 mån"}
+PROSPECT_BANDS = ("3_9", "under_3", "acute")
 
 
 def band(row: dict) -> str:
@@ -39,10 +44,14 @@ def band(row: dict) -> str:
         return "missing"
     if row["cash_flow_positive"]:
         return "positive"
+    if "raise_announced" in row["flags"]:
+        return "raising"  # annonserad men inte genomförd: egen kategori
     value = row["runway_today"]
     refinanced = "financing_received" in row["flags"] and (value or 0) > 0
     if "cash_exhausted_since_report" in row["flags"] and not refinanced:
         return "exhausted"
+    if "acute" in row["flags"] or (value is not None and value < 1):
+        return "acute"
     for name, low, high in BANDS:
         if value >= low and (high is None or value < high):
             return name
@@ -80,6 +89,8 @@ def latest_rows(connection: sqlite3.Connection) -> list[dict]:
             "reported_inflows_after_period": result.get("reported_inflows_after_period", 0.0),
             "debt_due_12m": result.get("debt_due_12m"),
             "runway_after_debt": result.get("runway_after_debt"),
+            "available_credit": result.get("available_credit", 0.0),
+            "runway_with_credit": result.get("runway_with_credit"),
         }
         item["band"] = band(item)
         items.append(item)
@@ -123,7 +134,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         for item in items:
             counts[item["band"]] = counts.get(item["band"], 0) + 1
         return JSONResponse({"companies": companies, "with_result": len(items), "bands": counts,
-                             "reports": reports, "flag_text": FLAG_TEXT},
+                             "reports": reports, "flag_text": FLAG_TEXT, "band_text": BAND_TEXT},
                             headers={"Cache-Control": "no-store"})
 
     @app.get("/api/companies")
@@ -169,14 +180,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             market, history = load_market(connection), load_history(connection)
         finally:
             connection.close()
-        out = []
+        out, raising = [], []
         for item in items:
-            if item["band"] not in ("3_9", "under_3") or "raise_announced" in item["flags"]:
+            is_raising = item["band"] == "raising" and (item["runway_today"] or 0) < 9
+            if item["band"] not in PROSPECT_BANDS and not is_raising:
                 continue
             q = qualify(item, market.get(item["id"]), history.get(item["id"], []))
-            out.append({**item, **q.to_dict(), "market_error": (market.get(item["id"]) or {}).get("error")})
-        out.sort(key=lambda i: (-i["score"], i["runway_today"] or 0, i["name"].casefold()))
-        return JSONResponse({"items": out}, headers={"Cache-Control": "no-store"})
+            (raising if is_raising else out).append(
+                {**item, **q.to_dict(), "market_error": (market.get(item["id"]) or {}).get("error")})
+        for group in (out, raising):
+            group.sort(key=lambda i: (-i["score"], i["runway_today"] or 0, i["name"].casefold()))
+        return JSONResponse({"items": out, "raising": raising}, headers={"Cache-Control": "no-store"})
 
     app.mount("/static", StaticFiles(directory=str(static)), name="static")
 

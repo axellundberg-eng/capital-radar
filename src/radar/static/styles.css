@@ -98,3 +98,12 @@ a { color: var(--accent); }
 }
 
 .pill.new { background: var(--accent); color: var(--panel); font-size: 11px; margin-left: 6px; }
+
+.pill.band-acute { background: var(--urgent); color: var(--panel); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { border-radius: 6px; padding: 1px 7px; font-size: 11px; background: var(--muted-bg); color: var(--muted); }
+.chip.announced { background: var(--target-bg); color: var(--target); }
+.chip.completed { background: var(--watch-bg); color: var(--watch); }
+.credit { color: var(--accent); font-weight: 600; }
+.detail h4 { margin: 12px 0 6px; font-size: 13px; }
+.section-title { font-size: 18px; margin: 24px 0 4px; }

@@ -3,6 +3,8 @@
 const BANDS = [
   ["3_9", "3–9 mån", "Målgrupp"],
   ["under_3", "Under 3 mån", "Akut"],
+  ["acute", "Akut < 1 mån", "Kassan nästan slut"],
+  ["raising", "Pågående kapitalanskaffning", "Emission annonserad"],
   ["exhausted", "Kassa slut enl. rapport", "Kolla finansiering"],
   ["9_18", "9–18 mån", "Bevaka"],
   ["over_18", "Över 18 mån", ""],
@@ -10,16 +12,20 @@ const BANDS = [
   ["missing", "Saknar data", ""],
   ["all", "Alla", ""],
 ];
-const KIND = { cash: "Likvida medel", short_term_investments: "Kortfristiga placeringar", operating_cash_flow: "Kassaflöde, löpande verksamhet",
+const KIND = { cash: "Likvida medel", undrawn_credit: "Outnyttjad kredit", short_term_investments: "Kortfristiga placeringar", operating_cash_flow: "Kassaflöde, löpande verksamhet",
   capex: "Investeringar (capex)", investing_cash_flow: "Kassaflöde, investeringar",
   post_period_outflow: "Utbetalning efter perioden", post_period_inflow: "Inbetalning efter perioden",
   debt_due_12m: "Lån som förfaller inom 12 mån" };
 
-const TYPE = { rights_issue: "Företrädesemission", directed_issue: "Riktad emission", loan: "Lån",
-  convertible: "Konvertibel", warrants: "Teckningsoptioner", other: "Övrigt" };
+const TYPE = { rights_issue: "Företrädesemission", directed_issue: "Riktad emission", bridge_loan: "Brygglån",
+  loan: "Lån", credit_facility: "Kreditfacilitet", convertible: "Konvertibel", warrants: "Teckningsoptioner",
+  repayment: "Amortering", other: "Övrigt" };
+const TYPE_ORDER = Object.keys(TYPE);
 const STATUS = { announced: "Annonserad", completed: "Genomförd", cancelled: "Avbruten" };
+const STATUS_CHIP = { announced: "pågår", completed: "genomförd", cancelled: "avbruten" };
+const ACUTE_TEXT = "Kassan räcker mindre än en månad enligt senaste rapporten. Bolaget behöver kapital nu eller har kreditlöften (visas om de finns i rapporten).";
 
-const state = { items: [], band: "3_9", query: "", hideStale: false, hideRaise: true, selected: null, overview: null, view: "list", prospects: null };
+const state = { items: [], band: "3_9", query: "", hideStale: false, selected: null, overview: null, view: "list", prospects: null };
 const $ = (selector) => document.querySelector(selector);
 
 function escapeHtml(value) {
@@ -42,7 +48,13 @@ async function api(path) {
 }
 
 function pool() {
-  return state.items.filter((item) => !state.hideRaise || !item.flags.includes("raise_announced"));
+  return state.items;
+}
+
+function chips(item) {
+  const events = (item.financing_events || []).filter((e) => e.status !== "cancelled");
+  if (!events.length) return "";
+  return `<small class="chips">${events.map((e) => `<span class="chip ${e.status}" title="${escapeHtml(date(e.date))}">${TYPE[e.type] || e.type} · ${STATUS_CHIP[e.status] || e.status}</span>`).join("")}</small>`;
 }
 
 function visible() {
@@ -57,10 +69,17 @@ function runwayCell(item) {
   if (item.status !== "ok") return '<span class="pill muted">Saknar data</span>';
   if (item.cash_flow_positive) return '<span class="pill good">Positivt</span>';
   if (item.band === "exhausted") return '<span class="pill band-exhausted" title="Kassan borde vara slut sedan rapporten">Slut?</span>';
+  if (item.band === "acute") return `<span class="pill band-acute" title="${ACUTE_TEXT}">${months(item.runway_today)}</span><small>Akut: under 1 mån</small>${creditNote(item)}`;
   const recent = item.recent_runway_today != null
     ? `<small title="I senaste periodens takt">${months(item.recent_runway_today)} i senaste takt</small>` : "";
-  const raise = item.flags.includes("raise_announced") ? '<small><span class="pill raise">Emission annonserad</span></small>' : "";
-  return `<span class="pill band-${item.band}">${months(item.runway_today)}</span>${recent}${raise}`;
+  const raise = item.band === "raising" ? '<small><span class="pill raise">Pågående kapitalanskaffning</span></small>' : "";
+  const pill = item.band === "raising" ? "band-under_3" : `band-${item.band}`;
+  return `<span class="pill ${pill}">${months(item.runway_today)}</span>${recent}${raise}${creditNote(item)}`;
+}
+
+function creditNote(item) {
+  return item.runway_with_credit != null
+    ? `<small title="Outnyttjad kredit ${msek(item.available_credit)}">${months(item.runway_with_credit)} inkl. kredit</small>` : "";
 }
 
 function renderBands() {
@@ -84,7 +103,7 @@ function renderRows() {
   const rows = visible();
   $("#rows").innerHTML = rows.length ? rows.map((item) => `
     <tr data-id="${item.id}" class="${state.selected === item.id ? "selected" : ""}" tabindex="0">
-      <td><strong>${escapeHtml(item.name)}</strong>${changeBadge(item)}<small>${escapeHtml(item.market || "")}</small></td>
+      <td><strong>${escapeHtml(item.name)}</strong>${changeBadge(item)}<small>${escapeHtml(item.market || "")}</small>${chips(item)}</td>
       <td class="num">${runwayCell(item)}</td>
       <td class="num">${item.cash_flow_positive ? "—" : msek(item.monthly_burn)}</td>
       <td class="num">${msek(item.cash)}</td>
@@ -102,11 +121,8 @@ function lastIssue(item) {
   return `${TYPE[e.type] || e.type}<small>${STATUS[e.status] || e.status} · ${date(e.date)}${e.amount != null ? " · " + msek(e.amount) : ""}</small>`;
 }
 
-function renderProspects() {
-  const items = state.prospects;
-  if (!items) return;
-  const rows = items;
-  $("#prospectRows").innerHTML = rows.length ? rows.map((item) => `
+function prospectRow(item) {
+  return `
     <tr data-id="${item.id}" class="${state.selected === item.id ? "selected" : ""}" tabindex="0">
       <td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.market || "")}</small></td>
       <td class="num"><span class="score ${scoreClass(item.score)}" title="${escapeHtml(item.summary)}">${item.score}</span></td>
@@ -115,7 +131,16 @@ function renderProspects() {
       <td class="num">${item.market_cap ? msek(item.market_cap) : "okänt"}</td>
       <td class="num">${pct(item.share)}</td>
       <td>${lastIssue(item)}</td>
-    </tr>`).join("") : '<tr><td colspan="7" class="empty">Inga prospekt just nu.</td></tr>';
+    </tr>`;
+}
+
+function renderProspects() {
+  if (!state.prospects) return;
+  const { items, raising } = state.prospects;
+  $("#prospectRows").innerHTML = items.length ? items.map(prospectRow).join("")
+    : '<tr><td colspan="7" class="empty">Inga prospekt just nu.</td></tr>';
+  $("#raisingRows").innerHTML = raising.length ? raising.map(prospectRow).join("")
+    : '<tr><td colspan="7" class="empty">Inga bolag med pågående kapitalanskaffning.</td></tr>';
 }
 
 function qualificationSection(d) {
@@ -130,7 +155,8 @@ function qualificationSection(d) {
 
 async function loadProspects() {
   try {
-    state.prospects = (await api("api/prospects")).items;
+    const data = await api("api/prospects");
+    state.prospects = { items: data.items, raising: data.raising || [] };
     renderProspects();
   } catch (error) {
     $("#prospectRows").innerHTML = `<tr><td colspan="7" class="empty">Prospekten kunde inte läsas (${escapeHtml(error.message)}).</td></tr>`;
@@ -148,6 +174,7 @@ function setView(view) {
 function explanation(d) {
   if (d.status !== "ok") return "Runway kan inte beräknas: rapporten saknar kassa eller kassaflöde.";
   if (d.cash_flow_positive) return "Bolaget har positivt kassaflöde efter investeringar och bränner inte kassa.";
+  if (d.band === "acute") return `Kassan var ${msek(d.cash)} den ${date(d.period_end)} med en burn på ${msek(d.monthly_burn)} per månad. ${ACUTE_TEXT}`;
   if (d.band === "exhausted") return `Kassan ${msek(d.cash)} den ${date(d.period_end)} räckte ${months(d.runway_at_report)} med en burn på`
     + ` ${msek(d.monthly_burn)} per månad, men ${months(d.months_since_report)} har gått. Bolaget har med stor sannolikhet`
     + " tagit in ny finansiering efter rapporten. Kontrollera pressmeddelanden innan kontakt.";
@@ -166,14 +193,26 @@ function financingNote(d) {
   return parts.join("");
 }
 
+function financingItem(e) {
+  const drawn = e.type === "credit_facility" && e.drawn_amount != null ? ` · utnyttjat ${msek(e.drawn_amount)}` : "";
+  return `<li><div><strong>${STATUS[e.status] || e.status}</strong>
+    <span>${e.amount != null ? msek(e.amount) : "belopp saknas"}${drawn} · ${date(e.date)}</span></div>
+    ${e.quote ? `<q>${escapeHtml(e.quote)}</q>` : ""}
+    ${e.url ? `<a href="${escapeHtml(e.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(e.title || "Pressmeddelande")}</a>` : escapeHtml(e.title || "")}</li>`;
+}
+
+function creditReserve(d) {
+  if (!(d.available_credit > 0)) return "";
+  return `<p class="source credit">Kreditreserv: ${msek(d.available_credit)} — runway inkl. kredit ${months(d.runway_with_credit)}</p>`;
+}
+
 function financingSection(d) {
   const events = d.financing_events || [];
-  if (!events.length) return '<h3>Finansiering efter rapporten</h3><p class="source">Inga finansieringshändelser funna.</p>';
-  const items = events.map((e) => `<li><div><strong>${TYPE[e.type] || e.type} · ${STATUS[e.status] || e.status}</strong>
-    <span>${e.amount != null ? msek(e.amount) : "belopp saknas"} · ${date(e.date)}</span></div>
-    ${e.quote ? `<q>${escapeHtml(e.quote)}</q>` : ""}
-    ${e.url ? `<a href="${escapeHtml(e.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(e.title || "Pressmeddelande")}</a>` : escapeHtml(e.title || "")}</li>`).join("");
-  return `<h3>Finansiering efter rapporten</h3><ul class="facts">${items}</ul>`;
+  const credit = creditReserve(d);
+  if (!events.length) return `<h3>Finansiering efter rapporten</h3><p class="source">Inga finansieringshändelser funna.</p>${credit}`;
+  const groups = TYPE_ORDER.filter((type) => events.some((e) => e.type === type)).map((type) =>
+    `<h4>${TYPE[type]}</h4><ul class="facts">${events.filter((e) => e.type === type).map(financingItem).join("")}</ul>`);
+  return `<h3>Finansiering efter rapporten</h3>${credit}${groups.join("")}`;
 }
 
 function afterPeriodSection(d) {
@@ -264,6 +303,5 @@ document.addEventListener("keydown", (event) => {
   if (row && event.key === "Enter") select(Number(row.dataset.id));
 });
 $("#search").addEventListener("input", (event) => { state.query = event.target.value; renderRows(); });
-$("#hideRaise").addEventListener("change", (event) => { state.hideRaise = event.target.checked; renderBands(); renderRows(); });
 $("#hideStale").addEventListener("change", (event) => { state.hideStale = event.target.checked; renderRows(); });
 load();

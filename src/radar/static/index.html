@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Capital Radar</title>
-  <link rel="stylesheet" href="static/styles.css?v=5">
+  <link rel="stylesheet" href="static/styles.css?v=6">
 </head>
 <body>
   <header class="top">
@@ -29,7 +29,6 @@
 
       <div class="tools">
         <input id="search" type="search" placeholder="Sök bolag" aria-label="Sök bolag">
-        <label class="check"><input id="hideRaise" type="checkbox" checked> Dölj bolag med annonserad emission</label>
         <label class="check"><input id="hideStale" type="checkbox"> Dölj gamla rapporter</label>
       </div>
 
@@ -51,7 +50,7 @@
       </div>
 
       <div id="prospectView" hidden>
-        <p class="source">Bolag med runway under 9 månader och ingen annonserad emission, rankade efter prospektpoäng. Marknadsvärde från Nasdaq; saknas det visas "okänt".</p>
+        <p class="source">Bolag med runway under 9 månader och ingen annonserad emission, rankade efter prospektpoäng. Bolag med pågående kapitalanskaffning visas separat längst ner. Marknadsvärde från Nasdaq; saknas det visas "okänt".</p>
         <div class="table-wrap">
           <table>
             <thead>
@@ -68,6 +67,13 @@
             <tbody id="prospectRows"><tr><td colspan="7" class="empty">Laddar…</td></tr></tbody>
           </table>
         </div>
+        <h2 class="section-title">Pågående kapitalanskaffning (för sent för garanti)</h2>
+        <p class="source">Emission annonserad men inte genomförd: garantin är sannolikt redan ordnad.</p>
+        <div class="table-wrap">
+          <table>
+            <tbody id="raisingRows"><tr><td colspan="7" class="empty">Laddar…</td></tr></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -76,6 +82,6 @@
     </aside>
   </main>
 
-  <script src="static/app.js?v=7" defer></script>
+  <script src="static/app.js?v=8" defer></script>
 </body>
 </html>

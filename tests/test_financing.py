@@ -121,7 +121,7 @@ def test_summary_counts_only_completed_after_period_end():
               event(kind="directed_issue", status="completed", gross=99e6, net=90e6, day="2026-05-01"),
               event(kind="warrants", status="announced", gross=7e6, day="2026-09-01"),
               event(kind="convertible", status="completed", gross=5e6, day="2026-09-02", currency="EUR")]
-    confirmed, announced, listing = summarize(events, END, "SEK")
+    confirmed, announced, listing, _credit = summarize(events, END, "SEK")
     assert confirmed == 50e6 * 0.9 + 10e6          # aktier minus ca 10 % kostnader, lån brutto
     assert announced == 7e6
     assert len(listing) == 4                       # emissionen före periodslut är borta; EUR visas men summeras inte
@@ -284,7 +284,7 @@ def test_web_exposes_financing_and_moves_refinanced_company_out_of_exhausted(set
     assert {"confirmed_financing", "announced_financing", "financing_events"} <= set(detail)
     assert detail["financing_events"][0]["title"] == "Utfall i företrädesemissionen"
     html = client.get("/").text
-    assert "hideRaise" in html and "Dölj bolag med annonserad emission" in html
+    assert "hideRaise" not in html and "Dölj bolag med annonserad emission" not in html
 
 
 def test_web_flags_announced_round(setup):
@@ -310,7 +310,7 @@ def test_repayment_reduces_cash_and_prefilter_finds_it():
     assert looks_like_financing("Company repays convertible loan")
     events = [Event("directed_issue", "completed", 30e6, 27e6, "SEK", "2026-08-01"),
               Event("repayment", "completed", 50e6, None, "SEK", "2026-08-15")]
-    confirmed, announced, listing = summarize(events, "2026-06-30", "SEK")
+    confirmed, announced, listing, _credit = summarize(events, "2026-06-30", "SEK")
     assert confirmed == 27e6 - 50e6
     assert {row["type"] for row in listing} == {"directed_issue", "repayment"}
 

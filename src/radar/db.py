@@ -76,9 +76,10 @@ CREATE TABLE IF NOT EXISTS financing_events (
     id INTEGER PRIMARY KEY,
     news_document_id INTEGER NOT NULL REFERENCES news(document_id),
     company_id INTEGER NOT NULL,
-    type TEXT NOT NULL,                -- rights_issue, directed_issue, loan, convertible, warrants, other
+    type TEXT NOT NULL,                -- rights_issue, directed_issue, bridge_loan, loan, credit_facility, convertible, warrants, repayment, other
     status TEXT NOT NULL,              -- announced, completed, cancelled
-    gross_amount REAL, net_amount REAL, -- hela valutaenheter
+    gross_amount REAL, net_amount REAL, -- hela valutaenheter; vid kreditfacilitet är gross ramen
+    drawn_amount REAL,                 -- utnyttjad del av en kreditfacilitet, om den anges
     currency TEXT,
     event_date TEXT NOT NULL,
     quote TEXT,
@@ -105,4 +106,13 @@ def connect(path: Path) -> sqlite3.Connection:
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA foreign_keys=ON")
     connection.executescript(SCHEMA)
+    _migrate(connection)
     return connection
+
+
+def _migrate(connection: sqlite3.Connection) -> None:
+    """Lägg till kolumner som tillkommit efter att databasen skapades."""
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(financing_events)")}
+    if "drawn_amount" not in columns:
+        with connection:
+            connection.execute("ALTER TABLE financing_events ADD COLUMN drawn_amount REAL")

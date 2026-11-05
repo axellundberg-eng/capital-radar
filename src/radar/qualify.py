@@ -100,7 +100,8 @@ def check_runway(item: dict) -> Check:
     if low <= value < high:
         return Check("runway", "Runway", "pass", f"{text}, inom målgruppen 3-9 månader.", weight)
     if value < low:
-        return Check("runway", "Runway", "warn", f"{text}: akut, kort tid att ordna garanti.", weight)
+        acute = " (under 1 mån)" if "acute" in (item.get("flags") or []) else ""
+        return Check("runway", "Runway", "warn", f"{text}{acute}: akut, kort tid att ordna garanti.", weight)
     return Check("runway", "Runway", "fail", f"{text}, utanför målgruppen 3-9 månader.", weight)
 
 
@@ -209,7 +210,7 @@ def load_history(connection: sqlite3.Connection) -> dict[int, list[dict]]:
 
 
 def prospect_companies(connection: sqlite3.Connection, items: list[dict]) -> list[tuple[dict, str | None]]:
-    """Bolag i 3-9- och under-3-grupperna utan annonserad emission, med ISIN."""
+    """Bolag i 3-9-, under-3- och akut-grupperna (alltså utan annonserad emission), med ISIN."""
     isins = {r["id"]: r["isin"] for r in connection.execute("SELECT id, isin FROM companies")}
     return [(i, isins.get(i["id"])) for i in items
-            if i["band"] in ("3_9", "under_3") and "raise_announced" not in i["flags"]]
+            if i["band"] in ("3_9", "under_3", "acute") and "raise_announced" not in i["flags"]]

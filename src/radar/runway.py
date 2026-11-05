@@ -13,6 +13,8 @@
   nyhetssteget) utan visas bara. Lån som förfaller inom 12 månader
   (`debt_due_12m`) ändrar inte huvudtalet utan ger en varning med egen runway.
 - Kassan rullas fram med burn från periodslut till idag.
+- Kreditfaciliteter är en reserv: outnyttjad kredit (rapport + nyheter) ger `runway_with_credit`
+  men ändrar inte huvudtalet. Runway under en månad utan ny finansiering flaggas `acute`.
 - Bekräftad finansiering efter rapporten (genomförda rundor, se rounds.py) läggs
   till kassan; annonserade rundor redovisas bara och flaggas.
 """
@@ -21,6 +23,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import date
+
+from .rounds import NO_RAISE_TYPES
 
 DAYS_PER_MONTH = 30.4375
 RECENT_RATIO = 1.5
@@ -66,6 +70,8 @@ class Runway:
     reported_inflows_after_period: float = 0.0
     debt_due_12m: float | None = None
     runway_after_debt: float | None = None
+    available_credit: float = 0.0
+    runway_with_credit: float | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -109,15 +115,16 @@ def _periods(facts: list[Fact], period_end: str) -> list[Period]:
     return sorted(periods, key=lambda p: p.months)
 
 
-def _apply_financing(result: Runway, financing: tuple[float, float, list[dict]] | None) -> float:
+def _apply_financing(result: Runway, financing: tuple | None) -> float:
     """Registrerar finansieringen och returnerar den bekräftade kassan som läggs till."""
     if financing is None:
         return 0.0
-    confirmed, announced, events = financing
+    confirmed, announced, events = financing[:3]
     result.confirmed_financing, result.announced_financing, result.financing_events = confirmed, announced, events
+    result.available_credit = financing[3] if len(financing) > 3 else 0.0
     if confirmed > 0:
         result.flags.append("financing_received")
-    if any(e["status"] == "announced" and e["type"] != "repayment" for e in events):
+    if any(e["status"] == "announced" and e["type"] not in NO_RAISE_TYPES for e in events):
         result.flags.append("raise_announced")
     return confirmed
 
@@ -144,8 +151,19 @@ def _debt_warning(result: Runway, facts: list[Fact], cash_today: float) -> None:
         result.flags.append("debt_due_within_12m")
 
 
+def _credit_and_acute(result: Runway, cash_today: float) -> None:
+    """Kreditreserv ger egen runway (ändrar inte huvudtalet); akut = under en månad utan ny finansiering."""
+    if result.available_credit > 0:
+        result.runway_with_credit = round((cash_today + result.available_credit) / result.monthly_burn, 1)
+        result.flags.append("credit_reserve")
+    # Ny finansiering in efter rapporten (emission, lån, brygglån, dragen kredit) häver "akut".
+    refinanced = any(e["status"] == "completed" and (e.get("cash") or 0) > 0 for e in result.financing_events)
+    if result.runway_today < 1 and not refinanced:
+        result.flags.append("acute")
+
+
 def compute(facts: list[Fact], period_end: str, *, today: str,
-            financing: tuple[float, float, list[dict]] | None = None) -> Runway:
+            financing: tuple | None = None) -> Runway:
     result = Runway(status="ok", period_end=period_end)
     extra = _apply_financing(result, financing)
     cash = next((f.value for f in facts if f.kind == "cash" and f.period_end == period_end), None)
@@ -158,6 +176,7 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
         result.flags.append("includes_short_term_investments")
         cash += placements
     result.cash = cash
+    result.available_credit += _sum(facts, "undrawn_credit")
     # Samma amortering kan stå både i rapporten och i ett pressmeddelande: räkna den en gång.
     news_repayments = [e.get("amount") or 0.0 for e in result.financing_events
                        if e.get("type") == "repayment" and e.get("status") == "completed"]
@@ -194,6 +213,8 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
     if (cash + extra) / chosen.monthly_burn < since:
         # Kassan borde redan vara slut: nästan alltid ny finansiering efter rapporten.
         result.flags.append("cash_exhausted_since_report")
-    result.runway_today = round(max(0.0, cash + extra - chosen.monthly_burn * since) / chosen.monthly_burn, 1)
-    _debt_warning(result, facts, max(0.0, cash + extra - chosen.monthly_burn * since))
+    cash_today = max(0.0, cash + extra - chosen.monthly_burn * since)
+    result.runway_today = round(cash_today / chosen.monthly_burn, 1)
+    _credit_and_acute(result, cash_today)
+    _debt_warning(result, facts, cash_today)
     return result

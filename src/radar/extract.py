@@ -42,7 +42,8 @@ Svara med enbart ett JSON-objekt:
     {"description": "kort text", "direction": "out | in", "amount": tal, "date": "YYYY-MM-DD" eller null,
      "page": sidnummer, "quote": "kort citat"}
   ],
-  "debt_due_12m": {"value": tal, "page": sidnummer, "quote": "kort citat"} eller null
+  "debt_due_12m": {"value": tal, "page": sidnummer, "quote": "kort citat"} eller null,
+  "undrawn_credit": {"value": tal, "page": sidnummer, "quote": "kort citat"} eller null
 }
 
 Regler:
@@ -66,6 +67,8 @@ Regler:
   om inga finns. Ta inte med händelser före periodens slut.
 - debt_due_12m = räntebärande skulder som förfaller inom 12 månader (kortfristiga räntebärande
   skulder) vid periodens slut, exklusive leasing om det går att skilja. Annars null.
+- undrawn_credit = outnyttjade kreditfaciliteter, checkkredit eller beviljade kreditramar
+  vid periodens slut (ramen minus utnyttjat belopp). Annars null.
 - Ta med varje periodkolumn för innevarande år som finns (t.ex. både kvartalet och hittills i år).
 - Hoppa över en siffra hellre än att gissa.
 """
@@ -211,6 +214,7 @@ def parse_response(raw: str) -> Extraction:
         facts.append(ExtractedFact(item["kind"], value * multiplier, currency, parse_date(item.get("period_start")),
                                    parse_date(item.get("period_end")) or end, item.get("page"), item.get("quote")))
     facts.extend(_post_period_facts(data, multiplier, currency, end))
+    facts.extend(_credit_facts(data, multiplier, currency, end))
     return Extraction(parse_date(data.get("report_period_start")), end, currency, tuple(facts))
 
 
@@ -234,6 +238,15 @@ def _post_period_facts(data: dict, multiplier: float, currency: str | None, end:
         facts.append(ExtractedFact("debt_due_12m", abs(parse_number(debt["value"])) * multiplier, currency,
                                    None, end, debt.get("page"), debt.get("quote")))
     return facts
+
+
+def _credit_facts(data: dict, multiplier: float, currency: str | None, end: str) -> list[ExtractedFact]:
+    """Outnyttjad kredit vid periodens slut (kreditfaciliteter, checkkredit)."""
+    credit = data.get("undrawn_credit")
+    if not isinstance(credit, dict) or not parse_number(credit.get("value")):
+        return []
+    return [ExtractedFact("undrawn_credit", abs(parse_number(credit["value"])) * multiplier, currency,
+                          None, end, credit.get("page"), credit.get("quote"))]
 
 
 def extract(client: ChatClient, page_texts: list[str], *, attempts: int = 2
