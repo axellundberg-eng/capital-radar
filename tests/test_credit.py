@@ -107,7 +107,7 @@ def test_ui_has_no_hide_checkbox_and_prospects_have_raising_section(tmp_path):
     from fastapi.testclient import TestClient
 
     from radar.web import create_app
-    from tests.test_qualify import ok, seed
+    from test_qualify import ok, seed
 
     settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "f")
     connection = connect(settings.db_path)
