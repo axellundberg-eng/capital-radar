@@ -29,7 +29,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 
-from .rounds import NON_CASH_TYPES, OUTFLOW_TYPES
+from .rounds import EQUITY_COST, NON_CASH_TYPES, OUTFLOW_TYPES
 
 DAYS_PER_MONTH = 30.4375
 RECENT_RATIO = 1.5
@@ -84,6 +84,8 @@ class Runway:
     burn_basis: str | None = None       # ltm, annual eller longest_period
     cash_today: float | None = None     # kassa idag (rapportens kassa rullad fram), rapportens valuta
     currency: str | None = None         # rapportens valuta
+    secured_financing: float = 0.0      # säkrad del (åtaganden + garantier) av annonserade emissioner, netto
+    runway_pro_forma: float | None = None   # runway om den säkrade delen kommer in
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -212,6 +214,28 @@ def _debt_warning(result: Runway, facts: list[Fact], cash_today: float) -> None:
         result.flags.append("debt_due_within_12m")
 
 
+def _pro_forma(result: Runway, cash_today: float, burn: float) -> None:
+    """Annonserade emissioner räknas inte i huvudtalet. Den del som redan är säkrad genom
+    teckningsåtaganden och garantier visas som pro forma-runway: nettot efter angivna kostnader,
+    annars schablonen."""
+    secured = 0.0
+    for e in result.financing_events:
+        if e.get("status") != "announced" or e.get("type") not in ("rights_issue", "directed_issue") \
+                or e.get("unconverted"):
+            continue
+        gross = e.get("gross_amount")
+        covered = (e.get("subscription_commitments") or 0.0) + (e.get("guarantee_amount") or 0.0)
+        if not gross or covered <= 0:
+            continue
+        covered = min(gross, covered)
+        cost_share = (e["issue_costs"] / gross) if e.get("issue_costs") else 1 - EQUITY_COST
+        secured += covered * (1 - cost_share)
+    if secured > 0:
+        result.secured_financing = secured
+        result.runway_pro_forma = round((cash_today + result.available_credit + secured) / burn, 1)
+        result.flags.append("secured_pro_forma")
+
+
 def _credit_and_acute(result: Runway, cash_today: float) -> None:
     """Kreditreserv ger egen runway (ändrar inte huvudtalet); akut = under en månad utan ny finansiering."""
     if result.available_credit > 0:
@@ -286,6 +310,7 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
     result.runway_cash_today = round(cash_today / burn, 1)
     # Dagens runway räknar in outnyttjad kreditlinje (den är tillgänglig pengar); kassan visas separat.
     result.runway_today = round((cash_today + result.available_credit) / burn, 1)
+    _pro_forma(result, cash_today, burn)
     _credit_and_acute(result, cash_today)
     _debt_warning(result, facts, cash_today)
     return result

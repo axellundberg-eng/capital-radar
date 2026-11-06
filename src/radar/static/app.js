@@ -31,6 +31,7 @@ const STATUS = { announced: "Annonserad", completed: "Genomförd", cancelled: "A
 const STATUS_CHIP = { announced: "pågår", completed: "genomförd", cancelled: "avbruten" };
 const ACUTE_TEXT = "Kassan räcker mindre än en månad enligt senaste rapporten. Bolaget behöver kapital nu eller har kreditlöften (visas om de finns i rapporten).";
 
+const expandedProspects = new Set();
 const state = { items: [], band: "3_9", query: "", selected: null, overview: null, view: "list", prospects: null };
 const $ = (selector) => document.querySelector(selector);
 
@@ -52,6 +53,20 @@ async function api(path) {
   const response = await fetch(path, { headers: { Accept: "application/json" }, cache: "no-store" });
   if (!response.ok) throw new Error(`API ${response.status}`);
   return response.json();
+}
+
+const REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function skeleton(cols, rows = 5) {
+  const cells = Array.from({ length: cols }, (_, i) => `<td><span class="sk" style="width:${i === 0 ? 70 : 40 + ((i * 17) % 30)}%"></span></td>`).join("");
+  return Array.from({ length: rows }, () => `<tr class="skel">${cells}</tr>`).join("");
+}
+
+// Rad med pro forma-runway om den säkrade finansieringen kommer in (visas bara när fältet finns).
+function proForma(item) {
+  if (item.runway_pro_forma == null) return "";
+  const secured = item.secured_financing != null ? ` (${msek(item.secured_financing, item.currency)})` : "";
+  return `<small class="proforma" title="Säkrad finansiering som ännu inte ingår i kassan">Pro forma ${months(item.runway_pro_forma)} om säkrad del${secured} kommer in</small>`;
 }
 
 function pool() {
@@ -82,12 +97,12 @@ function runwayCell(item) {
   if (item.cash_flow_positive) return '<span class="pill good">Positivt</span>';
   if (item.band === "structural") return `<span class="pill band-structural" title="${escapeHtml(STRUCT_WARNING)}">Strukturell förändring</span><small>Gammal runway ${months(item.runway_today)}</small>`;
   if (item.band === "exhausted") return '<span class="pill band-exhausted" title="Kassan borde vara slut sedan rapporten">Slut?</span>';
-  if (item.band === "acute") return `<span class="pill band-acute" title="${ACUTE_TEXT}">${months(item.runway_today)}</span><small>Akut: under 1 mån</small>${creditNote(item)}`;
+  if (item.band === "acute") return `<span class="pill band-acute" title="${ACUTE_TEXT}">${months(item.runway_today)}</span><small>Akut: under 1 mån</small>${proForma(item)}${creditNote(item)}`;
   const recent = item.recent_runway_today != null
     ? `<small title="I senaste periodens takt">${months(item.recent_runway_today)} i senaste takt</small>` : "";
   const raise = item.band === "raising" ? '<small><span class="pill raise">Pågående kapitalanskaffning</span></small>' : "";
   const pill = item.band === "raising" ? "band-under_3" : `band-${item.band}`;
-  return `<span class="pill ${pill}">${months(item.runway_today)}</span>${recent}${raise}${creditNote(item)}`;
+  return `<span class="pill ${pill}">${months(item.runway_today)}</span>${recent}${proForma(item)}${raise}${creditNote(item)}`;
 }
 
 // Runway idag inkluderar outnyttjad kreditlinje; här visas hur mycket som är kassan utan kredit.
@@ -99,9 +114,9 @@ function creditNote(item) {
 function renderBands() {
   const counts = {};
   pool().forEach((item) => { counts[item.band] = (counts[item.band] || 0) + 1; });
-  $("#bands").innerHTML = BANDS.map(([key, label, hint]) => {
+  $("#bands").innerHTML = BANDS.map(([key, label, hint, tone]) => {
     const count = key === "all" ? pool().length : (counts[key] || 0);
-    return `<button class="band ${state.band === key ? "active" : ""}" data-band="${key}" title="${escapeHtml(hint)}">
+    return `<button class="band tone-${tone} ${state.band === key ? "active" : ""}" data-band="${key}" title="${escapeHtml(hint)}" aria-pressed="${state.band === key}">
       <strong>${count}</strong><span>${label}</span></button>`;
   }).join("");
 }
@@ -123,7 +138,22 @@ function renderRows() {
       <td class="num">${msek(item.cash, item.currency)}</td>
       <td>${date(item.period_end)}<small>${months(item.months_since_report)} sedan</small></td>
       <td>${item.flags.length ? `<span class="warn" title="${escapeHtml(item.flags.map((f) => state.overview?.flag_text?.[f] || f).join(", "))}">${item.flags.length} ⚠</span>` : ""}</td>
-    </tr>`).join("") : '<tr><td colspan="6" class="empty">Inga bolag i den här gruppen.</td></tr>';
+    </tr>`).join("") : `<tr><td colspan="6" class="empty">${state.query.trim()
+    ? `Inga bolag matchar "${escapeHtml(state.query.trim())}" i den här gruppen. Rensa sökningen eller välj <strong>Alla</strong> ovan.`
+    : "Inga bolag i den här gruppen. Välj en annan runway-grupp ovan."}</td></tr>`;
+  $("#rows").classList.add("anim");
+  updateTabs();
+}
+
+// Markerar vald rad utan att bygga om tabellerna (bevarar öppna rader och animationer).
+function markSelected() {
+  document.querySelectorAll("tr[data-id]").forEach((tr) => tr.classList.toggle("selected", Number(tr.dataset.id) === state.selected));
+}
+
+function updateTabs() {
+  const set = (view, n) => { const el = document.querySelector(`.view[data-view="${view}"] .cnt`); if (el) el.textContent = n == null ? "" : n; };
+  set("list", state.items.length || null);
+  set("prospects", state.prospects ? state.prospects.items.length : null);
 }
 
 function scoreClass(score) { return score >= 70 ? "high" : score >= 45 ? "mid" : "low"; }
@@ -135,12 +165,19 @@ function lastIssue(item) {
   return `${TYPE[e.type] || e.type}<small>${STATUS[e.status] || e.status} · ${date(e.date)}${e.amount != null ? " · " + msek(e.amount, e.currency) : ""}</small>`;
 }
 
-function prospectRow(item) {
+function nextReport(item) {
+  return item.next_report ? `<small title="${escapeHtml(item.next_report.title || "")}">Nästa rapport ${escapeHtml(date(item.next_report.date))}</small>` : "";
+}
+
+function prospectRow(item, expandable) {
+  const open = expandable && expandedProspects.has(item.id);
+  const chev = expandable ? `<span class="chev" aria-hidden="true"></span>` : "";
+  const aria = expandable ? ` aria-expanded="${open}"` : "";
   return `
-    <tr data-id="${item.id}" class="${state.selected === item.id ? "selected" : ""}" tabindex="0">
-      <td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.market || "")}</small></td>
+    <tr data-id="${item.id}" class="${state.selected === item.id ? "selected" : ""}${expandable ? " expandable" : ""}${open ? " open" : ""}" tabindex="0"${aria}>
+      <td>${chev}<span class="namecell"><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.market || "")}</small>${nextReport(item)}</span></td>
       <td class="num"><span class="score ${scoreClass(item.score)}" title="${escapeHtml(item.summary)}">${item.score}</span></td>
-      <td class="num"><span class="pill band-${item.band}">${months(item.runway_today)}</span></td>
+      <td class="num"><span class="pill band-${item.band}">${months(item.runway_today)}</span>${proForma(item)}</td>
       <td class="num">${msek(item.capital_need)}</td>
       <td class="num">${item.market_cap ? msek(item.market_cap) : "okänt"}</td>
       <td class="num">${pct(item.share)}</td>
@@ -187,7 +224,7 @@ function prospectDetail(item) {
   const auth = a ? `<p class="source">Bemyndigande (stämma ${escapeHtml(date(a.meeting_date))}):
       ${a.max_dilution_pct != null ? `högst ${a.max_dilution_pct} % av aktierna` : a.max_shares != null ? `högst ${Number(a.max_shares).toLocaleString("sv-SE")} aktier` : "omfattning ej angiven"}${a.directed_allowed ? ", även riktad emission" : ""}.</p>` : "";
   return `
-    <tr class="expand"><td colspan="9">
+    <tr class="expand"><td colspan="9"><div class="xwrap"><div class="xinner">
       <p class="source">Kassa utan kredit: ${months(item.runway_cash_today)} · Outnyttjad kredit: ${msek(item.available_credit, item.currency)} ·
         Emissioner senaste 24 mån: ${item.emissions_24m ?? 0}${basis ? ` · Burn räknad på ${basis}` : ""}${report}</p>
       ${need}${auth}
@@ -197,16 +234,26 @@ function prospectDetail(item) {
         <span>${escapeHtml(c.reason)}</span></li>`).join("")}</ul>
       <h3>Finansiering senaste 24 mån</h3>
       ${list ? `<ul class="facts">${list}</ul>` : '<p class="source">Inga finansieringshändelser de senaste 24 månaderna.</p>'}
-    </td></tr>`;
+    </div></div></td></tr>`;
 }
 
-const expandedProspects = new Set();
+let closing = null;
 // Bara ett prospekt är öppet åt gången: att öppna ett stänger det föregående.
 function toggleProspect(id) {
   const wasOpen = expandedProspects.has(id);
+  const wrap = document.querySelector("#prospectRows .xwrap");
   expandedProspects.clear();
   if (!wasOpen) expandedProspects.add(id);
-  renderProspects();
+  clearTimeout(closing);
+  if (wasOpen && wrap && !REDUCED) {
+    // Stäng mjukt: animera först, bygg sedan om raderna.
+    wrap.classList.add("closing");
+    const tr = document.querySelector(`#prospectRows tr[data-id="${id}"]`);
+    if (tr) { tr.classList.remove("open"); tr.setAttribute("aria-expanded", "false"); }
+    closing = setTimeout(() => renderProspects(false), 200);
+  } else {
+    renderProspects(false);
+  }
 }
 
 function structuralRow(item) {
@@ -219,16 +266,18 @@ function structuralRow(item) {
     </tr>`;
 }
 
-function renderProspects() {
+function renderProspects(animate = true) {
   if (!state.prospects) return;
   const { items, raising, structural } = state.prospects;
   $("#structuralRows").innerHTML = structural.length ? structural.map(structuralRow).join("")
-    : '<tr><td colspan="4" class="empty">Inga bolag med strukturell förändring.</td></tr>';
+    : '<tr><td colspan="4" class="empty">Inga bolag med strukturell förändring just nu.</td></tr>';
   $("#prospectRows").innerHTML = items.length
-    ? items.map((item) => prospectRow(item) + (expandedProspects.has(item.id) ? prospectDetail(item) : "")).join("")
-    : '<tr><td colspan="8" class="empty">Inga prospekt just nu.</td></tr>';
-  $("#raisingRows").innerHTML = raising.length ? raising.map(prospectRow).join("")
-    : '<tr><td colspan="7" class="empty">Inga bolag med pågående kapitalanskaffning.</td></tr>';
+    ? items.map((item) => prospectRow(item, true) + (expandedProspects.has(item.id) ? prospectDetail(item) : "")).join("")
+    : '<tr><td colspan="8" class="empty">Inga prospekt just nu. Bolag hamnar här när runway understiger 9 månader utan annonserad emission. Se Lista för alla bolag.</td></tr>';
+  $("#raisingRows").innerHTML = raising.length ? raising.map((item) => prospectRow(item, false)).join("")
+    : '<tr><td colspan="8" class="empty">Inga bolag med pågående kapitalanskaffning.</td></tr>';
+  ["#prospectRows", "#structuralRows", "#raisingRows"].forEach((sel) => $(sel).classList.toggle("anim", animate));
+  updateTabs();
 }
 
 function qualificationSection(d) {
@@ -242,21 +291,28 @@ function qualificationSection(d) {
 }
 
 async function loadProspects() {
+  if (state.prospects || state.loadingProspects) return;
+  state.loadingProspects = true;
+  $("#prospectRows").innerHTML = skeleton(8);
+  $("#structuralRows").innerHTML = skeleton(4, 2);
+  $("#raisingRows").innerHTML = skeleton(8, 2);
   try {
     const data = await api("api/prospects");
     state.prospects = { items: data.items, raising: data.raising || [], structural: data.structural || [] };
     renderProspects();
   } catch (error) {
-    $("#prospectRows").innerHTML = `<tr><td colspan="8" class="empty">Prospekten kunde inte läsas (${escapeHtml(error.message)}).</td></tr>`;
-  }
+    $("#prospectRows").innerHTML = `<tr><td colspan="8" class="empty">Prospekten kunde inte läsas (${escapeHtml(error.message)}). Ladda om sidan för att försöka igen.</td></tr>`;
+    $("#structuralRows").innerHTML = "";
+    $("#raisingRows").innerHTML = "";
+  } finally { state.loadingProspects = false; }
 }
 
 function setView(view) {
   state.view = view;
-  document.querySelectorAll(".view").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+  document.querySelectorAll(".view").forEach((b) => { const on = b.dataset.view === view; b.classList.toggle("active", on); b.setAttribute("aria-selected", on); });
   $("#listView").hidden = view !== "list";
   $("#prospectView").hidden = view !== "prospects";
-  if (view === "prospects" && !state.prospects) loadProspects();
+  if (view === "prospects") loadProspects();
 }
 
 function explanation(d) {
@@ -282,7 +338,7 @@ function financingNote(d) {
   return parts.join("");
 }
 
-function financingItem(e) {
+function financingItem(e, d) {
   const drawn = e.type === "credit_facility" && e.drawn_amount != null ? ` · utnyttjat ${msek(e.drawn_amount, d.currency)}` : "";
   return `<li><div><strong>${STATUS[e.status] || e.status}</strong>
     <span>${e.amount != null ? msek(e.amount, d.currency) : "belopp saknas"}${drawn} · ${date(e.date)}</span></div>
@@ -300,7 +356,7 @@ function financingSection(d) {
   const credit = creditReserve(d);
   if (!events.length) return `<h3>Finansiering efter rapporten</h3><p class="source">Inga finansieringshändelser funna.</p>${credit}`;
   const groups = TYPE_ORDER.filter((type) => events.some((e) => e.type === type)).map((type) =>
-    `<h4>${TYPE[type]}</h4><ul class="facts">${events.filter((e) => e.type === type).map(financingItem).join("")}</ul>`);
+    `<h4>${TYPE[type]}</h4><ul class="facts">${events.filter((e) => e.type === type).map((e) => financingItem(e, d)).join("")}</ul>`);
   return `<h3>Finansiering efter rapporten</h3>${credit}${groups.join("")}`;
 }
 
@@ -344,7 +400,11 @@ function renderDetail(d) {
     <span>${msek(f.value, d.currency)} · ${f.period_start ? `${date(f.period_start)}–` : ""}${date(f.period_end)} · ${pdfLink(d, f.page)}</span></div>
     ${f.quote ? `<q>${escapeHtml(f.quote)}</q>` : ""}</li>`).join("");
   const flags = Object.values(d.flag_text || {}).map((text) => `<li>${escapeHtml(text)}</li>`).join("");
-  $("#detail").innerHTML = `
+  const pro = d.runway_pro_forma != null ? `
+      <div class="wide proforma-kpi"><span>Pro forma runway</span><strong>${months(d.runway_pro_forma)}</strong>
+        <small>om säkrad finansiering${d.secured_financing != null ? ` (${msek(d.secured_financing, d.currency)})` : ""} kommer in</small></div>` : "";
+  const nextRep = d.next_report ? `<p class="source">Nästa rapport: ${escapeHtml(date(d.next_report.date))}${d.next_report.title ? ` (${escapeHtml(d.next_report.title)})` : ""}</p>` : "";
+  $("#detail").innerHTML = `<div class="fade-in">
     <div class="detail-head">
       <h2>${escapeHtml(d.name)}</h2>
       <span>${escapeHtml(d.market || "")} ${d.segment ? "· " + escapeHtml(d.segment) : ""}</span>
@@ -353,8 +413,9 @@ function renderDetail(d) {
       <div><span>Runway idag</span><strong class="band-${d.band}">${d.cash_flow_positive ? "Positivt" : months(d.runway_today)}</strong></div>
       <div><span>Vid rapporten</span><strong>${months(d.runway_at_report)}</strong></div>
       <div><span>Burn / mån</span><strong>${d.cash_flow_positive ? "—" : msek(d.monthly_burn, d.currency)}</strong></div>
-      <div><span>Kassa</span><strong>${msek(d.cash, d.currency)}</strong></div>
+      <div><span>Kassa</span><strong>${msek(d.cash, d.currency)}</strong></div>${pro}
     </div>
+    ${nextRep}
     <p class="explain">${explanation(d)}${financingNote(d)}</p>
     ${flags ? `<ul class="flags">${flags}</ul>` : ""}
     ${qualificationSection(d)}
@@ -366,22 +427,24 @@ function renderDetail(d) {
       <tbody>${periods || '<tr><td colspan="4">Inga perioder</td></tr>'}</tbody></table>
     <h3>Källor i rapporten</h3>
     <p class="source">${escapeHtml(d.report_title)} · publicerad ${date(d.published_at)} · ${pdfLink(d)}</p>
-    <ul class="facts">${facts}</ul>`;
+    <ul class="facts">${facts}</ul></div>`;
 }
 
 async function select(id) {
   state.selected = id;
-  renderRows();
-  renderProspects();
-  $("#detail").innerHTML = '<div class="placeholder">Laddar…</div>';
+  markSelected();
+  $("#detail").innerHTML = '<div class="detail-skel"><span class="sk" style="width:60%;height:22px"></span><span class="sk" style="width:35%"></span><span class="sk block"></span><span class="sk block"></span><span class="sk" style="width:90%"></span><span class="sk" style="width:80%"></span></div>';
   try {
-    renderDetail(await api(`api/companies/${id}`));
+    const d = await api(`api/companies/${id}`);
+    if (state.selected !== id) return;
+    renderDetail(d);
   } catch (error) {
-    $("#detail").innerHTML = `<div class="placeholder">Kunde inte läsa bolaget (${escapeHtml(error.message)}).</div>`;
+    if (state.selected === id) $("#detail").innerHTML = `<div class="placeholder">Kunde inte läsa bolaget (${escapeHtml(error.message)}).</div>`;
   }
 }
 
 async function load() {
+  $("#rows").innerHTML = skeleton(6);
   try {
     const [overview, list] = await Promise.all([api("api/overview"), api("api/companies")]);
     state.overview = overview;
@@ -390,8 +453,9 @@ async function load() {
     $("#meta").textContent = `${overview.with_result} av ${overview.companies} bolag beräknade · ${done} rapporter extraherade`;
     renderBands();
     renderRows();
+    loadProspects();
   } catch (error) {
-    $("#rows").innerHTML = `<tr><td colspan="6" class="empty">Underlaget kunde inte läsas (${escapeHtml(error.message)}).</td></tr>`;
+    $("#rows").innerHTML = `<tr><td colspan="6" class="empty">Underlaget kunde inte läsas (${escapeHtml(error.message)}). Ladda om sidan för att försöka igen.</td></tr>`;
   }
 }
 
@@ -408,7 +472,10 @@ document.addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   const row = event.target.closest?.("tr[data-id]");
-  if (row && event.key === "Enter") select(Number(row.dataset.id));
+  if (!row || event.key !== "Enter") return;
+  const id = Number(row.dataset.id);
+  if (row.closest("#prospectRows")) toggleProspect(id);
+  select(id);
 });
 $("#search").addEventListener("input", (event) => { state.query = event.target.value; renderRows(); });
 load();

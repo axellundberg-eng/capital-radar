@@ -94,3 +94,17 @@ def test_set_off_issue_is_no_cash_and_part_of_the_rights_issue(tmp_path):
                            "currency, event_date, quote, created_at) VALUES (5, 1, 'directed_issue', 'completed', 900000, "
                            "'SEK', '2026-10-07', 'betalning genom kvittning', '2026-10-07')")
     assert [e.type for e in load_events(connection, 1)] == ["set_off"]
+
+
+def test_pro_forma_runway_counts_only_the_secured_part():
+    # Annonserad emission 50 MSEK med åtaganden 10 och garantier 20: 30 säkrat, kostnader 5 av 50 (10 %).
+    issue = Event("rights_issue", "announced", 50e6, None, "SEK", "2026-08-01", "q", "t", "u",
+                  subscription_commitments=10e6, guarantee_amount=20e6, issue_costs=5e6)
+    facts = [Fact("cash", 12e6, None, END), flow("operating_cash_flow", -6e6, "2026-01-01")]
+    result = compute(facts, END, today=END, financing=summarize([issue], END, "SEK"))
+    assert result.runway_today == pytest.approx(12.0)                  # huvudtalet ändras inte
+    assert result.secured_financing == pytest.approx(27e6)             # 30 * (1 - 0,1)
+    assert result.runway_pro_forma == pytest.approx(39.0) and "secured_pro_forma" in result.flags
+    plain = compute(facts, END, today=END, financing=summarize(
+        [Event("rights_issue", "announced", 50e6, None, "SEK", "2026-08-01", "q", "t", "u")], END, "SEK"))
+    assert plain.runway_pro_forma is None and plain.secured_financing == 0

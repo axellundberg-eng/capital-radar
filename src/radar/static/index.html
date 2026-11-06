@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Capital Radar</title>
-  <link rel="stylesheet" href="static/styles.css?v=10">
+  <link rel="stylesheet" href="static/styles.css?v=11">
 </head>
 <body>
   <header class="top">
@@ -19,9 +19,9 @@
         <p>Runway räknas från idag: rapportens kassa minus burn sedan periodslut. Målgrupp: 3–9 månader.</p>
       </div>
 
-      <div class="views" id="views" role="tablist">
-        <button class="view active" data-view="list" role="tab">Lista</button>
-        <button class="view" data-view="prospects" role="tab">Prospekt</button>
+      <div class="views" id="views" role="tablist" aria-label="Vy">
+        <button class="view active" data-view="list" role="tab" aria-selected="true">Lista <span class="cnt"></span></button>
+        <button class="view" data-view="prospects" role="tab" aria-selected="false">Prospekt <span class="cnt"></span></button>
       </div>
 
       <div id="listView">
@@ -43,7 +43,7 @@
               <th>Varningar</th>
             </tr>
           </thead>
-          <tbody id="rows"><tr><td colspan="6" class="empty">Laddar…</td></tr></tbody>
+          <tbody id="rows"><tr class="skel"><td colspan="6"><span class="sk"></span></td></tr></tbody>
         </table>
       </div>
       </div>
@@ -64,7 +64,7 @@
                 <th>Senaste emission</th>
               </tr>
             </thead>
-            <tbody id="prospectRows"><tr><td colspan="8" class="empty">Laddar…</td></tr></tbody>
+            <tbody id="prospectRows"><tr class="skel"><td colspan="8"><span class="sk"></span></td></tr></tbody>
           </table>
         </div>
         <h2 class="section-title">Strukturell förändring (kontrollera manuellt)</h2>
@@ -72,14 +72,26 @@
         <div class="table-wrap">
           <table>
             <thead><tr><th>Bolag</th><th>Händelser efter rapporten</th><th>Rapport</th><th class="num">Gammal runway</th></tr></thead>
-            <tbody id="structuralRows"><tr><td colspan="4" class="empty">Laddar…</td></tr></tbody>
+            <tbody id="structuralRows"><tr class="skel"><td colspan="4"><span class="sk"></span></td></tr></tbody>
           </table>
         </div>
         <h2 class="section-title">Pågående kapitalanskaffning (för sent för garanti)</h2>
         <p class="source">Emission annonserad men inte genomförd: garantin är sannolikt redan ordnad.</p>
         <div class="table-wrap">
           <table>
-            <tbody id="raisingRows"><tr><td colspan="7" class="empty">Laddar…</td></tr></tbody>
+            <thead>
+              <tr>
+                <th>Bolag</th>
+                <th class="num">Poäng</th>
+                <th class="num">Runway idag</th>
+                <th class="num">Kapitalbehov</th>
+                <th class="num">Marknadsvärde</th>
+                <th class="num">Andel</th>
+                <th class="num">Emissioner 24 mån</th>
+                <th>Senaste emission</th>
+              </tr>
+            </thead>
+            <tbody id="raisingRows"><tr class="skel"><td colspan="8"><span class="sk"></span></td></tr></tbody>
           </table>
         </div>
       </div>
@@ -90,6 +102,6 @@
     </aside>
   </main>
 
-  <script src="static/app.js?v=16" defer></script>
+  <script src="static/app.js?v=17" defer></script>
 </body>
 </html>
