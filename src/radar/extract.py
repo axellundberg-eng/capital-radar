@@ -10,7 +10,7 @@ from typing import Any, Protocol
 
 from .units import parse_unit
 
-KINDS = ("operating_cash_flow", "capex", "operating_investments", "investing_cash_flow")
+KINDS = ("operating_cash_flow", "capex", "operating_investments", "investing_cash_flow", "lease_repayment")
 POST_PERIOD_KINDS = {"out": "post_period_outflow", "in": "post_period_inflow"}
 KEYWORDS = (
     "kassaflöde", "kassaflödesanalys", "likvida medel", "den löpande verksamheten",
@@ -23,7 +23,8 @@ MAX_PAGES = 8
 MAX_PAGE_CHARS = 6000
 
 PROMPT = """Du läser en kvartals- eller årsrapport från ett börsnoterat bolag.
-Extrahera siffror för INNEVARANDE period. Använd aldrig jämförelsekolumner från föregående år.
+Extrahera kassa och skulder för INNEVARANDE period (aldrig jämförelsekolumner). För kassaflöden ska
+även jämförelseperioderna med, se reglerna nedan.
 
 Svara med enbart ett JSON-objekt:
 {
@@ -34,7 +35,7 @@ Svara med enbart ett JSON-objekt:
   "cash": {"value": tal, "date": "YYYY-MM-DD", "page": sidnummer, "quote": "kort citat"} eller null,
   "short_term_investments": {"value": tal, "date": "YYYY-MM-DD", "page": sidnummer, "quote": "kort citat"} eller null,
   "cash_flows": [
-    {"kind": "operating_cash_flow | capex | operating_investments | investing_cash_flow",
+    {"kind": "operating_cash_flow | capex | operating_investments | investing_cash_flow | lease_repayment",
      "value": tal, "period_start": "YYYY-MM-DD", "period_end": "YYYY-MM-DD",
      "page": sidnummer, "quote": "kort citat"}
   ],
@@ -60,6 +61,8 @@ Regler:
   eller joint venture-bolag. Försäljning av inventarier räknas med (netto). Ange det
   beräknade talet och citera raderna du använt.
 - investing_cash_flow = kassaflöde från investeringsverksamheten totalt.
+- lease_repayment = amortering av leasingskuld (IFRS 16, "amortering av leasingskulder", "repayment of
+  lease liabilities") i finansieringsverksamheten, negativt tal. Inte räntor och inte andra lån.
 - events_after_period = kassapåverkande händelser som rapporten säger inträffat EFTER periodens
   slut (t.ex. under "Väsentliga händelser efter periodens utgång"). direction "out" =
   amortering/återbetalning av lån, utdelning, återköp, lösen av konvertibel; "in" = nyemission,
@@ -69,7 +72,9 @@ Regler:
   skulder) vid periodens slut, exklusive leasing om det går att skilja. Annars null.
 - undrawn_credit = outnyttjade kreditfaciliteter, checkkredit eller beviljade kreditramar
   vid periodens slut (ramen minus utnyttjat belopp). Annars null.
-- Ta med varje periodkolumn för innevarande år som finns (t.ex. både kvartalet och hittills i år).
+- Kassaflöden (alla kinds ovan): ta med varje periodkolumn som finns, både innevarande år (t.ex.
+  kvartalet och hittills i år) och jämförelsekolumnerna (samma period föregående år och föregående
+  helår). Ange alltid rätt period_start och period_end för varje kolumn.
 - Hoppa över en siffra hellre än att gissa.
 """
 

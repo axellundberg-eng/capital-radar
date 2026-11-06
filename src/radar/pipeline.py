@@ -14,6 +14,7 @@ from pathlib import Path
 from .events import load_events as load_structural, summarize as summarize_structural
 from .extract import ChatClient, ExtractionError, extract
 from .fetch import fetch_pdf
+from .fx import converter
 from .financing import load_events
 from .pdftext import pages as pdf_pages
 from .review import apply_fact_corrections
@@ -100,9 +101,12 @@ def runway_for(connection: sqlite3.Connection, document_id: int, *, today: str) 
     facts, period_end = apply_fact_corrections(connection, document_id, facts, period_end)
     company = connection.execute("SELECT company_id FROM reports WHERE document_id=?", (document_id,)).fetchone()
     currency = next((r["currency"] for r in rows if r["currency"]), None)
-    financing = summarize(load_events(connection, company["company_id"]), period_end, currency)
+    financing = summarize(load_events(connection, company["company_id"]), period_end, currency,
+                          fx=converter(connection))
     structural = summarize_structural(load_structural(connection, company["company_id"]), period_end)
-    return compute(facts, period_end, today=today, financing=financing, structural=structural).to_dict()
+    result = compute(facts, period_end, today=today, financing=financing, structural=structural)
+    result.currency = currency
+    return result.to_dict()
 
 
 def refresh_runway(connection: sqlite3.Connection, document_id: int, *, today: str) -> dict:

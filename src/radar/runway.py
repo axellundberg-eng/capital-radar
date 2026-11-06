@@ -1,7 +1,10 @@
 """Runway från fakta. Regler kalibrerade mot facitsetet.
 
-- Burn per kassaflödesperiod, med periodens egen längd.
-- Längsta perioden ger huvudtalet (minst säsongsbrus). Bränner den senaste
+- Burn per kassaflödesperiod, med periodens egen längd: investeringar plus amortering av
+  leasingskuld (IFRS 16, ligger i finansieringsflödet) minus löpande kassaflöde.
+- Rullande tolv månader (LTM) ger huvudtalet när jämförelsekolumnerna finns: föregående helår plus
+  innevarande period minus samma period föregående år. Annars ger den längsta perioden huvudtalet
+  (minst säsongsbrus). Är bolaget positivt men senaste perioden bränner flaggas `recent_period_burning`. Bränner den senaste
   perioden över 1,5 gånger så fort visas den separat som varning, med egen
   runway, men ändrar inte huvudtalet.
 - Investeringar: i första hand rörelseinvesteringar (investeringsflödet utan
@@ -24,7 +27,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import date
+from datetime import date, timedelta
 
 from .rounds import OUTFLOW_TYPES
 
@@ -49,6 +52,7 @@ class Period:
     investments: float
     investments_basis: str
     monthly_burn: float
+    lease: float = 0.0          # amortering av leasingskuld under perioden
 
 
 @dataclass
@@ -76,6 +80,10 @@ class Runway:
     available_credit: float = 0.0
     runway_with_credit: float | None = None
     structural_events: list[dict] = field(default_factory=list)   # se events.py
+    ltm: dict | None = None             # rullande tolv månader, om jämförelsekolumnerna finns
+    burn_basis: str | None = None       # ltm, annual eller longest_period
+    cash_today: float | None = None     # kassa idag (rapportens kassa rullad fram), rapportens valuta
+    currency: str | None = None         # rapportens valuta
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -90,33 +98,72 @@ def period_length(start: str, end: str) -> int | None:
     return months if 1 <= months <= 12 else None
 
 
-def _periods(facts: list[Fact], period_end: str) -> list[Period]:
-    def at(kind: str, start: str) -> Fact | None:
-        return next((f for f in facts if f.kind == kind and f.period_start == start
-                     and f.period_end == period_end), None)
+def _flows(facts: list[Fact], start: str, end: str) -> tuple[float, float, str, float] | None:
+    """(löpande kassaflöde, investeringar, investeringsunderlag, leasingamortering) för en period."""
+    def at(kind: str) -> Fact | None:
+        return next((f for f in facts if f.kind == kind and f.period_start == start and f.period_end == end), None)
 
+    cfo = at("operating_cash_flow")
+    if cfo is None:
+        return None
+    operating, capex_fact, investing_fact = at("operating_investments"), at("capex"), at("investing_cash_flow")
+    if operating is not None:
+        # Netto: ett positivt tal (avyttringar större än investeringar) minskar burnen.
+        amount, basis = -operating.value, "operating_investments"
+    elif capex_fact is not None:
+        amount, basis = abs(capex_fact.value), "capex"
+    elif investing_fact is not None and investing_fact.value < 0:
+        amount, basis = -investing_fact.value, "investing_cash_flow"
+    else:
+        amount, basis = 0.0, "none"
+    lease = at("lease_repayment")
+    return cfo.value, amount, basis, abs(lease.value) if lease is not None else 0.0
+
+
+def _periods(facts: list[Fact], period_end: str) -> list[Period]:
     periods = []
     starts = sorted({f.period_start for f in facts if f.kind == "operating_cash_flow"
                      and f.period_end == period_end and f.period_start})
     for start in starts:
         months = period_length(start, period_end)
-        if months is None:
+        flows = _flows(facts, start, period_end)
+        if months is None or flows is None:
             continue
-        cfo = at("operating_cash_flow", start).value
-        operating = at("operating_investments", start)
-        capex_fact, investing_fact = at("capex", start), at("investing_cash_flow", start)
-        if operating is not None:
-            # Netto: ett positivt tal (avyttringar större än investeringar) minskar burnen.
-            amount, basis = -operating.value, "operating_investments"
-        elif capex_fact is not None:
-            amount, basis = abs(capex_fact.value), "capex"
-        elif investing_fact is not None and investing_fact.value < 0:
-            amount, basis = -investing_fact.value, "investing_cash_flow"
-        else:
-            amount, basis = 0.0, "none"
-        burn = max(0.0, (amount - cfo) / months)
-        periods.append(Period(start, months, cfo, amount, basis, burn))
+        cfo, amount, basis, lease = flows
+        burn = max(0.0, (amount + lease - cfo) / months)
+        periods.append(Period(start, months, cfo, amount, basis, burn, lease))
     return sorted(periods, key=lambda p: p.months)
+
+
+def _year_earlier(day: str) -> str:
+    d = date.fromisoformat(day)
+    try:
+        return d.replace(year=d.year - 1).isoformat()
+    except ValueError:  # 29 februari
+        return d.replace(year=d.year - 1, day=28).isoformat()
+
+
+def _ltm(facts: list[Fact], periods: list[Period], period_end: str) -> dict | None:
+    """Rullande tolv månader: föregående helår + innevarande period - samma period föregående år."""
+    if not periods:
+        return None
+    ytd = periods[-1]
+    if ytd.months == 12:
+        return {"months": 12, "operating_cash_flow": ytd.operating_cash_flow, "investments": ytd.investments,
+                "lease": ytd.lease, "monthly_burn": ytd.monthly_burn, "basis": "annual"}
+    prior = _flows(facts, _year_earlier(ytd.start), _year_earlier(period_end))
+    year_end = (date.fromisoformat(ytd.start) - timedelta(days=1)).isoformat()
+    year_starts = sorted({f.period_start for f in facts if f.kind == "operating_cash_flow"
+                          and f.period_end == year_end and f.period_start
+                          and period_length(f.period_start, year_end) == 12})
+    year = _flows(facts, year_starts[0], year_end) if year_starts else None
+    if prior is None or year is None:
+        return None
+    cfo = year[0] + ytd.operating_cash_flow - prior[0]
+    investments = year[1] + ytd.investments - prior[1]
+    lease = year[3] + ytd.lease - prior[3]
+    return {"months": 12, "operating_cash_flow": cfo, "investments": investments, "lease": lease,
+            "monthly_burn": max(0.0, (investments + lease - cfo) / 12), "basis": "ltm"}
 
 
 def _apply_financing(result: Runway, financing: tuple | None) -> float:
@@ -131,6 +178,8 @@ def _apply_financing(result: Runway, financing: tuple | None) -> float:
     # Allt annonserat som tillför pengar (emission, lån, brygglån, kreditfacilitet) väntar på utfall.
     if any(e["status"] == "announced" and e["type"] not in OUTFLOW_TYPES for e in events):
         result.flags.append("raise_announced")
+    if any(e.get("unconverted") for e in events):
+        result.flags.append("unconverted_currency")   # kurs saknades: beloppet räknas inte
     return confirmed
 
 
@@ -206,31 +255,37 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
         result.status = "missing_cash_flow"
         return result
     chosen, recent = result.periods[-1], result.periods[0]
+    result.ltm = _ltm(facts, result.periods, period_end)
+    burn = result.ltm["monthly_burn"] if result.ltm else chosen.monthly_burn
+    result.burn_basis = result.ltm["basis"] if result.ltm else "longest_period"
     faster_recent = (len(result.periods) > 1 and recent.monthly_burn > 0
-                     and recent.monthly_burn > chosen.monthly_burn * RECENT_RATIO)
+                     and recent.monthly_burn > burn * RECENT_RATIO)
     if chosen.investments_basis == "investing_cash_flow":
         result.flags.append("investing_as_capex")
     since = max(0.0, _months(period_end, today))
     result.months_since_report = round(since, 1)
     if since > STALE_MONTHS:
         result.flags.append("stale_report")
-    result.monthly_burn = chosen.monthly_burn
+    result.monthly_burn = burn
     if faster_recent:
         result.flags.append("recent_period_burn_higher")
         result.recent_monthly_burn = recent.monthly_burn
         result.recent_runway_today = round(
             max(0.0, cash + extra - recent.monthly_burn * since) / recent.monthly_burn, 1)
-    if chosen.monthly_burn == 0:
+    if burn == 0:
         result.cash_flow_positive = True
+        if recent.monthly_burn > 0:
+            result.flags.append("recent_period_burning")   # positivt totalt, men senaste perioden bränner
         return result
-    result.runway_at_report = round(cash / chosen.monthly_burn, 1)
-    if (cash + extra) / chosen.monthly_burn < since:
+    result.runway_at_report = round(cash / burn, 1)
+    if (cash + extra) / burn < since:
         # Kassan borde redan vara slut: nästan alltid ny finansiering efter rapporten.
         result.flags.append("cash_exhausted_since_report")
-    cash_today = max(0.0, cash + extra - chosen.monthly_burn * since)
-    result.runway_cash_today = round(cash_today / chosen.monthly_burn, 1)
+    cash_today = max(0.0, cash + extra - burn * since)
+    result.cash_today = cash_today
+    result.runway_cash_today = round(cash_today / burn, 1)
     # Dagens runway räknar in outnyttjad kreditlinje (den är tillgänglig pengar); kassan visas separat.
-    result.runway_today = round((cash_today + result.available_credit) / chosen.monthly_burn, 1)
+    result.runway_today = round((cash_today + result.available_credit) / burn, 1)
     _credit_and_acute(result, cash_today)
     _debt_warning(result, facts, cash_today)
     return result

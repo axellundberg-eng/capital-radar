@@ -1,7 +1,7 @@
 """Insamling: hämta varje bevakat bolags MFN-sida, klassificera och spara nya poster.
 
-Rapporter hamnar i `reports` (status new, PDF från första bilagan), allt annat
-utom ren kalenderbrus i `news`. Redan kända poster (samma source_url, eller
+Rapporter hamnar i `reports` (status new, PDF från första bilagan), kalenderposter i
+`calendar_events` (se calendar.py) och allt annat i `news`. Redan kända poster (samma source_url, eller
 samma bolag, rubrik och dag) hoppas över, även sådana som importerats ur den
 gamla databasen. Ett bolag som misslyckas stoppar aldrig körningen.
 """
@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterator
 
-from . import mfn
+from . import calendar, mfn
 from .classify import classify
 from .db import connect, next_document_id
 from .importer import legacy_slugs, open_legacy
@@ -84,10 +84,11 @@ def collect_company(connection: sqlite3.Connection, settings: Settings, company,
                     throttle: mfn.Throttle | None = None) -> dict[str, int]:
     """Hämta ett bolags sida och spara nya poster. `company` har id, name och mfn_slug."""
     items = mfn.fetch_items(company["mfn_slug"], settings, throttle)
-    counts = {"fetched": len(items), "new_reports": 0, "new_news": 0}
+    counts = {"fetched": len(items), "new_reports": 0, "new_news": 0, "calendar": 0}
     for item in items:
         kind = classify(item.title, item.category, item.attachments)
         if kind == "calendar":
+            counts["calendar"] += calendar.store_item(connection, company["id"], item)
             continue
         table = "reports" if kind == "report" else "news"
         if insert_item(connection, company["id"], item, table):
@@ -165,8 +166,8 @@ def collect_all(settings: Settings, workers: int = 4, log: Callable[[str], None]
     """Samla alla bolag. Med `dry_run` skrivs allt till en tillfällig kopia i stället för radar.db."""
     with working_settings(settings, dry_run) as work_settings:
         companies, missing = _companies(work_settings, limit)
-        counts = {"companies": len(companies), "fetched": 0, "new_reports": 0, "new_news": 0, "failed": 0,
-                  "skipped_no_slug": missing}
+        counts = {"companies": len(companies), "fetched": 0, "new_reports": 0, "new_news": 0, "calendar": 0,
+                  "failed": 0, "skipped_no_slug": missing}
         run = _Run(work_settings)
         with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
             futures = {pool.submit(run.work, company): company for company in companies}

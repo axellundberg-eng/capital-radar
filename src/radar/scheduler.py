@@ -23,6 +23,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from . import authorizations
 from .batch import run_latest
 from .collect import collect_all
 from .db import connect
@@ -135,6 +136,34 @@ def _collect_step(settings: Settings) -> dict:
         connection.close()
 
 
+def _authorizations_step(settings: Settings, log: Callable[[str], None]) -> dict:
+    """Läs stämmokommunikéer för emissionsbemyndiganden; ett fel här stoppar aldrig varvet."""
+    try:
+        connection = connect(settings.db_path)
+        try:
+            return authorizations.run(connection, settings, log=lambda _line: None)
+        finally:
+            connection.close()
+    except Exception as error:  # noqa: BLE001
+        log(f"authorizations misslyckades: {error}")
+        return {"error": str(error)}
+
+
+def _fx_step(settings: Settings, log: Callable[[str], None]) -> dict:
+    """Hämta dagens växelkurser (högst en gång per dag och valuta); ett fel stoppar aldrig varvet."""
+    from . import fx
+
+    try:
+        connection = connect(settings.db_path)
+        try:
+            return fx.refresh(connection)
+        finally:
+            connection.close()
+    except Exception as error:  # noqa: BLE001
+        log(f"växelkurser misslyckades: {error}")
+        return {"error": str(error)}
+
+
 def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: int, news_budget: int,
               log: Callable[[str], None] = logger.info) -> dict:
     from .web import latest_rows
@@ -148,6 +177,8 @@ def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: i
         if client is not None:
             summary["news"] = run_news(settings, client, today=today, token_budget=news_budget,
                                        log=lambda _line: None)
+        summary["authorizations"] = _authorizations_step(settings, log)
+        summary["fx"] = _fx_step(settings, log)
         connection = connect(settings.db_path)
         try:
             rows = latest_rows(connection)

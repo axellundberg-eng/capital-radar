@@ -128,6 +128,37 @@ CREATE TABLE IF NOT EXISTS review_runs (
     started_at TEXT, finished_at TEXT, since TEXT,
     checked INTEGER, corrections INTEGER, findings_before INTEGER, findings_after INTEGER, note TEXT
 );
+CREATE TABLE IF NOT EXISTS fx_rates (      -- Riksbankens dagskurser, se fx.py
+    currency TEXT NOT NULL,            -- EUR, USD, ...
+    rate_date TEXT NOT NULL,
+    sek_per_unit REAL NOT NULL,        -- så många kronor för en enhet av valutan
+    source TEXT NOT NULL,
+    fetched_at TEXT NOT NULL,
+    PRIMARY KEY (currency, rate_date)
+);
+CREATE TABLE IF NOT EXISTS calendar_events (   -- kalenderposter från MFN: rapportdatum, stämmor, se calendar.py
+    id INTEGER PRIMARY KEY,
+    company_id INTEGER NOT NULL,
+    source_url TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    published_at TEXT,
+    event_date TEXT,                   -- datumet posten aviserar (YYYY-MM-DD), om det gick att läsa
+    kind TEXT NOT NULL,                -- report, meeting, other
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS calendar_company ON calendar_events(company_id, event_date);
+CREATE TABLE IF NOT EXISTS authorizations (    -- bemyndiganden att emittera aktier, se authorizations.py
+    id INTEGER PRIMARY KEY,
+    company_id INTEGER NOT NULL,
+    news_document_id INTEGER NOT NULL UNIQUE,
+    meeting_date TEXT,
+    max_dilution_pct REAL,             -- högst så många procent av aktierna, om det anges
+    max_shares REAL,                   -- högst så många aktier, om det anges
+    directed_allowed INTEGER,          -- 1 om avvikelse från företrädesrätt är tillåten
+    quote TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS authorizations_company ON authorizations(company_id, meeting_date);
 """
 
 
@@ -161,6 +192,13 @@ def _migrate(connection: sqlite3.Connection) -> None:
     """Lägg till kolumner som tillkommit efter att databasen skapades (även för nya databaser)."""
     _add_column(connection, "financing_events", "drawn_amount", "REAL")
     _add_column(connection, "financing_events", "advisers", "TEXT")
+    # Villkor och utfall per emission (financing.py): garanti, teckning, pris, utspädning, TO-villkor.
+    for column, ddl in (("subscription_commitments", "REAL"), ("guarantee_amount", "REAL"),
+                        ("guarantee_fee_pct", "REAL"), ("guarantors", "TEXT"), ("subscription_rate_pct", "REAL"),
+                        ("guarantee_utilized", "REAL"), ("issue_price", "REAL"), ("shares_issued", "REAL"),
+                        ("shares_before", "REAL"), ("discount_pct", "REAL"), ("exercise_price", "REAL"),
+                        ("exercise_start", "TEXT"), ("exercise_end", "TEXT")):
+        _add_column(connection, "financing_events", column, ddl)
     # Strukturella händelser (events.py): NULL = nyheten är aldrig bedömd, annars checked/structural/failed.
     _add_column(connection, "news", "events_status", "TEXT")
     _add_column(connection, "news", "events_error", "TEXT")

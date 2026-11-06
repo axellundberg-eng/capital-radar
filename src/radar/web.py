@@ -18,6 +18,9 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .db import connect
+from .authorizations import latest as latest_authorizations
+from .calendar import next_report
+from .fx import latest_rates
 from .qualify import load_history, load_market, qualify, recent_financing
 from .settings import Settings
 
@@ -25,6 +28,8 @@ BANDS = (("under_3", 0, 3), ("3_9", 3, 9), ("9_18", 9, 18), ("over_18", 18, None
 FLAG_TEXT = {
     "stale_report": "Senaste rapporten är äldre än 7 månader",
     "recent_period_burn_higher": "Senaste perioden bränner snabbare än snittet",
+    "recent_period_burning": "Kassaflödespositivt totalt, men senaste perioden bränner",
+    "unconverted_currency": "Finansiering i annan valuta räknas inte: växelkurs saknas",
     "investing_as_capex": "Investeringar uppskattade från investeringsflödet",
     "includes_short_term_investments": "Likviditeten inkluderar kortfristiga placeringar",
     "cash_exhausted_since_report": "Kassan borde vara slut sedan rapporten: kontrollera ny finansiering",
@@ -93,6 +98,8 @@ def latest_rows(connection: sqlite3.Connection) -> list[dict]:
             "recent_monthly_burn": result.get("recent_monthly_burn"),
             "recent_runway_today": result.get("recent_runway_today"),
             "runway_cash_today": result.get("runway_cash_today"),
+            "cash_today": result.get("cash_today"), "currency": result.get("currency"),
+            "burn_basis": result.get("burn_basis"), "ltm": result.get("ltm"),
             "confirmed_financing": result.get("confirmed_financing", 0.0),
             "announced_financing": result.get("announced_financing", 0.0),
             "financing_events": result.get("financing_events", []),
@@ -176,11 +183,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                    ORDER BY kind, period_start""", (item["document_id"],))]
             market = load_market(connection).get(company_id)
             history = load_history(connection).get(company_id, [])
+            rates = latest_rates(connection)
         finally:
             connection.close()
         return JSONResponse({**item, "pdf_url": report["pdf_url"], "page_count": report["page_count"],
                              "periods": result.get("periods", []), "facts": facts,
-                             "qualification": qualify(item, market, history).to_dict(),
+                             "qualification": qualify(item, market, history, rates).to_dict(),
                              "flag_text": {flag: FLAG_TEXT.get(flag, flag) for flag in item["flags"]}},
                             headers={"Cache-Control": "no-store"})
 
@@ -190,6 +198,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             items = latest_rows(connection)
             market, history = load_market(connection), load_history(connection)
+            rates = latest_rates(connection)
+            reports, authorized = next_report(connection, date.today().isoformat()), latest_authorizations(connection)
         finally:
             connection.close()
         out, raising, structural = [], [], []
@@ -200,11 +210,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             is_raising = item["band"] == "raising" and (item["runway_today"] or 0) < 9
             if item["band"] not in PROSPECT_BANDS and not is_raising:
                 continue
-            q = qualify(item, market.get(item["id"]), history.get(item["id"], []))
+            q = qualify(item, market.get(item["id"]), history.get(item["id"], []), rates)
             emissions, recent = recent_financing(history.get(item["id"], []), date.today().isoformat())
             (raising if is_raising else out).append(
                 {**item, **q.to_dict(), "market_error": (market.get(item["id"]) or {}).get("error"),
-                 "emissions_24m": emissions, "recent_financing": recent})
+                 "emissions_24m": emissions, "recent_financing": recent,
+                 "next_report": reports.get(item["id"]), "authorization": authorized.get(item["id"])})
         for group in (out, raising):
             group.sort(key=lambda i: (-i["score"], i["runway_today"] or 0, i["name"].casefold()))
         structural.sort(key=lambda i: i["name"].casefold())

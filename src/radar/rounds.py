@@ -8,7 +8,7 @@ tas bort. Bara genomförda rundor efter rapportens periodslut ger kassa.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields, replace
 from datetime import date
 
 WINDOW_DAYS = 120
@@ -35,6 +35,22 @@ class Event:
     url: str | None = None
     drawn_amount: float | None = None   # utnyttjad del av en kreditfacilitet
     advisers: str | None = None         # finansiella rådgivare, emissionsinstitut och garanter, som de nämns
+    # Villkor och utfall (financing.py). Belopp i händelsens valuta, priser per aktie, procent 0-100.
+    subscription_commitments: float | None = None   # teckningsåtaganden
+    guarantee_amount: float | None = None           # garanterat belopp
+    guarantee_fee_pct: float | None = None          # garantiersättning i procent av garanterat belopp
+    guarantors: str | None = None
+    subscription_rate_pct: float | None = None      # teckningsgrad i utfallet
+    guarantee_utilized: float | None = None         # utnyttjad garanti
+    issue_price: float | None = None                # teckningskurs per aktie
+    shares_issued: float | None = None
+    shares_before: float | None = None
+    discount_pct: float | None = None               # rabatt mot aktiekursen enligt pressmeddelandet
+    exercise_price: float | None = None             # teckningsoptioner: lösenpris
+    exercise_start: str | None = None               # teckningsoptioner: lösenperiodens början
+    exercise_end: str | None = None
+    original_currency: str | None = None            # satt när beloppen räknats om till rapportens valuta
+    original_amount: float | None = None
 
     @property
     def amount(self) -> float | None:
@@ -65,7 +81,34 @@ def _merge(group: list[Event]) -> Event | None:
     drawn = best.drawn_amount if best.drawn_amount is not None else next(
         (e.drawn_amount for e in group if e.drawn_amount is not None), None)
     status = "completed" if best.status == "completed" else "announced"
-    return Event(best.type, status, gross, net, best.currency, best.date, best.quote, best.title, best.url, drawn)
+    # Villkor som bara står i en av versionerna (t.ex. utfallet eller den engelska) följer med.
+    extras = {f: next((getattr(e, f) for e in [best, *group] if getattr(e, f) is not None), None)
+              for f in EXTRA_FIELDS}
+    return replace(best, status=status, gross_amount=gross, net_amount=net, drawn_amount=drawn, **extras)
+
+
+EXTRA_FIELDS = tuple(f.name for f in fields(Event)
+                     if f.name not in ("type", "status", "gross_amount", "net_amount", "currency", "date",
+                                       "quote", "title", "url", "drawn_amount"))
+AMOUNT_FIELDS = ("gross_amount", "net_amount", "drawn_amount", "subscription_commitments", "guarantee_amount",
+                 "guarantee_utilized")
+
+
+def to_currency(event: Event, currency: str, fx) -> Event | None:
+    """Händelsen med beloppen omräknade till `currency`, eller None om en kurs saknas."""
+    if fx is None:
+        return None
+    converted = {}
+    for name in AMOUNT_FIELDS:
+        value = getattr(event, name)
+        if value is None:
+            continue
+        new = fx(value, event.currency, currency, event.date)
+        if new is None:
+            return None
+        converted[name] = new
+    return replace(event, currency=currency, original_currency=event.currency,
+                   original_amount=event.amount, **converted)
 
 
 def dedupe(events: list[Event]) -> list[Event]:
@@ -100,16 +143,27 @@ def undrawn_credit(event: Event) -> float:
     return max(0.0, event.amount - (event.drawn_amount or 0.0))
 
 
-def summarize(events: list[Event], period_end: str, currency: str | None = None
+def summarize(events: list[Event], period_end: str, currency: str | None = None, fx=None
               ) -> tuple[float, float, list[dict], float]:
     """(bekräftad kassa, annonserat belopp, rundor som listor, tillgänglig kredit) efter periodslut.
 
-    Kreditfaciliteter räknas inte som kassa (bara utnyttjat belopp) utan som kreditreserv."""
-    rounds = dedupe([e for e in events if e.date[:10] > period_end[:10]])
+    Kreditfaciliteter räknas inte som kassa (bara utnyttjat belopp) utan som kreditreserv.
+    Händelser i annan valuta räknas om med `fx(belopp, från, till, datum)` före sammanslagningen; går
+    det inte (kurs saknas) räknas de inte och markeras `unconverted` i listan."""
+    after, foreign = [], []
+    for event in events:
+        if event.date[:10] <= period_end[:10]:
+            continue
+        if currency and event.currency and event.currency != currency:
+            converted = to_currency(event, currency, fx)
+            if converted is None:
+                foreign.append(event)
+                continue
+            event = converted
+        after.append(event)
+    rounds = dedupe(after)
     confirmed = announced = credit = 0.0
     for event in rounds:
-        if currency and event.currency and event.currency != currency:
-            continue  # annan valuta kan inte läggas på rapportens kassa
         if event.status == "completed":
             confirmed += confirmed_cash(event)
             credit += undrawn_credit(event)
@@ -117,4 +171,6 @@ def summarize(events: list[Event], period_end: str, currency: str | None = None
             announced += event.amount
     listing = [{**asdict(e), "amount": e.amount, "cash": confirmed_cash(e) if e.status == "completed" else 0.0}
                for e in sorted(rounds, key=lambda e: e.date, reverse=True)]
+    listing += [{**asdict(e), "amount": e.amount, "cash": 0.0, "unconverted": True}
+                for e in dedupe(foreign) if e.status != "cancelled"]
     return confirmed, announced, listing, credit

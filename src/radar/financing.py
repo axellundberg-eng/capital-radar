@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 
 from .extract import ChatClient, ExtractionError, json_object, parse_date, parse_number
 from .rounds import Event
+
+TERM_FIELDS = ('subscription_commitments', 'guarantee_amount', 'guarantee_fee_pct', 'guarantors', 'subscription_rate_pct', 'guarantee_utilized', 'issue_price', 'shares_issued', 'shares_before', 'discount_pct', 'exercise_price', 'exercise_start', 'exercise_end')
 from .units import parse_unit
 
 TYPES = ("rights_issue", "directed_issue", "bridge_loan", "loan", "credit_facility", "convertible",
@@ -52,7 +54,13 @@ Svara med enbart ett JSON-objekt:
      "gross_amount": tal eller null, "net_amount": tal eller null, "drawn_amount": tal eller null,
      "unit": "enheten beloppen anges i, t.ex. SEK, TSEK, MSEK", "currency": "SEK",
      "date": "YYYY-MM-DD", "quote": "kort citat som styrker beloppet och statusen",
-     "advisers": "finansiella rådgivare, emissionsinstitut och garanter som nämns, separerade med semikolon, eller null"}
+     "advisers": "finansiella rådgivare, emissionsinstitut och garanter som nämns, separerade med semikolon, eller null",
+     "subscription_commitments": tal eller null, "guarantee_amount": tal eller null,
+     "guarantee_fee_pct": tal eller null, "guarantors": "namn; namn" eller null,
+     "subscription_rate_pct": tal eller null, "guarantee_utilized": tal eller null,
+     "issue_price": tal eller null, "shares_issued": tal eller null, "shares_before": tal eller null,
+     "discount_pct": tal eller null, "exercise_price": tal eller null,
+     "exercise_start": "YYYY-MM-DD" eller null, "exercise_end": "YYYY-MM-DD" eller null}
   ]
 }
 
@@ -72,6 +80,15 @@ Regler:
 - Om texten inte beskriver finansiering: {"is_financing": false, "events": []}.
 - advisers: skriv bara namn som texten uttryckligen nämner (t.ex. "Carnegie; Redeye" för emissionsinstitut
   eller finansiell rådgivare). Om inget namn står: null. Gissa inte.
+- Villkor och utfall (bara om texten anger dem, annars null):
+  subscription_commitments = teckningsåtaganden och guarantee_amount = garanterat belopp (båda i angiven
+  enhet, som beloppen); guarantee_fee_pct = garantiersättning i procent av garanterat belopp;
+  guarantors = garanternas namn; subscription_rate_pct = teckningsgrad i procent i utfallet (t.ex. 87);
+  guarantee_utilized = hur mycket av garantin som togs i anspråk (angiven enhet).
+  issue_price = teckningskurs per aktie (eller per unit) i kronor/valutan, INTE omräknad med enheten;
+  shares_issued = antal nya aktier och shares_before = antal aktier före emissionen, exakta antal;
+  discount_pct = rabatt i procent som texten anger (mot stängningskurs, VWAP eller teoretiskt värde).
+  Teckningsoptioner: exercise_price = lösenpris per aktie, exercise_start/exercise_end = lösenperiod.
 - En ny rad per separat finansiering. Gissa inte.
 """
 
@@ -99,7 +116,22 @@ def _event(item: dict, top: dict, published: str) -> Event | None:
     return Event(kind if kind in TYPES else "other", status, _scaled(gross, multiplier),
                  _scaled(net, multiplier), currency, parse_date(item.get("date")) or published,
                  (item.get("quote") or "")[:300] or None, drawn_amount=_scaled(drawn, multiplier),
-                 advisers=(str(item.get("advisers") or "").strip()[:300] or None))
+                 advisers=(str(item.get("advisers") or "").strip()[:300] or None), **_terms(item, multiplier))
+
+
+def _terms(item: dict, multiplier: float) -> dict:
+    """Villkor och utfall. Belopp skalas med enheten; priser, antal och procent anges som de står."""
+    number = lambda key: parse_number(item.get(key))  # noqa: E731
+    terms = {key: _scaled(number(key), multiplier)
+             for key in ("subscription_commitments", "guarantee_amount", "guarantee_utilized")}
+    for key in ("guarantee_fee_pct", "subscription_rate_pct", "discount_pct", "issue_price", "exercise_price",
+                "shares_issued", "shares_before"):
+        value = number(key)
+        terms[key] = abs(value) if value is not None else None
+    terms["guarantors"] = str(item.get("guarantors") or "").strip()[:300] or None
+    terms["exercise_start"] = parse_date(item.get("exercise_start"))
+    terms["exercise_end"] = parse_date(item.get("exercise_end"))
+    return terms
 
 
 def parse_financing(raw: str, published_at: str | None) -> list[Event]:
@@ -133,8 +165,7 @@ def load_events(connection: sqlite3.Connection, company_id: int) -> list[Event]:
     from .review import apply_event_row, event_overrides
 
     rows = connection.execute(
-        """SELECT f.id, f.type, f.status, f.gross_amount, f.net_amount, f.currency, f.event_date, f.quote,
-                  n.title, n.url, f.drawn_amount, f.advisers
+        """SELECT f.*, n.title, n.url
            FROM financing_events f JOIN news n ON n.document_id = f.news_document_id
            WHERE f.company_id=?""", (company_id,)).fetchall()
     overrides = event_overrides(connection, company_id)
@@ -144,5 +175,6 @@ def load_events(connection: sqlite3.Connection, company_id: int) -> list[Event]:
         if fixed is not None:
             events.append(Event(fixed["type"], fixed["status"], fixed["gross_amount"], fixed["net_amount"],
                                 fixed["currency"], fixed["event_date"], fixed["quote"], fixed["title"],
-                                fixed["url"], fixed["drawn_amount"], fixed["advisers"]))
+                                fixed["url"], fixed["drawn_amount"], fixed["advisers"],
+                                **{key: fixed.get(key) for key in TERM_FIELDS}))
     return events

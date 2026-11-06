@@ -23,7 +23,7 @@ from .batch import Budget
 from .db import connect
 from .extract import ChatClient
 from .fetch import fetch_text
-from .financing import ask, build_message, looks_like_financing
+from .financing import TERM_FIELDS, ask, build_message, looks_like_financing
 from .news_events import process_company_events
 from .pipeline import refresh_runway
 from .settings import Settings
@@ -56,11 +56,12 @@ def _store(connection: sqlite3.Connection, item: sqlite3.Row, events: list, toke
     with connection:
         connection.execute("DELETE FROM financing_events WHERE news_document_id=?", (item["document_id"],))
         connection.executemany(
-            """INSERT INTO financing_events(news_document_id, company_id, type, status, gross_amount,
-               net_amount, currency, event_date, quote, created_at, drawn_amount, advisers)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            f"""INSERT INTO financing_events(news_document_id, company_id, type, status, gross_amount,
+               net_amount, currency, event_date, quote, created_at, drawn_amount, advisers, {", ".join(TERM_FIELDS)})
+               VALUES ({", ".join("?" * (12 + len(TERM_FIELDS)))})""",
             [(item["document_id"], item["company_id"], e.type, e.status, e.gross_amount, e.net_amount,
-              e.currency, e.date, e.quote, _now(), e.drawn_amount, e.advisers) for e in events])
+              e.currency, e.date, e.quote, _now(), e.drawn_amount, e.advisers,
+              *(getattr(e, key) for key in TERM_FIELDS)) for e in events])
     _set(connection, item["document_id"], status=status, error=None, tokens=tokens)
     return status
 

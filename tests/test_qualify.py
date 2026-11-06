@@ -84,12 +84,13 @@ def test_refresh_stores_value_error_and_respects_cache(tmp_path):
 # --- Kapitalbehov och kontroller -----------------------------------------------
 
 def test_capital_need_math_includes_confirmed_financing_and_rounds():
-    need, cash = capital_need(item())              # kassa 20 - 3*2 = 14; behov 36 - 14 = 22
-    assert cash == pytest.approx(14e6) and need == pytest.approx(22e6)
+    # Brutto = netto / (1 - 12 % emissionskostnad), avrundat till 0,1 MSEK.
+    need, cash = capital_need(item())              # kassa 20 - 3*2 = 14; netto 36 - 14 = 22 -> 25,0
+    assert cash == pytest.approx(14e6) and need == pytest.approx(25e6)
     need, cash = capital_need(item(confirmed_financing=10e6))
-    assert cash == pytest.approx(24e6) and need == pytest.approx(12e6)
+    assert cash == pytest.approx(24e6) and need == pytest.approx(13.6e6)   # 12 / 0,88
     need, _ = capital_need(item(monthly_burn=2.33e6, months_since_report=0.0, cash=10e6))
-    assert need == pytest.approx(18.0e6)           # 27,96 - 10 = 17,96 -> 18,0
+    assert need == pytest.approx(20.4e6)           # 17,96 / 0,88 = 20,41
     assert capital_need(item(cash=100e6, months_since_report=0.0))[0] == 0.0
     assert capital_need(item(cash_flow_positive=True))[0] is None
 
@@ -110,9 +111,9 @@ def test_share_thresholds():
 
 def test_size_runway_raise_history_and_sector_checks():
     cap = {"market_cap": 500e6, "currency": "SEK"}
-    assert statuses(qualify(item(), cap, []))["size"] == "pass"                 # 22 MSEK
+    assert statuses(qualify(item(), cap, []))["size"] == "pass"                 # 25 MSEK
     small = qualify(item(monthly_burn=1e6, cash=8e6, months_since_report=0.0), cap, [])
-    assert small.capital_need == pytest.approx(4e6) and statuses(small)["size"] == "fail"
+    assert small.capital_need == pytest.approx(4.5e6) and statuses(small)["size"] == "fail"
     assert statuses(qualify(item(monthly_burn=1e6, cash=6e6, months_since_report=0.0), cap, []))["size"] == "warn"
     assert statuses(qualify(item(monthly_burn=15e6, cash=0, months_since_report=0.0), cap, []))["size"] == "fail"
     assert statuses(qualify(item(runway_today=1.5), cap, []))["runway"] == "warn"
@@ -136,7 +137,28 @@ def test_score_orders_better_prospects_first_and_stays_in_range():
     worst = qualify(item(runway_today=14, flags=["raise_announced", "stale_report"], monthly_burn=0.2e6,
                         cash=0, months_since_report=0.0), None, [])
     assert best.score == 100 > no_history.score > unknown.score > big_share.score > worst.score >= 0
-    assert "Poäng 100/100" in best.summary and "22 MSEK" in best.summary
+    assert "Poäng 100/100" in best.summary and "25 MSEK" in best.summary
+
+
+def test_capital_need_includes_debt_credit_and_costs_in_sek():
+    base = capital_need(item())[0]
+    with_debt = qualify(item(debt_due_12m=10e6), None, [])
+    assert with_debt.capital_need == pytest.approx(36.4e6)        # (22 + 10) / 0,88
+    assert with_debt.need_breakdown["debt_due_12m"] == 10e6 and with_debt.need_breakdown["issue_costs"] > 0
+    assert capital_need(item(available_credit=5e6))[0] == pytest.approx(19.3e6)   # (22 - 5) / 0,88
+    assert base == pytest.approx(25e6)
+
+
+def test_currency_is_converted_to_sek_before_size_and_share():
+    rates = {"SEK": 1.0, "EUR": 11.0}
+    eur = item(currency="EUR", monthly_burn=0.3e6, cash=2e6, months_since_report=0.0)   # netto 1,6 MEUR
+    q = qualify(eur, {"market_cap": 200e6, "currency": "SEK"}, [], rates)
+    assert q.capital_need == pytest.approx(20e6)                  # 1,6 / 0,88 * 11 = 20,0 MSEK
+    assert q.share == pytest.approx(0.1) and statuses(q)["size"] == "pass"
+    missing = qualify(eur, {"market_cap": 200e6, "currency": "SEK"}, [], {"SEK": 1.0})
+    assert missing.capital_need is None and statuses(missing)["size"] == "fail"   # ingen gissad kurs
+    cap_eur = qualify(item(), {"market_cap": 20e6, "currency": "EUR"}, [], rates)
+    assert cap_eur.market_cap == pytest.approx(220e6)
 
 
 # --- Webb ----------------------------------------------------------------------
@@ -188,8 +210,8 @@ def test_prospects_endpoint_ranks_and_filters(client):
     raising = client.get("/api/prospects").json()["raising"]
     assert [i["name"] for i in raising] == ["Annonserat AB"]  # visas separat i stället för att tas bort
     bra = items[0]
-    assert bra["score"] == 100 and bra["capital_need"] == pytest.approx(22e6) and bra["market_cap"] == 150e6
-    assert bra["share"] == pytest.approx(22 / 150) and bra["last_issue"]["date"] == "2020-03-01"
+    assert bra["score"] == 100 and bra["capital_need"] == pytest.approx(25e6) and bra["market_cap"] == 150e6
+    assert bra["share"] == pytest.approx(25 / 150) and bra["last_issue"]["date"] == "2020-03-01"
     assert {c["key"] for c in bra["checks"]} >= {"runway", "size", "share", "history", "sector"}
     assert items[1]["market_cap"] is None and items[1]["share"] is None
     assert items[1]["score"] > items[2]["score"] and "okänt" in items[1]["summary"]

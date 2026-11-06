@@ -37,10 +37,11 @@ const $ = (selector) => document.querySelector(selector);
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
-function msek(value) {
+// Belopp i miljoner med valuta: rapportens valuta för kassa och burn, SEK för prospektens behov och marknadsvärde.
+function msek(value, currency) {
   if (value == null) return "—";
   const m = value / 1e6;
-  return `${m.toLocaleString("sv-SE", { maximumFractionDigits: Math.abs(m) < 10 ? 1 : 0 })} MSEK`;
+  return `${m.toLocaleString("sv-SE", { maximumFractionDigits: Math.abs(m) < 10 ? 1 : 0 })} M${(currency || "SEK").toUpperCase()}`;
 }
 function months(value) {
   return value == null ? "—" : `${value.toLocaleString("sv-SE", { maximumFractionDigits: 1 })} mån`;
@@ -92,7 +93,7 @@ function runwayCell(item) {
 // Runway idag inkluderar outnyttjad kreditlinje; här visas hur mycket som är kassan utan kredit.
 function creditNote(item) {
   return item.available_credit > 0 && item.runway_cash_today != null
-    ? `<small title="Outnyttjad kredit ${msek(item.available_credit)}">${months(item.runway_cash_today)} utan kredit</small>` : "";
+    ? `<small title="Outnyttjad kredit ${msek(item.available_credit, item.currency)}">${months(item.runway_cash_today)} utan kredit</small>` : "";
 }
 
 function renderBands() {
@@ -118,8 +119,8 @@ function renderRows() {
     <tr data-id="${item.id}" class="${state.selected === item.id ? "selected" : ""}" tabindex="0">
       <td><strong>${escapeHtml(item.name)}</strong>${changeBadge(item)}<small>${escapeHtml(item.market || "")}</small>${chips(item)}</td>
       <td class="num">${runwayCell(item)}</td>
-      <td class="num">${item.cash_flow_positive ? "—" : msek(item.monthly_burn)}</td>
-      <td class="num">${msek(item.cash)}</td>
+      <td class="num">${item.cash_flow_positive ? "—" : msek(item.monthly_burn, item.currency)}</td>
+      <td class="num">${msek(item.cash, item.currency)}</td>
       <td>${date(item.period_end)}<small>${months(item.months_since_report)} sedan</small></td>
       <td>${item.flags.length ? `<span class="warn" title="${escapeHtml(item.flags.map((f) => state.overview?.flag_text?.[f] || f).join(", "))}">${item.flags.length} ⚠</span>` : ""}</td>
     </tr>`).join("") : '<tr><td colspan="6" class="empty">Inga bolag i den här gruppen.</td></tr>';
@@ -131,7 +132,7 @@ function pct(value) { return value == null ? "okänt" : `${Math.round(value * 10
 function lastIssue(item) {
   const e = item.last_issue;
   if (!e) return '<span class="source">Ingen känd</span>';
-  return `${TYPE[e.type] || e.type}<small>${STATUS[e.status] || e.status} · ${date(e.date)}${e.amount != null ? " · " + msek(e.amount) : ""}</small>`;
+  return `${TYPE[e.type] || e.type}<small>${STATUS[e.status] || e.status} · ${date(e.date)}${e.amount != null ? " · " + msek(e.amount, e.currency) : ""}</small>`;
 }
 
 function prospectRow(item) {
@@ -148,17 +149,46 @@ function prospectRow(item) {
     </tr>`;
 }
 
+// Villkor och utfall för en emission: garanti, teckning, pris, rabatt, utspädning, TO-villkor.
+function terms(e) {
+  const cur = e.currency;
+  const parts = [];
+  if (e.subscription_commitments != null) parts.push(`åtaganden ${msek(e.subscription_commitments, cur)}`);
+  if (e.guarantee_amount != null) parts.push(`garanti ${msek(e.guarantee_amount, cur)}${e.guarantee_fee_pct != null ? ` (ersättning ${e.guarantee_fee_pct} %)` : ""}`);
+  if (e.subscription_rate_pct != null) parts.push(`teckningsgrad ${e.subscription_rate_pct} %`);
+  if (e.guarantee_utilized != null) parts.push(`utnyttjad garanti ${msek(e.guarantee_utilized, cur)}`);
+  if (e.issue_price != null) parts.push(`kurs ${e.issue_price.toLocaleString("sv-SE")} ${cur || "SEK"}`);
+  if (e.discount_pct != null) parts.push(`rabatt ${e.discount_pct} %`);
+  if (e.dilution_pct != null) parts.push(`utspädning ${e.dilution_pct.toLocaleString("sv-SE")} %`);
+  if (e.exercise_price != null) parts.push(`lösenpris ${e.exercise_price.toLocaleString("sv-SE")} ${cur || "SEK"}`);
+  if (e.exercise_start || e.exercise_end) parts.push(`lösen ${date(e.exercise_start)}–${date(e.exercise_end)}`);
+  const guarantors = e.guarantors ? ` · Garanter: ${escapeHtml(e.guarantors)}` : "";
+  return parts.length || guarantors ? `<small>${parts.join(" · ")}${guarantors}</small>` : "";
+}
+
 // Utfällbar rad under ett prospekt: de senaste finansieringshändelserna i detalj.
 function prospectDetail(item) {
   const list = (item.recent_financing || []).map((e) => `
     <li><div><span>${escapeHtml(e.date)} · ${TYPE[e.type] || e.type} · ${STATUS[e.status] || e.status}</span>
-      <strong>${e.amount != null ? msek(e.amount) : "belopp saknas"}</strong></div>
+      <strong>${e.amount != null ? msek(e.amount, e.currency) : "belopp saknas"}</strong></div>
+      ${terms(e)}
       <small>Rådgivare: ${e.advisers ? escapeHtml(e.advisers) : "ej angivet"}</small>
       ${e.quote ? `<q>${escapeHtml(e.quote)}</q>` : ""}</li>`).join("");
+  const n = item.need_breakdown;
+  const need = n ? `<p class="source">Kapitalbehov (SEK): burn 12 mån ${msek(n.operating_12m)} + skulder inom 12 mån ${msek(n.debt_due_12m)}
+      − kassa ${msek(n.cash_today)} − kredit ${msek(n.available_credit)} = ${msek(n.net_need)} netto;
+      med emissionskostnad ${msek(n.issue_costs)} blir det ${msek(n.gross_need)}.${n.currency !== "SEK"
+        ? ` Omräknat från ${n.currency} (${n.sek_per_unit.toLocaleString("sv-SE")} kr).` : ""}</p>` : "";
+  const basis = { ltm: "rullande tolv månader", annual: "helåret", longest_period: "längsta perioden i rapporten" }[item.burn_basis];
+  const report = item.next_report ? ` · Nästa rapport: ${escapeHtml(item.next_report.date)}` : "";
+  const a = item.authorization;
+  const auth = a ? `<p class="source">Bemyndigande (stämma ${escapeHtml(date(a.meeting_date))}):
+      ${a.max_dilution_pct != null ? `högst ${a.max_dilution_pct} % av aktierna` : a.max_shares != null ? `högst ${Number(a.max_shares).toLocaleString("sv-SE")} aktier` : "omfattning ej angiven"}${a.directed_allowed ? ", även riktad emission" : ""}.</p>` : "";
   return `
     <tr class="expand"><td colspan="9">
-      <p class="source">Kassa utan kredit: ${months(item.runway_cash_today)} · Outnyttjad kredit: ${msek(item.available_credit)} ·
-        Emissioner senaste 24 mån: ${item.emissions_24m ?? 0}</p>
+      <p class="source">Kassa utan kredit: ${months(item.runway_cash_today)} · Outnyttjad kredit: ${msek(item.available_credit, item.currency)} ·
+        Emissioner senaste 24 mån: ${item.emissions_24m ?? 0}${basis ? ` · Burn räknad på ${basis}` : ""}${report}</p>
+      ${need}${auth}
       <h3>Varför poängen</h3>
       <ul class="checks">${(item.checks || []).map((c) => `<li class="st-${c.status}">
         <span class="st">${{ pass: "Ok", warn: "Varning", fail: "Underkänd", info: "Info" }[c.status] || c.status}</span> ${escapeHtml(c.label)}
@@ -230,37 +260,37 @@ function setView(view) {
 function explanation(d) {
   if (d.status !== "ok") return "Runway kan inte beräknas: rapporten saknar kassa eller kassaflöde.";
   if (d.cash_flow_positive) return "Bolaget har positivt kassaflöde efter investeringar och bränner inte kassa.";
-  if (d.band === "structural") return `${STRUCT_WARNING} Rapporten visade kassa ${msek(d.cash)} den ${date(d.period_end)} och en burn på ${msek(d.monthly_burn)} per månad (${months(d.runway_today)} kvar enligt de siffrorna).`;
-  if (d.band === "acute") return `Kassan var ${msek(d.cash)} den ${date(d.period_end)} med en burn på ${msek(d.monthly_burn)} per månad. ${ACUTE_TEXT}`;
-  if (d.band === "exhausted") return `Kassan ${msek(d.cash)} den ${date(d.period_end)} räckte ${months(d.runway_at_report)} med en burn på`
-    + ` ${msek(d.monthly_burn)} per månad, men ${months(d.months_since_report)} har gått. Bolaget har med stor sannolikhet`
+  if (d.band === "structural") return `${STRUCT_WARNING} Rapporten visade kassa ${msek(d.cash, d.currency)} den ${date(d.period_end)} och en burn på ${msek(d.monthly_burn, d.currency)} per månad (${months(d.runway_today)} kvar enligt de siffrorna).`;
+  if (d.band === "acute") return `Kassan var ${msek(d.cash, d.currency)} den ${date(d.period_end)} med en burn på ${msek(d.monthly_burn, d.currency)} per månad. ${ACUTE_TEXT}`;
+  if (d.band === "exhausted") return `Kassan ${msek(d.cash, d.currency)} den ${date(d.period_end)} räckte ${months(d.runway_at_report)} med en burn på`
+    + ` ${msek(d.monthly_burn, d.currency)} per månad, men ${months(d.months_since_report)} har gått. Bolaget har med stor sannolikhet`
     + " tagit in ny finansiering efter rapporten. Kontrollera pressmeddelanden innan kontakt.";
   const chosen = d.periods.find((p) => Math.abs(p.monthly_burn - d.monthly_burn) < 1) || d.periods.at(-1);
-  return `Kassan var ${msek(d.cash)} den ${date(d.period_end)}. Bolaget bränner ${msek(d.monthly_burn)} per månad`
+  return `Kassan var ${msek(d.cash, d.currency)} den ${date(d.period_end)}. Bolaget bränner ${msek(d.monthly_burn, d.currency)} per månad`
     + ` (baserat på ${chosen?.months ?? "?"} månader). Sedan dess har ${months(d.months_since_report)} gått,`
     + ` så kvarvarande runway är ${months(d.runway_today)}.`
-    + (d.recent_monthly_burn ? ` Senaste perioden bränner dock ${msek(d.recent_monthly_burn)} per månad;`
+    + (d.recent_monthly_burn ? ` Senaste perioden bränner dock ${msek(d.recent_monthly_burn, d.currency)} per månad;`
       + ` i den takten räcker kassan ${months(d.recent_runway_today)}.` : "");
 }
 
 function financingNote(d) {
   const parts = [];
-  if (d.confirmed_financing > 0) parts.push(` Bekräftad finansiering efter rapporten på ${msek(d.confirmed_financing)} ingår i beräkningen.`);
-  if (d.flags.includes("raise_announced")) parts.push(` En ytterligare finansiering på ${msek(d.announced_financing)} är annonserad men inte genomförd och ingår inte.`);
+  if (d.confirmed_financing > 0) parts.push(` Bekräftad finansiering efter rapporten på ${msek(d.confirmed_financing, d.currency)} ingår i beräkningen.`);
+  if (d.flags.includes("raise_announced")) parts.push(` En ytterligare finansiering på ${msek(d.announced_financing, d.currency)} är annonserad men inte genomförd och ingår inte.`);
   return parts.join("");
 }
 
 function financingItem(e) {
-  const drawn = e.type === "credit_facility" && e.drawn_amount != null ? ` · utnyttjat ${msek(e.drawn_amount)}` : "";
+  const drawn = e.type === "credit_facility" && e.drawn_amount != null ? ` · utnyttjat ${msek(e.drawn_amount, d.currency)}` : "";
   return `<li><div><strong>${STATUS[e.status] || e.status}</strong>
-    <span>${e.amount != null ? msek(e.amount) : "belopp saknas"}${drawn} · ${date(e.date)}</span></div>
+    <span>${e.amount != null ? msek(e.amount, d.currency) : "belopp saknas"}${drawn} · ${date(e.date)}</span></div>
     ${e.quote ? `<q>${escapeHtml(e.quote)}</q>` : ""}
     ${e.url ? `<a href="${escapeHtml(e.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(e.title || "Pressmeddelande")}</a>` : escapeHtml(e.title || "")}</li>`;
 }
 
 function creditReserve(d) {
   if (!(d.available_credit > 0)) return "";
-  return `<p class="source credit">Kreditreserv: ${msek(d.available_credit)} — runway inkl. kredit ${months(d.runway_with_credit)}</p>`;
+  return `<p class="source credit">Kreditreserv: ${msek(d.available_credit, d.currency)} — runway inkl. kredit ${months(d.runway_with_credit)}</p>`;
 }
 
 function financingSection(d) {
@@ -290,9 +320,9 @@ function structuralSection(d) {
 function afterPeriodSection(d) {
   const rows = d.facts.filter((f) => f.kind === "post_period_outflow" || f.kind === "post_period_inflow");
   const debt = d.debt_due_12m > 0
-    ? `<p class="source warn">Lån som förfaller inom 12 mån: ${msek(d.debt_due_12m)} — runway efter amortering ${months(d.runway_after_debt)}</p>` : "";
+    ? `<p class="source warn">Lån som förfaller inom 12 mån: ${msek(d.debt_due_12m, d.currency)} — runway efter amortering ${months(d.runway_after_debt)}</p>` : "";
   if (!rows.length) return debt;
-  const items = rows.map((f) => `<li><div><strong>${f.kind === "post_period_outflow" ? "Ut" : "In"} · ${msek(f.value)}</strong>
+  const items = rows.map((f) => `<li><div><strong>${f.kind === "post_period_outflow" ? "Ut" : "In"} · ${msek(f.value, d.currency)}</strong>
     <span>${f.period_start ? date(f.period_start) + " · " : ""}${pdfLink(d, f.page)}</span></div>
     ${f.quote ? `<q>${escapeHtml(f.quote)}</q>` : ""}</li>`).join("");
   return `<h3>Händelser efter perioden</h3><ul class="facts">${items}</ul>${debt}`;
@@ -306,10 +336,10 @@ function pdfLink(d, page) {
 
 function renderDetail(d) {
   const periods = d.periods.map((p) => `<tr><td>${p.months} mån från ${date(p.start)}</td>
-    <td class="num">${msek(p.operating_cash_flow)}</td><td class="num">${msek(-p.investments)}</td>
-    <td class="num">${msek(p.monthly_burn)}</td></tr>`).join("");
+    <td class="num">${msek(p.operating_cash_flow, d.currency)}</td><td class="num">${msek(-p.investments, d.currency)}</td>
+    <td class="num">${msek(p.monthly_burn, d.currency)}</td></tr>`).join("");
   const facts = d.facts.map((f) => `<li><div><strong>${KIND[f.kind] || f.kind}</strong>
-    <span>${msek(f.value)} · ${f.period_start ? `${date(f.period_start)}–` : ""}${date(f.period_end)} · ${pdfLink(d, f.page)}</span></div>
+    <span>${msek(f.value, d.currency)} · ${f.period_start ? `${date(f.period_start)}–` : ""}${date(f.period_end)} · ${pdfLink(d, f.page)}</span></div>
     ${f.quote ? `<q>${escapeHtml(f.quote)}</q>` : ""}</li>`).join("");
   const flags = Object.values(d.flag_text || {}).map((text) => `<li>${escapeHtml(text)}</li>`).join("");
   $("#detail").innerHTML = `
@@ -320,8 +350,8 @@ function renderDetail(d) {
     <div class="kpis">
       <div><span>Runway idag</span><strong class="band-${d.band}">${d.cash_flow_positive ? "Positivt" : months(d.runway_today)}</strong></div>
       <div><span>Vid rapporten</span><strong>${months(d.runway_at_report)}</strong></div>
-      <div><span>Burn / mån</span><strong>${d.cash_flow_positive ? "—" : msek(d.monthly_burn)}</strong></div>
-      <div><span>Kassa</span><strong>${msek(d.cash)}</strong></div>
+      <div><span>Burn / mån</span><strong>${d.cash_flow_positive ? "—" : msek(d.monthly_burn, d.currency)}</strong></div>
+      <div><span>Kassa</span><strong>${msek(d.cash, d.currency)}</strong></div>
     </div>
     <p class="explain">${explanation(d)}${financingNote(d)}</p>
     ${flags ? `<ul class="flags">${flags}</ul>` : ""}

@@ -23,6 +23,7 @@ Granskning (se agents/radar-reviewer.md):
     python -m radar correct event --id N --hide | --status S | --type T | --amount A | --currency C
                                   | --date D | --advisers "..." --reason "..."
     python -m radar corrections list [--company ID]  |  corrections revert ID
+    python -m radar fx                     hämta dagens växelkurser från Riksbanken (högst en gång per dag)
 """
 
 from __future__ import annotations
@@ -318,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
     correct.add_argument("--currency")
     correct.add_argument("--date")
     correct.add_argument("--advisers")
+    sub.add_parser("fx", help="hämta dagens växelkurser från Riksbanken")
     corrections = sub.add_parser("corrections", help="lista eller ångra rättelser")
     corrections.add_argument("action", choices=["list", "revert"])
     corrections.add_argument("id", type=int, nargs="?")
@@ -344,6 +346,11 @@ def main(argv: list[str] | None = None) -> int:
         return qualify_command(args, connection, today)
     if args.command == "review":
         return review_command(args, connection, today)
+    if args.command == "fx":
+        from . import fx
+
+        print(json.dumps({"refresh": fx.refresh(connection), "rates": fx.latest_rates(connection)}, ensure_ascii=False))
+        return 0
     if args.command in ("correct", "corrections"):
         try:
             return correct_command(args, connection, today)

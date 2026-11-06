@@ -4,8 +4,11 @@ Indata är bolagets senaste runway-resultat, marknadsvärde (market_data) och
 emissionshistorik (financing_events). Inga AI-anrop; allt räknas om vid varje
 läsning.
 
-Kapitalbehov = max(0, burn/mån x 12 - kassa idag inklusive bekräftad
-finansiering), avrundat till 0,1 MSEK. Andel = kapitalbehov / marknadsvärde.
+Kapitalbehov (brutto, det en emission behöver ta in) = max(0, burn/mån x 12 + skulder som förfaller
+inom 12 mån - kassa idag - outnyttjad kredit) / (1 - emissionskostnad), avrundat till 0,1 MSEK.
+Emissionskostnaden är en schablon på 12 % (avgifter och garantiersättning). Alla belopp räknas om
+till SEK med Riksbankens kurs (fx.py) innan storlek och andel bedöms; saknas kursen kan behovet inte
+beräknas. Andel = kapitalbehov / marknadsvärde (båda i SEK).
 
 Poäng 0-100 = summan av vikt x faktor, där pass = 1, warn = 0,5, fail = 0:
 
@@ -33,6 +36,8 @@ SIZE_RANGE = (8e6, 80e6)
 SIZE_SOFT = (5e6, 120e6)
 SHARE_PASS, SHARE_WARN = 0.25, 0.40
 EQUITY_TYPES = ("rights_issue", "directed_issue")
+ISSUE_COST = 0.12   # emissionskostnader och garantiersättning, andel av bruttobeloppet
+TERMS = ('subscription_commitments', 'guarantee_amount', 'guarantee_fee_pct', 'guarantors', 'subscription_rate_pct', 'guarantee_utilized', 'issue_price', 'shares_issued', 'shares_before', 'discount_pct', 'exercise_price', 'exercise_start', 'exercise_end')
 WEIGHTS = {"runway": 20, "no_raise": 15, "size": 15, "share": 25, "history": 10, "quality": 5, "sector": 10}
 TARGET_SECTORS = ("health", "technology", "life science", "medical", "biotech", "pharma")
 FACTOR = {"pass": 1.0, "warn": 0.5, "fail": 0.0, "info": 0.0}
@@ -58,6 +63,7 @@ class Qualification:
     checks: list[Check] = field(default_factory=list)
     summary: str = ""
     last_issue: dict | None = None
+    need_breakdown: dict | None = None   # delarna i kapitalbehovet, i SEK
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -69,20 +75,48 @@ def msek(value: float) -> str:
 
 
 def cash_today(item: dict) -> float | None:
-    """Uppskattad kassa idag: rapportens kassa + bekräftad finansiering - burn sedan periodslut."""
+    """Kassa idag i rapportens valuta: runway-motorns värde, annars rapportens kassa + bekräftad
+    finansiering - burn sedan periodslut."""
+    if item.get("cash_today") is not None:
+        return item["cash_today"]
     if item.get("cash") is None or item.get("monthly_burn") is None:
         return None
     since = item.get("months_since_report") or 0.0
     return max(0.0, item["cash"] + (item.get("confirmed_financing") or 0.0) - item["monthly_burn"] * since)
 
 
-def capital_need(item: dict) -> tuple[float | None, float | None]:
-    """(kapitalbehov, kassa idag); behovet avrundas till 0,1 MSEK."""
+def _to_sek(item: dict, rates: dict | None) -> float | None:
+    currency = (item.get("currency") or "SEK").upper()
+    if currency == "SEK":
+        return 1.0
+    return (rates or {}).get(currency)
+
+
+def need_breakdown(item: dict, rates: dict | None = None) -> dict | None:
+    """Kapitalbehovets delar i SEK, eller None om det inte kan beräknas (positivt kassaflöde, saknad
+    kassa eller saknad växelkurs)."""
     cash = cash_today(item)
-    if cash is None or item.get("cash_flow_positive"):
-        return None, cash
-    need = max(0.0, item["monthly_burn"] * MONTHS_AHEAD - cash)
-    return round(need / 1e5) * 1e5, cash
+    factor = _to_sek(item, rates)
+    if cash is None or factor is None or item.get("cash_flow_positive") or not item.get("monthly_burn"):
+        return None
+    operating = item["monthly_burn"] * MONTHS_AHEAD
+    debt = item.get("debt_due_12m") or 0.0
+    credit = item.get("available_credit") or 0.0
+    net = max(0.0, operating + debt - cash - credit)
+    gross = net / (1 - ISSUE_COST)
+    return {"operating_12m": operating * factor, "debt_due_12m": debt * factor, "cash_today": cash * factor,
+            "available_credit": credit * factor, "issue_costs": (gross - net) * factor,
+            "net_need": net * factor, "gross_need": round(gross * factor / 1e5) * 1e5,
+            "currency": (item.get("currency") or "SEK").upper(), "sek_per_unit": factor}
+
+
+def capital_need(item: dict, rates: dict | None = None) -> tuple[float | None, float | None]:
+    """(kapitalbehov brutto i SEK, kassa idag i SEK); behovet avrundas till 0,1 MSEK."""
+    parts = need_breakdown(item, rates)
+    if parts is None:
+        cash, factor = cash_today(item), _to_sek(item, rates)
+        return None, (cash * factor if cash is not None and factor is not None else None)
+    return parts["gross_need"], parts["cash_today"]
 
 
 def equity_events(rows: list[dict]) -> list[Event]:
@@ -183,20 +217,27 @@ def summarize(need: float | None, cap: float | None, share: float | None, runway
     return f"{', '.join(parts)}. Poäng {score}/100."
 
 
-def qualify(item: dict, market: dict | None, history: list[dict]) -> Qualification:
-    """Kvalificera ett bolag. `market` och `history` är rader ur market_data resp. financing_events."""
+def qualify(item: dict, market: dict | None, history: list[dict], rates: dict | None = None) -> Qualification:
+    """Kvalificera ett bolag. `market` och `history` är rader ur market_data resp. financing_events,
+    `rates` växelkurser (SEK per enhet, fx.latest_rates). Alla belopp i resultatet är i SEK."""
     market = market or {}
-    cap = market.get("market_cap") if market.get("currency") in (None, "SEK") else None
-    need, cash = capital_need(item)
+    cap = market.get("market_cap")
+    cap_currency = (market.get("currency") or "SEK").upper()
+    if cap is not None and cap_currency != "SEK":
+        rate = (rates or {}).get(cap_currency)
+        cap = cap * rate if rate else None
+    parts = need_breakdown(item, rates)
+    need, cash = capital_need(item, rates)
     share = need / cap if need is not None and cap else None
     events = equity_events(history)
     checks = [check_runway(item), check_no_raise(item), check_size(need), check_share(need, cap),
               check_history(events), check_quality(item, cap), check_sector(market.get("sector"))]
     score = score_of(checks)
     last = events[0] if events else None
-    last_issue = {"type": last.type, "status": last.status, "date": last.date, "amount": last.amount} if last else None
+    last_issue = ({"type": last.type, "status": last.status, "date": last.date, "amount": last.amount,
+                   "currency": last.currency} if last else None)
     return Qualification(need, cash, cap, share, score, checks,
-                         summarize(need, cap, share, item.get("runway_today"), score), last_issue)
+                         summarize(need, cap, share, item.get("runway_today"), score), last_issue, parts)
 
 
 def load_market(connection: sqlite3.Connection) -> dict[int, dict]:
@@ -236,13 +277,20 @@ def recent_financing(rows: list[dict], today: str) -> tuple[int, list[dict]]:
         # Samma händelse från den svenska och den engelska versionen av pressmeddelandet visas en gång.
         key = (r["type"], r["status"], (r["event_date"] or "")[:10], round(amount / 1e5) if amount else None)
         if key in seen:
-            if r.get("advisers") and listing and not listing[-1]["advisers"]:
-                listing[-1]["advisers"] = r["advisers"]
+            # Den andra språkversionen kan ha uppgifter som saknas i den första.
+            if listing:
+                for field in ("advisers", *TERMS):
+                    if r.get(field) is not None and listing[-1].get(field) is None:
+                        listing[-1][field] = r[field]
             continue
         seen.add(key)
-        listing.append({"type": r["type"], "status": r["status"], "date": (r["event_date"] or "")[:10],
-                        "amount": amount, "currency": r["currency"], "quote": r.get("quote"),
-                        "advisers": r.get("advisers")})
+        entry = {"type": r["type"], "status": r["status"], "date": (r["event_date"] or "")[:10],
+                 "amount": amount, "currency": r["currency"], "quote": r.get("quote"), "advisers": r.get("advisers")}
+        entry.update({key: r.get(key) for key in TERMS})
+        before, issued = r.get("shares_before"), r.get("shares_issued")
+        # Utspädning = nya aktier / aktier efter emissionen.
+        entry["dilution_pct"] = round(100 * issued / (before + issued), 1) if before and issued else None
+        listing.append(entry)
     return len(equity), listing
 
 
