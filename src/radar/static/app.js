@@ -159,6 +159,11 @@ function prospectDetail(item) {
     <tr class="expand"><td colspan="9">
       <p class="source">Kassa utan kredit: ${months(item.runway_cash_today)} · Outnyttjad kredit: ${msek(item.available_credit)} ·
         Emissioner senaste 24 mån: ${item.emissions_24m ?? 0}</p>
+      <h3>Varför poängen</h3>
+      <ul class="checks">${(item.checks || []).map((c) => `<li class="st-${c.status}">
+        <span class="st">${{ pass: "Ok", warn: "Varning", fail: "Underkänd", info: "Info" }[c.status] || c.status}</span> ${escapeHtml(c.label)}
+        <span>${escapeHtml(c.reason)}</span></li>`).join("")}</ul>
+      <h3>Finansiering senaste 24 mån</h3>
       ${list ? `<ul class="facts">${list}</ul>` : '<p class="source">Inga finansieringshändelser de senaste 24 månaderna.</p>'}
     </td></tr>`;
 }
