@@ -164,8 +164,11 @@ function prospectDetail(item) {
 }
 
 const expandedProspects = new Set();
+// Bara ett prospekt är öppet åt gången: att öppna ett stänger det föregående.
 function toggleProspect(id) {
-  if (expandedProspects.has(id)) expandedProspects.delete(id); else expandedProspects.add(id);
+  const wasOpen = expandedProspects.has(id);
+  expandedProspects.clear();
+  if (!wasOpen) expandedProspects.add(id);
   renderProspects();
 }
 
