@@ -7,13 +7,13 @@ import sqlite3
 from datetime import datetime, timezone
 
 from .extract import ChatClient, ExtractionError, json_object, parse_date, parse_number
-from .rounds import Event
+from .rounds import Event, is_set_off
 
-TERM_FIELDS = ('subscription_commitments', 'guarantee_amount', 'guarantee_fee_pct', 'guarantors', 'subscription_rate_pct', 'guarantee_utilized', 'issue_price', 'shares_issued', 'shares_before', 'discount_pct', 'exercise_price', 'exercise_start', 'exercise_end')
+TERM_FIELDS = ('subscription_commitments', 'guarantee_amount', 'guarantee_fee_pct', 'guarantors', 'subscription_rate_pct', 'guarantee_utilized', 'issue_price', 'shares_issued', 'shares_before', 'discount_pct', 'exercise_price', 'exercise_start', 'exercise_end', 'issue_costs')
 from .units import parse_unit
 
 TYPES = ("rights_issue", "directed_issue", "bridge_loan", "loan", "credit_facility", "convertible",
-         "warrants", "repayment", "other")
+         "warrants", "repayment", "set_off", "other")
 STATUSES = ("announced", "completed", "cancelled")
 
 # Starka ord pekar på finansiering; svaga (utfall, teckning, garanti, outcome) räcker inte
@@ -49,7 +49,7 @@ Svara med enbart ett JSON-objekt:
 {
   "is_financing": true eller false,
   "events": [
-    {"type": "rights_issue | directed_issue | bridge_loan | loan | credit_facility | convertible | warrants | repayment | other",
+    {"type": "rights_issue | directed_issue | bridge_loan | loan | credit_facility | convertible | warrants | repayment | set_off | other",
      "status": "announced | completed | cancelled",
      "gross_amount": tal eller null, "net_amount": tal eller null, "drawn_amount": tal eller null,
      "unit": "enheten beloppen anges i, t.ex. SEK, TSEK, MSEK", "currency": "SEK",
@@ -59,7 +59,7 @@ Svara med enbart ett JSON-objekt:
      "guarantee_fee_pct": tal eller null, "guarantors": "namn; namn" eller null,
      "subscription_rate_pct": tal eller null, "guarantee_utilized": tal eller null,
      "issue_price": tal eller null, "shares_issued": tal eller null, "shares_before": tal eller null,
-     "discount_pct": tal eller null, "exercise_price": tal eller null,
+     "discount_pct": tal eller null, "exercise_price": tal eller null, "issue_costs": tal eller null,
      "exercise_start": "YYYY-MM-DD" eller null, "exercise_end": "YYYY-MM-DD" eller null}
   ]
 }
@@ -80,6 +80,9 @@ Regler:
 - Om texten inte beskriver finansiering: {"is_financing": false, "events": []}.
 - advisers: skriv bara namn som texten uttryckligen nämner (t.ex. "Carnegie; Redeye" för emissionsinstitut
   eller finansiell rådgivare). Om inget namn står: null. Gissa inte.
+- type "set_off" = kvittningsemission eller ersättningsemission där aktier betalas genom kvittning av en
+  fordran (t.ex. garantiersättning i aktier till garanterna). Inga pengar in; ange beloppet i gross_amount.
+- issue_costs = emissionskostnader som texten anger (i angiven enhet, inklusive kontant garantiersättning).
 - Villkor och utfall (bara om texten anger dem, annars null):
   subscription_commitments = teckningsåtaganden och guarantee_amount = garanterat belopp (båda i angiven
   enhet, som beloppen); guarantee_fee_pct = garantiersättning i procent av garanterat belopp;
@@ -113,7 +116,10 @@ def _event(item: dict, top: dict, published: str) -> Event | None:
     if (gross is not None or net is not None or drawn is not None) and unit is None:
         raise ExtractionError("enhet och valuta saknas för beloppet")
     multiplier, currency = unit or (1.0, None)
-    return Event(kind if kind in TYPES else "other", status, _scaled(gross, multiplier),
+    kind = kind if kind in TYPES else "other"
+    if kind in ("directed_issue", "rights_issue", "other") and is_set_off(item.get("quote")):
+        kind = "set_off"
+    return Event(kind, status, _scaled(gross, multiplier),
                  _scaled(net, multiplier), currency, parse_date(item.get("date")) or published,
                  (item.get("quote") or "")[:300] or None, drawn_amount=_scaled(drawn, multiplier),
                  advisers=(str(item.get("advisers") or "").strip()[:300] or None), **_terms(item, multiplier))
@@ -123,7 +129,7 @@ def _terms(item: dict, multiplier: float) -> dict:
     """Villkor och utfall. Belopp skalas med enheten; priser, antal och procent anges som de står."""
     number = lambda key: parse_number(item.get(key))  # noqa: E731
     terms = {key: _scaled(number(key), multiplier)
-             for key in ("subscription_commitments", "guarantee_amount", "guarantee_utilized")}
+             for key in ("subscription_commitments", "guarantee_amount", "guarantee_utilized", "issue_costs")}
     for key in ("guarantee_fee_pct", "subscription_rate_pct", "discount_pct", "issue_price", "exercise_price",
                 "shares_issued", "shares_before"):
         value = number(key)
@@ -160,6 +166,13 @@ def ask(client: ChatClient, message: str, published_at: str | None, *, attempts:
     raise last  # type: ignore[misc]
 
 
+def reclassify(row: dict) -> dict:
+    """Äldre extraktioner kallade kvittningsemissioner riktade emissioner: rätta typen vid läsning."""
+    if row.get("type") in ("directed_issue", "other") and is_set_off(row.get("quote"), row.get("title")):
+        return {**row, "type": "set_off"}
+    return row
+
+
 def load_events(connection: sqlite3.Connection, company_id: int) -> list[Event]:
     """Bolagets händelser med granskningens rättelser (dolda händelser tas bort)."""
     from .review import apply_event_row, event_overrides
@@ -171,7 +184,7 @@ def load_events(connection: sqlite3.Connection, company_id: int) -> list[Event]:
     overrides = event_overrides(connection, company_id)
     events = []
     for row in rows:
-        fixed = apply_event_row(dict(row), overrides.get(row["id"]))
+        fixed = apply_event_row(reclassify(dict(row)), overrides.get(row["id"]))
         if fixed is not None:
             events.append(Event(fixed["type"], fixed["status"], fixed["gross_amount"], fixed["net_amount"],
                                 fixed["currency"], fixed["event_date"], fixed["quote"], fixed["title"],

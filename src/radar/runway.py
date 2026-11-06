@@ -29,7 +29,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 
-from .rounds import OUTFLOW_TYPES
+from .rounds import NON_CASH_TYPES, OUTFLOW_TYPES
 
 DAYS_PER_MONTH = 30.4375
 RECENT_RATIO = 1.5
@@ -176,7 +176,7 @@ def _apply_financing(result: Runway, financing: tuple | None) -> float:
     if confirmed > 0:
         result.flags.append("financing_received")
     # Allt annonserat som tillför pengar (emission, lån, brygglån, kreditfacilitet) väntar på utfall.
-    if any(e["status"] == "announced" and e["type"] not in OUTFLOW_TYPES for e in events):
+    if any(e["status"] == "announced" and e["type"] not in OUTFLOW_TYPES + NON_CASH_TYPES for e in events):
         result.flags.append("raise_announced")
     if any(e.get("unconverted") for e in events):
         result.flags.append("unconverted_currency")   # kurs saknades: beloppet räknas inte

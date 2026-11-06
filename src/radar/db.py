@@ -197,7 +197,7 @@ def _migrate(connection: sqlite3.Connection) -> None:
                         ("guarantee_fee_pct", "REAL"), ("guarantors", "TEXT"), ("subscription_rate_pct", "REAL"),
                         ("guarantee_utilized", "REAL"), ("issue_price", "REAL"), ("shares_issued", "REAL"),
                         ("shares_before", "REAL"), ("discount_pct", "REAL"), ("exercise_price", "REAL"),
-                        ("exercise_start", "TEXT"), ("exercise_end", "TEXT")):
+                        ("exercise_start", "TEXT"), ("exercise_end", "TEXT"), ("issue_costs", "REAL")):
         _add_column(connection, "financing_events", column, ddl)
     # Strukturella händelser (events.py): NULL = nyheten är aldrig bedömd, annars checked/structural/failed.
     _add_column(connection, "news", "events_status", "TEXT")

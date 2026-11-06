@@ -21,7 +21,7 @@ const KIND = { cash: "Likvida medel", undrawn_credit: "Outnyttjad kredit", short
 
 const TYPE = { rights_issue: "Företrädesemission", directed_issue: "Riktad emission", bridge_loan: "Brygglån",
   loan: "Lån", credit_facility: "Kreditfacilitet", convertible: "Konvertibel", warrants: "Teckningsoptioner",
-  repayment: "Amortering", other: "Övrigt" };
+  repayment: "Amortering", set_off: "Kvittningsemission", other: "Övrigt" };
 const TYPE_ORDER = Object.keys(TYPE);
 const EVENT_TYPE = { reverse_acquisition: "Omvänt förvärv", merger: "Fusion", acquisition: "Förvärv", name_change: "Namnbyte",
   public_offer: "Offentligt bud", delisting: "Avnotering", bankruptcy: "Konkurs", reorganisation: "Rekonstruktion",
@@ -157,6 +157,8 @@ function terms(e) {
   if (e.guarantee_amount != null) parts.push(`garanti ${msek(e.guarantee_amount, cur)}${e.guarantee_fee_pct != null ? ` (ersättning ${e.guarantee_fee_pct} %)` : ""}`);
   if (e.subscription_rate_pct != null) parts.push(`teckningsgrad ${e.subscription_rate_pct} %`);
   if (e.guarantee_utilized != null) parts.push(`utnyttjad garanti ${msek(e.guarantee_utilized, cur)}`);
+  if (e.issue_costs != null) parts.push(`kostnader ${msek(e.issue_costs, cur)}`);
+  if (e.paid_in_shares) parts.push(`varav ${msek(e.paid_in_shares, cur)} till garanter i aktier (kvittning, ingen kassa)`);
   if (e.issue_price != null) parts.push(`kurs ${e.issue_price.toLocaleString("sv-SE")} ${cur || "SEK"}`);
   if (e.discount_pct != null) parts.push(`rabatt ${e.discount_pct} %`);
   if (e.dilution_pct != null) parts.push(`utspädning ${e.dilution_pct.toLocaleString("sv-SE")} %`);
@@ -399,7 +401,8 @@ document.addEventListener("click", (event) => {
   const bandButton = event.target.closest("[data-band]");
   if (bandButton) { state.band = bandButton.dataset.band; renderBands(); renderRows(); return; }
   const prospect = event.target.closest("#prospectRows tr[data-id]");
-  if (prospect) { toggleProspect(Number(prospect.dataset.id)); return; }  // prospekt: klick öppnar en rad under
+  // Prospekt: klick öppnar både detaljpanelen till höger (som i listan) och raden under med mer information.
+  if (prospect) { const id = Number(prospect.dataset.id); toggleProspect(id); select(id); return; }
   const row = event.target.closest("tr[data-id]");
   if (row) select(Number(row.dataset.id));
 });

@@ -70,3 +70,27 @@ def test_fx_refresh_stores_rates_and_never_guesses(tmp_path):
     assert fx.convert(10, "EUR", "SEK", fx.latest_rates(connection)) == pytest.approx(110.26)
     assert fx.convert(10, "USD", "SEK", fx.latest_rates(connection)) is None
     assert fx.converter(connection)(1.0, "EUR", "SEK", "2026-12-01") == pytest.approx(11.026)
+
+
+def test_set_off_issue_is_no_cash_and_part_of_the_rights_issue(tmp_path):
+    # SciBase: företrädesemission 57,5 MSEK, kostnader 4,8 MSEK, kvittningsemission 0,9 MSEK till garanten.
+    from radar.db import connect
+    from radar.financing import load_events
+
+    rights = Event("rights_issue", "completed", 57.5e6, None, "SEK", "2026-10-01", "utfall", "t", "u",
+                   issue_costs=4.8e6)
+    set_off = Event("set_off", "completed", 0.9e6, None, "SEK", "2026-10-07", "kvittning", "t", "u")
+    confirmed, _, listing, _ = summarize([rights, set_off], END, "SEK")
+    assert confirmed == pytest.approx(52.7e6)                       # 57,5 - 4,8; kvittningen ger ingen kassa
+    assert len(listing) == 1 and listing[0]["paid_in_shares"] == pytest.approx(0.9e6)
+
+    # Äldre extraktion kallade kvittningen "riktad emission": typen rättas vid läsning.
+    connection = connect(tmp_path / "radar.db")
+    with connection:
+        connection.execute("INSERT INTO companies(id, name) VALUES (1, 'SciBase')")
+        connection.execute("INSERT INTO news(document_id, company_id, title, published_at, url, status) VALUES "
+                           "(5, 1, 'SciBase beslutar om kvittningsemission av aktier till garant', '2026-10-07', 'u', 'financing')")
+        connection.execute("INSERT INTO financing_events(news_document_id, company_id, type, status, gross_amount, "
+                           "currency, event_date, quote, created_at) VALUES (5, 1, 'directed_issue', 'completed', 900000, "
+                           "'SEK', '2026-10-07', 'betalning genom kvittning', '2026-10-07')")
+    assert [e.type for e in load_events(connection, 1)] == ["set_off"]

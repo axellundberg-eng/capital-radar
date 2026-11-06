@@ -37,7 +37,7 @@ SIZE_SOFT = (5e6, 120e6)
 SHARE_PASS, SHARE_WARN = 0.25, 0.40
 EQUITY_TYPES = ("rights_issue", "directed_issue")
 ISSUE_COST = 0.12   # emissionskostnader och garantiersättning, andel av bruttobeloppet
-TERMS = ('subscription_commitments', 'guarantee_amount', 'guarantee_fee_pct', 'guarantors', 'subscription_rate_pct', 'guarantee_utilized', 'issue_price', 'shares_issued', 'shares_before', 'discount_pct', 'exercise_price', 'exercise_start', 'exercise_end')
+TERMS = ('subscription_commitments', 'guarantee_amount', 'guarantee_fee_pct', 'guarantors', 'subscription_rate_pct', 'guarantee_utilized', 'issue_price', 'shares_issued', 'shares_before', 'discount_pct', 'exercise_price', 'exercise_start', 'exercise_end', 'issue_costs')
 WEIGHTS = {"runway": 20, "no_raise": 15, "size": 15, "share": 25, "history": 10, "quality": 5, "sector": 10}
 TARGET_SECTORS = ("health", "technology", "life science", "medical", "biotech", "pharma")
 FACTOR = {"pass": 1.0, "warn": 0.5, "fail": 0.0, "info": 0.0}
@@ -246,12 +246,15 @@ def load_market(connection: sqlite3.Connection) -> dict[int, dict]:
 
 def load_history(connection: sqlite3.Connection) -> dict[int, list[dict]]:
     """Alla händelser per bolag, med granskningens rättelser (dolda händelser tas bort)."""
+    from .financing import reclassify
     from .review import apply_event_row, event_overrides
 
     overrides = event_overrides(connection)
     history: dict[int, list[dict]] = {}
-    for row in connection.execute("SELECT * FROM financing_events ORDER BY event_date DESC"):
-        fixed = apply_event_row(dict(row), overrides.get(row["id"]))
+    for row in connection.execute(
+            """SELECT f.*, n.title FROM financing_events f LEFT JOIN news n ON n.document_id = f.news_document_id
+               ORDER BY f.event_date DESC"""):
+        fixed = apply_event_row(reclassify(dict(row)), overrides.get(row["id"]))
         if fixed is not None:
             history.setdefault(row["company_id"], []).append(fixed)
     return history
@@ -291,6 +294,14 @@ def recent_financing(rows: list[dict], today: str) -> tuple[int, list[dict]]:
         # Utspädning = nya aktier / aktier efter emissionen.
         entry["dilution_pct"] = round(100 * issued / (before + issued), 1) if before and issued else None
         listing.append(entry)
+    # Kvittningsemissioner (garantiersättning i aktier) visas som en del av emissionen de hör till.
+    for entry in [e for e in listing if e["type"] == "set_off"]:
+        parents = [p for p in listing if p["type"] in EQUITY_TYPES
+                   and abs((date.fromisoformat(p["date"]) - date.fromisoformat(entry["date"])).days) <= 45]
+        if parents:
+            parent = min(parents, key=lambda p: abs((date.fromisoformat(p["date"]) - date.fromisoformat(entry["date"])).days))
+            parent["paid_in_shares"] = (parent.get("paid_in_shares") or 0.0) + (entry["amount"] or 0.0)
+            listing.remove(entry)
     return len(equity), listing
 
 

@@ -8,6 +8,7 @@ tas bort. Bara genomförda rundor efter rapportens periodslut ger kassa.
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import date
 
@@ -18,7 +19,17 @@ DEBT_TYPES = ("loan", "bridge_loan", "convertible")
 OUTFLOW_TYPES = ("repayment",)  # amortering, återbetalning, kontant inlösen: pengar ut
 # Annonserade lån, kreditramar och återbetalningar är ingen publik kapitalanskaffning
 # (emission, brygglån inför emission, konvertibel och teckningsoptioner är det).
-NO_RAISE_TYPES = OUTFLOW_TYPES + ("credit_facility", "loan")
+# Kvittningsemission (t.ex. garantiersättning i aktier): aktier mot en fordran, inga pengar in.
+NON_CASH_TYPES = ("set_off",)
+NO_RAISE_TYPES = OUTFLOW_TYPES + NON_CASH_TYPES + ("credit_facility", "loan")
+SET_OFF = re.compile(r"kvittning|kvittat|set[- ]off|ersättningsemission|compensation issue|"
+                     r"betalning (?:genom|via) kvittning|payment by way of set", re.I)
+PARENT_DAYS = 45   # en kvittningsemission hör till emissionen den ersätter garanterna för
+
+
+def is_set_off(*texts: str | None) -> bool:
+    """Är händelsen en kvittningsemission (ingen kontant betalning)?"""
+    return any(text and SET_OFF.search(text) for text in texts)
 RANK = {"announced": 1, "completed": 2}
 
 
@@ -49,6 +60,8 @@ class Event:
     exercise_price: float | None = None             # teckningsoptioner: lösenpris
     exercise_start: str | None = None               # teckningsoptioner: lösenperiodens början
     exercise_end: str | None = None
+    issue_costs: float | None = None                # emissionskostnader enligt pressmeddelandet
+    paid_in_shares: float | None = None             # kvittningsemission till garanter som hör till rundan
     original_currency: str | None = None            # satt när beloppen räknats om till rapportens valuta
     original_amount: float | None = None
 
@@ -111,6 +124,24 @@ def to_currency(event: Event, currency: str, fx) -> Event | None:
                    original_amount=event.amount, **converted)
 
 
+def attach_set_offs(rounds: list[Event]) -> list[Event]:
+    """Lägg kvittningsemissioner på emissionen de hör till (närmast i tid, inom PARENT_DAYS dagar),
+    så att de visas som en del av samma affär. Kvittningar utan emission i närheten står kvar."""
+    equity = [i for i, e in enumerate(rounds) if e.type in ("rights_issue", "directed_issue")]
+    out = list(rounds)
+    drop = set()
+    for i, event in enumerate(rounds):
+        if event.type not in NON_CASH_TYPES:
+            continue
+        near = [j for j in equity if _days(rounds[j].date, event.date) <= PARENT_DAYS]
+        if not near:
+            continue
+        j = min(near, key=lambda k: _days(rounds[k].date, event.date))
+        out[j] = replace(out[j], paid_in_shares=(out[j].paid_in_shares or 0.0) + (event.amount or 0.0))
+        drop.add(i)
+    return [e for i, e in enumerate(out) if i not in drop]
+
+
 def dedupe(events: list[Event]) -> list[Event]:
     groups: list[list[Event]] = []
     for event in sorted(events, key=lambda e: e.date):
@@ -129,10 +160,14 @@ def confirmed_cash(event: Event) -> float:
         return event.drawn_amount or 0.0
     if event.type in OUTFLOW_TYPES:
         return -(event.amount or 0.0)
+    if event.type in NON_CASH_TYPES:
+        return 0.0          # kvittning: aktier mot en fordran, ingen kassa
     if event.net_amount is not None:
         return event.net_amount
     if event.gross_amount is None:
         return 0.0
+    if event.issue_costs is not None:
+        return max(0.0, event.gross_amount - event.issue_costs)   # angivna kostnader går före schablonen
     return event.gross_amount if event.type in DEBT_TYPES else event.gross_amount * EQUITY_COST
 
 
@@ -161,7 +196,7 @@ def summarize(events: list[Event], period_end: str, currency: str | None = None,
                 continue
             event = converted
         after.append(event)
-    rounds = dedupe(after)
+    rounds = attach_set_offs(dedupe(after))
     confirmed = announced = credit = 0.0
     for event in rounds:
         if event.status == "completed":
