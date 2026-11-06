@@ -204,9 +204,15 @@ def load_market(connection: sqlite3.Connection) -> dict[int, dict]:
 
 
 def load_history(connection: sqlite3.Connection) -> dict[int, list[dict]]:
+    """Alla händelser per bolag, med granskningens rättelser (dolda händelser tas bort)."""
+    from .review import apply_event_row, event_overrides
+
+    overrides = event_overrides(connection)
     history: dict[int, list[dict]] = {}
     for row in connection.execute("SELECT * FROM financing_events ORDER BY event_date DESC"):
-        history.setdefault(row["company_id"], []).append(dict(row))
+        fixed = apply_event_row(dict(row), overrides.get(row["id"]))
+        if fixed is not None:
+            history.setdefault(row["company_id"], []).append(fixed)
     return history
 
 
@@ -224,10 +230,19 @@ def recent_financing(rows: list[dict], today: str) -> tuple[int, list[dict]]:
     events = [Event(r["type"], r["status"], r["gross_amount"], r["net_amount"], r["currency"], r["event_date"],
                     r.get("quote"), None, None, r.get("drawn_amount"), r.get("advisers")) for r in recent]
     equity = [e for e in dedupe(events) if e.type in EQUITY_TYPES]
-    listing = [{"type": r["type"], "status": r["status"], "date": (r["event_date"] or "")[:10],
-                "amount": r["gross_amount"] if r["gross_amount"] is not None else r["net_amount"],
-                "currency": r["currency"], "quote": r.get("quote"), "advisers": r.get("advisers")}
-               for r in sorted(recent, key=lambda r: r["event_date"] or "", reverse=True)]
+    listing, seen = [], set()
+    for r in sorted(recent, key=lambda r: r["event_date"] or "", reverse=True):
+        amount = r["gross_amount"] if r["gross_amount"] is not None else r["net_amount"]
+        # Samma händelse från den svenska och den engelska versionen av pressmeddelandet visas en gång.
+        key = (r["type"], r["status"], (r["event_date"] or "")[:10], round(amount / 1e5) if amount else None)
+        if key in seen:
+            if r.get("advisers") and listing and not listing[-1]["advisers"]:
+                listing[-1]["advisers"] = r["advisers"]
+            continue
+        seen.add(key)
+        listing.append({"type": r["type"], "status": r["status"], "date": (r["event_date"] or "")[:10],
+                        "amount": amount, "currency": r["currency"], "quote": r.get("quote"),
+                        "advisers": r.get("advisers")})
     return len(equity), listing
 
 

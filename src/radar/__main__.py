@@ -12,6 +12,17 @@
                                            under 9 mån utan annonserad emission (--refresh-market tvingar om)
     python -m radar status                 antal rapporter per status
     python -m radar serve                  webbgränssnitt (RADAR_PORT, RADAR_BASE_PATH)
+
+Granskning (se agents/radar-reviewer.md):
+    python -m radar review checks          rimlighetskontroller, sammanfattning (--json för alla flaggor)
+    python -m radar review queue           bolag att granska, troligaste felen först (--since, --limit)
+    python -m radar review log             logga en granskningsrunda (--checked, --corrections, --before, --note)
+    python -m radar correct fact --document D --kind cash --period-end 2026-09-30 --value 8612000 --reason "..."
+    python -m radar correct fact --document D --kind operating_cash_flow --period-start ... --delete --reason "..."
+    python -m radar correct period --document D --period-end 2026-09-30 --reason "..."
+    python -m radar correct event --id N --hide | --status S | --type T | --amount A | --currency C
+                                  | --date D | --advisers "..." --reason "..."
+    python -m radar corrections list [--company ID]  |  corrections revert ID
 """
 
 from __future__ import annotations
@@ -107,6 +118,91 @@ def qualify_command(args, connection, today: str) -> int:
     return 0
 
 
+def review_command(args, connection, today: str) -> int:
+    from . import review
+
+    if args.action == "checks":
+        findings = review.run_checks(connection, today)
+        out = {"summary": review.summary(findings)}
+        if args.json:
+            out["findings"] = review.as_dicts(findings[:args.limit] if args.limit else findings)
+        print(json.dumps(out, ensure_ascii=False, indent=1))
+        return 0
+    if args.action == "queue":
+        print(json.dumps(review.queue(connection, args.since, args.limit), ensure_ascii=False, indent=1))
+        return 0
+    after = len(review.run_checks(connection, today))
+    run_id = review.log_run(connection, since=args.since or review.since_default(connection), checked=args.checked,
+                            corrections=args.corrections, findings_before=args.before, findings_after=after,
+                            note=args.note)
+    print(json.dumps({"review_run": run_id, "findings_after": after}, ensure_ascii=False))
+    return 0
+
+
+def _runway_brief(result: dict) -> dict:
+    keys = ("status", "period_end", "cash", "monthly_burn", "runway_today", "runway_cash_today", "cash_flow_positive")
+    return {k: result.get(k) for k in keys}
+
+
+def correct_command(args, connection, today: str) -> int:
+    from . import review
+    from .pipeline import refresh_runway
+
+    if args.command == "corrections":
+        if args.action == "list":
+            sql, params = "SELECT * FROM corrections", []
+            if args.company:
+                sql, params = sql + " WHERE company_id=?", [args.company]
+            print(json.dumps([dict(r) for r in connection.execute(sql + " ORDER BY id", params)],
+                             ensure_ascii=False, indent=1))
+            return 0
+        if args.id is None:
+            raise ValueError("ange id för rättelsen som ska ångras")
+        row = review.revert_correction(connection, args.id)
+        document = row["document_id"] if row["target"] == "fact" else review.latest_document(connection, row["company_id"])
+        result = refresh_runway(connection, document, today=today) if document else {}
+        print(json.dumps({"reverted": args.id, "runway": _runway_brief(result)}, ensure_ascii=False))
+        return 0
+    if args.target in ("fact", "period"):
+        if args.document is None:
+            raise ValueError("--document krävs")
+        company = connection.execute("SELECT company_id FROM reports WHERE document_id=?", (args.document,)).fetchone()
+        if company is None:
+            raise ValueError(f"rapport {args.document} finns inte")
+        if args.target == "period":
+            if not args.period_end:
+                raise ValueError("--period-end krävs")
+            ids = [review.add_correction(connection, target="fact", field="report_period_end", reason=args.reason,
+                                         company_id=company[0], document_id=args.document, new_value=args.period_end)]
+        else:
+            if not args.kind or (args.value is None and not args.delete):
+                raise ValueError("--kind och antingen --value eller --delete krävs")
+            ids = [review.add_correction(
+                connection, target="fact", field="delete" if args.delete else "value", reason=args.reason,
+                company_id=company[0], document_id=args.document, kind=args.kind, period_start=args.period_start,
+                period_end=args.period_end, new_value=None if args.delete else args.value)]
+        result = refresh_runway(connection, args.document, today=today)
+        print(json.dumps({"corrections": ids, "runway": _runway_brief(result)}, ensure_ascii=False))
+        return 0
+    if args.id is None:
+        raise ValueError("--id krävs för en händelse")
+    event = connection.execute("SELECT company_id FROM financing_events WHERE id=?", (args.id,)).fetchone()
+    if event is None:
+        raise ValueError(f"händelse {args.id} finns inte")
+    changes = {"hide": "1" if args.hide else None, "status": args.status, "type": args.event_type,
+               "gross_amount": args.amount, "currency": args.currency, "event_date": args.date,
+               "advisers": args.advisers}
+    changes = {field: value for field, value in changes.items() if value is not None}
+    if not changes:
+        raise ValueError("ange vad som ska rättas: --hide, --status, --type, --amount, --currency, --date eller --advisers")
+    ids = [review.add_correction(connection, target="event", field=field, reason=args.reason, company_id=event[0],
+                                 event_id=args.id, new_value=value) for field, value in changes.items()]
+    document = review.latest_document(connection, event[0])
+    result = refresh_runway(connection, document, today=today) if document else {}
+    print(json.dumps({"corrections": ids, "runway": _runway_brief(result)}, ensure_ascii=False))
+    return 0
+
+
 def schedule_command(args) -> int:
     import logging
     import os
@@ -196,6 +292,36 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("serve")
     schedule = sub.add_parser("schedule", help="löpande drift: import, rapporter, nyheter, marknadsvärde")
     schedule.add_argument("--once", action="store_true", help="kör ett varv och avsluta")
+    review = sub.add_parser("review", help="granskning: kontroller, kö och logg")
+    review.add_argument("action", choices=["checks", "queue", "log"])
+    review.add_argument("--since", help="datum (YYYY-MM-DD); standard: förra granskningen eller 7 dagar bakåt")
+    review.add_argument("--limit", type=int)
+    review.add_argument("--json", action="store_true", help="checks: skriv alla flaggor som JSON")
+    review.add_argument("--checked", type=int, default=0)
+    review.add_argument("--corrections", type=int, default=0)
+    review.add_argument("--before", type=int, help="antal flaggor före rundan")
+    review.add_argument("--note", default="")
+    correct = sub.add_parser("correct", help="rätta ett faktum, ett periodslut eller en händelse (kräver --reason)")
+    correct.add_argument("target", choices=["fact", "period", "event"])
+    correct.add_argument("--reason", required=True)
+    correct.add_argument("--document", type=int)
+    correct.add_argument("--kind")
+    correct.add_argument("--period-start")
+    correct.add_argument("--period-end")
+    correct.add_argument("--value", type=float)
+    correct.add_argument("--delete", action="store_true")
+    correct.add_argument("--id", type=int, help="händelsens id (financing_events.id)")
+    correct.add_argument("--hide", action="store_true")
+    correct.add_argument("--status", choices=["announced", "completed", "cancelled"])
+    correct.add_argument("--type", dest="event_type")
+    correct.add_argument("--amount", type=float)
+    correct.add_argument("--currency")
+    correct.add_argument("--date")
+    correct.add_argument("--advisers")
+    corrections = sub.add_parser("corrections", help="lista eller ångra rättelser")
+    corrections.add_argument("action", choices=["list", "revert"])
+    corrections.add_argument("id", type=int, nargs="?")
+    corrections.add_argument("--company", type=int)
     args = parser.parse_args(argv)
     if args.command == "serve":
         return serve()
@@ -216,6 +342,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "qualify":
         return qualify_command(args, connection, today)
+    if args.command == "review":
+        return review_command(args, connection, today)
+    if args.command in ("correct", "corrections"):
+        try:
+            return correct_command(args, connection, today)
+        except ValueError as error:
+            print(json.dumps({"error": str(error)}, ensure_ascii=False))
+            return 2
     client = _client(settings)
     if client is None:
         print("DEEPSEEK_API_KEY saknas; kör bara hämtning och text.")

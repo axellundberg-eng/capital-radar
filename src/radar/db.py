@@ -108,6 +108,26 @@ CREATE TABLE IF NOT EXISTS market_data (
     error TEXT,
     sector TEXT                        -- Nasdaqs sektornamn (ICB), när det finns
 );
+CREATE TABLE IF NOT EXISTS corrections (   -- rättelser från granskningen, se review.py
+    id INTEGER PRIMARY KEY,
+    target TEXT NOT NULL,              -- fact eller event
+    company_id INTEGER NOT NULL,
+    document_id INTEGER,               -- rapporten (fact)
+    event_id INTEGER,                  -- financing_events.id (event)
+    kind TEXT, period_start TEXT, period_end TEXT,
+    field TEXT NOT NULL,
+    old_value TEXT, new_value TEXT,
+    reason TEXT NOT NULL,
+    author TEXT,
+    created_at TEXT NOT NULL,
+    reverted_at TEXT                   -- satt = ångrad, räknas inte längre
+);
+CREATE INDEX IF NOT EXISTS corrections_document ON corrections(target, document_id);
+CREATE TABLE IF NOT EXISTS review_runs (
+    id INTEGER PRIMARY KEY,
+    started_at TEXT, finished_at TEXT, since TEXT,
+    checked INTEGER, corrections INTEGER, findings_before INTEGER, findings_after INTEGER, note TEXT
+);
 """
 
 

@@ -37,10 +37,11 @@ def title_key(title: str | None) -> str:
     return " ".join((title or "").split()).casefold()
 
 
-def is_known(connection: sqlite3.Connection, company_id: int, item: mfn.MfnItem) -> bool:
+def is_known(connection: sqlite3.Connection, company_id: int, item: mfn.MfnItem,
+             tables: tuple[str, ...] = ("reports", "news")) -> bool:
     """Finns posten redan, via källänk eller via bolag + rubrik + dag?"""
     day = item.published_at[:10]
-    for table in ("reports", "news"):
+    for table in tables:
         if connection.execute(f"SELECT 1 FROM {table} WHERE source_url=?", (item.url,)).fetchone():
             return True
         rows = connection.execute(
@@ -57,7 +58,8 @@ def insert_item(connection: sqlite3.Connection, company_id: int, item: mfn.MfnIt
         connection.commit()
     connection.execute("BEGIN IMMEDIATE")
     try:
-        if is_known(connection, company_id, item):
+        # En rapport som tidigare sparats som nyhet (rubrik i nyhetsform) läggs ändå till som rapport.
+        if is_known(connection, company_id, item, ("reports",) if table == "reports" else ("reports", "news")):
             connection.rollback()
             return False
         document_id = next_document_id(connection)
@@ -84,7 +86,7 @@ def collect_company(connection: sqlite3.Connection, settings: Settings, company,
     items = mfn.fetch_items(company["mfn_slug"], settings, throttle)
     counts = {"fetched": len(items), "new_reports": 0, "new_news": 0}
     for item in items:
-        kind = classify(item.title, item.category)
+        kind = classify(item.title, item.category, item.attachments)
         if kind == "calendar":
             continue
         table = "reports" if kind == "report" else "news"

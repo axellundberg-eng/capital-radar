@@ -371,3 +371,35 @@ def test_definite_form_quarter_report_titles_are_reports():
     for title in ("Cantargia bjuder in till presentation av delårsrapport för Q3 2026",
                   "Observit AB tidigarelägger publicering av kvartalsrapporten för tredje kvartalet 2026"):
         assert str(getattr(classify(title), "kind", classify(title))) == "calendar", title
+
+
+def test_report_recognised_from_attachment_filename():
+    # Rubriker i nyhetsform: bara bilagans filnamn visar att det är en kvartalsrapport.
+    assert classify("Agtiras starkaste kvartal – hög organisk tillväxt", None,
+                    ("https://mfn.se/a/agtira/agtira-kvartalsrapport-q1-2026.pdf",)) == "report"
+    assert classify("Alligator Bioscience AB reports financial results for the period 1 January – 30 September 2026",
+                    None, ("https://mfn.se/a/x/2026-q3-en-vf.pdf",)) == "report"
+    assert classify("Adverty når positiv EBITDA i Q1 och stärker marginalerna", None,
+                    ("https://mfn.se/a/adverty/adverty-q1-2026-sve.pdf",)) == "report"
+    # Stämmor, kallelser och inbjudningar blir aldrig rapporter, även med rapport som bilaga.
+    assert classify("Kallelse till årsstämma i Agtira AB", None, ("https://x/arsredovisning-2025.pdf",)) != "report"
+    assert classify("Inbjudan till rapportpresentation den 22 oktober 2026", None, ("https://x/q3-2026.pdf",)) == "calendar"
+    assert classify("Agtira säkrar finansiering om cirka 35 MSEK", None, ("https://x/pressmeddelande.pdf",)) == "financing"
+
+
+def test_report_saved_as_news_is_added_as_report(tmp_path):
+    from radar.collect import insert_item
+    from radar.db import connect
+    from radar.mfn import MfnItem
+
+    connection = connect(tmp_path / "radar.db")
+    with connection:
+        connection.execute("INSERT INTO companies(id, name) VALUES (1, 'Agtira')")
+    item = MfnItem("Agtiras starkaste kvartal", "2026-05-13T08:00:00+02:00",
+                   "https://mfn.se/all/a/agtira/agtiras-starkaste-kvartal", "sv",
+                   attachments=("https://x/agtira-kvartalsrapport-q1-2026.pdf",))
+    assert insert_item(connection, 1, item, "news")
+    assert not insert_item(connection, 1, item, "news")      # samma nyhet läggs inte in två gånger
+    assert insert_item(connection, 1, item, "reports")       # men rapporten läggs till
+    assert not insert_item(connection, 1, item, "reports")
+    assert connection.execute("SELECT COUNT(*) FROM reports").fetchone()[0] == 1

@@ -42,12 +42,29 @@ FINANCING = re.compile(
     re.I)
 
 
-def classify(title: str, category: str | None = None) -> str:
-    """Returnerar report, financing, calendar eller other."""
+# Rapporter med rubrik i nyhetsform ("Agtiras starkaste kvartal ...") känns igen på bilagans filnamn,
+# t.ex. agtira-kvartalsrapport-q2-2026.pdf, 2026-q3-en-vf.pdf eller adverty-q1-2026-sve.pdf.
+REPORT_FILE = re.compile(
+    r"kvartalsrapport|delarsrapport|delårsrapport|halvarsrapport|halvårsrapport|interim[-_ ]?report"
+    r"|quarterly[-_ ]?report|half[-_ ]?year[-_ ]?report|bokslutskommunik|year[-_ ]?end[-_ ]?report"
+    r"|arsredovisning|årsredovisning|annual[-_ ]?report"
+    r"|(?<![a-z0-9])q[1-4][-_ ]?20\d\d(?![0-9])|(?<![0-9])20\d\d[-_ ]?q[1-4](?![0-9a-z])",
+    re.I)
+
+
+def _report_attachment(attachments) -> bool:
+    return any(REPORT_FILE.search(url.rsplit("/", 1)[-1]) for url in attachments or ())
+
+
+def classify(title: str, category: str | None = None, attachments=()) -> str:
+    """Returnerar report, financing, calendar eller other.
+
+    `attachments` är bilagornas adresser; ett rapportlikt filnamn räcker för report när rubriken
+    inte säger det (men aldrig för kallelser och stämmokommunikéer)."""
     text = f"{title} {category or ''}"
     if CALENDAR.search(text):
         return "calendar"
-    if REPORT.search(text) and not MEETING.search(text):
+    if (REPORT.search(text) or _report_attachment(attachments)) and not MEETING.search(text):
         return "report"
     if FINANCING.search(text):
         return "financing"

@@ -129,9 +129,20 @@ def ask(client: ChatClient, message: str, published_at: str | None, *, attempts:
 
 
 def load_events(connection: sqlite3.Connection, company_id: int) -> list[Event]:
+    """Bolagets händelser med granskningens rättelser (dolda händelser tas bort)."""
+    from .review import apply_event_row, event_overrides
+
     rows = connection.execute(
-        """SELECT f.type, f.status, f.gross_amount, f.net_amount, f.currency, f.event_date, f.quote,
+        """SELECT f.id, f.type, f.status, f.gross_amount, f.net_amount, f.currency, f.event_date, f.quote,
                   n.title, n.url, f.drawn_amount, f.advisers
            FROM financing_events f JOIN news n ON n.document_id = f.news_document_id
            WHERE f.company_id=?""", (company_id,)).fetchall()
-    return [Event(*tuple(row)) for row in rows]
+    overrides = event_overrides(connection, company_id)
+    events = []
+    for row in rows:
+        fixed = apply_event_row(dict(row), overrides.get(row["id"]))
+        if fixed is not None:
+            events.append(Event(fixed["type"], fixed["status"], fixed["gross_amount"], fixed["net_amount"],
+                                fixed["currency"], fixed["event_date"], fixed["quote"], fixed["title"],
+                                fixed["url"], fixed["drawn_amount"], fixed["advisers"]))
+    return events

@@ -16,6 +16,7 @@ from .extract import ChatClient, ExtractionError, extract
 from .fetch import fetch_pdf
 from .financing import load_events
 from .pdftext import pages as pdf_pages
+from .review import apply_fact_corrections
 from .rounds import summarize
 from .runway import Fact, compute
 from .settings import Settings
@@ -95,6 +96,8 @@ def runway_for(connection: sqlite3.Connection, document_id: int, *, today: str) 
         "SELECT kind, value, period_start, period_end, currency FROM facts WHERE extraction_id=?",
         (extraction["id"],)).fetchall()
     facts = [Fact(r["kind"], r["value"], r["period_start"], r["period_end"]) for r in rows]
+    # Granskningens rättelser läggs ovanpå extraktionen och överlever därför en ny extraktion.
+    facts, period_end = apply_fact_corrections(connection, document_id, facts, period_end)
     company = connection.execute("SELECT company_id FROM reports WHERE document_id=?", (document_id,)).fetchone()
     currency = next((r["currency"] for r in rows if r["currency"]), None)
     financing = summarize(load_events(connection, company["company_id"]), period_end, currency)
