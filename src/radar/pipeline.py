@@ -36,8 +36,11 @@ def _set(connection: sqlite3.Connection, document_id: int, **fields) -> None:
 
 def _fail(connection: sqlite3.Connection, document_id: int, step: str, error: Exception | str) -> dict:
     message = f"{step}: {error}"[:500]
-    _set(connection, document_id, status="failed", error=message)
-    return {"document_id": document_id, "status": "failed", "error": message}
+    # Ett avbrutet svar (för lång utdata) blir likadant nästa gång: försök inte igen automatiskt varje varv,
+    # utan låt granskningen ta det (status too_long hämtas inte om; extrahera om med --reextract).
+    status = "too_long" if "finish_reason=length" in message else "failed"
+    _set(connection, document_id, status=status, error=message)
+    return {"document_id": document_id, "status": status, "error": message}
 
 
 def _fetch(connection, settings: Settings, report: sqlite3.Row) -> None:

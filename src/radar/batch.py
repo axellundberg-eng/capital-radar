@@ -150,7 +150,7 @@ def run_latest(settings: Settings, client: ChatClient | None, *, today: str, wor
             budget.add(sum(tokens_used(connection, d) for d in candidates) - before)
         finally:
             connection.close()
-        if outcome.get("status") == "failed":
+        if outcome.get("status") in ("failed", "too_long"):
             label = "fel: " + outcome["error"].split(":")[0]
         else:
             label = (outcome.get("runway") or {}).get("status", "ingen_extraktion")

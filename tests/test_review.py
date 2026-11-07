@@ -125,3 +125,12 @@ def test_queue_and_cli(tmp_path, monkeypatch, capsys):
     assert main(["correct", "event", "--id", "1", "--reason", "x"]) == 2          # inget att rätta
     assert main(["corrections", "revert", str(out["corrections"][0])]) == 0
     assert main(["review", "log", "--checked", "1", "--corrections", "1", "--before", "3"]) == 0
+
+
+def test_truncated_answer_is_not_retried_every_cycle(tmp_path):
+    from radar.pipeline import _fail
+
+    connection = seed(tmp_path)
+    assert _fail(connection, 10, "extrahera", "tomt svar (finish_reason=length)")["status"] == "too_long"
+    assert connection.execute("SELECT status FROM reports WHERE document_id=10").fetchone()[0] == "too_long"
+    assert _fail(connection, 10, "hämta", "timeout")["status"] == "failed"

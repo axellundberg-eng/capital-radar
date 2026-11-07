@@ -216,8 +216,8 @@ def schedule_command(args) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     settings = Settings.from_env()
     client = _client(settings)
-    budgets = {"report_budget": int(os.getenv("RADAR_CYCLE_REPORT_TOKENS", "500000")),
-               "news_budget": int(os.getenv("RADAR_CYCLE_NEWS_TOKENS", "300000"))}
+    budgets = {"report_budget": int(os.getenv("RADAR_CYCLE_REPORT_TOKENS", "200000")),
+               "news_budget": int(os.getenv("RADAR_CYCLE_NEWS_TOKENS", "100000"))}
     if args.once:
         print(json.dumps(run_cycle(settings, client, **budgets), ensure_ascii=False, default=str), flush=True)
         return 0
