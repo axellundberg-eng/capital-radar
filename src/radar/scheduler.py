@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 STALE_LOCK_SECONDS = 300       # utan hjärtslag på fem minuter är låset övergivet
 HEARTBEAT_SECONDS = 30
 RETRY_AFTER_SKIP_SECONDS = 300
+OWNERS_TOKEN_BUDGET = 60000    # tokens för ägartolkning per varv
 CHANGE_TEXT = {"3_9": "Ny i 3–9 mån", "under_3": "Ny under 3 mån", "exhausted": "Kassan borde vara slut",
                "acute": "Akut: under 1 mån", "structural": "Strukturell förändring"}
 
@@ -194,6 +195,39 @@ def _insiders_step(settings: Settings, log: Callable[[str], None]) -> dict:
         return {"error": str(error)}
 
 
+def _owners_step(settings: Settings, client: ChatClient | None, log: Callable[[str], None]) -> dict:
+    """Största ägare ur rapporttext (kräver AI-klient; högst 60 000 tokens per varv); fel stoppar aldrig varvet."""
+    if client is None:
+        return {"skipped": "ingen AI-klient"}
+    from . import owners
+
+    try:
+        connection = connect(settings.db_path)
+        try:
+            return owners.run(connection, settings, client, limit=30, token_budget=OWNERS_TOKEN_BUDGET,
+                              log=lambda _line: None)
+        finally:
+            connection.close()
+    except Exception as error:  # noqa: BLE001
+        log(f"ägare misslyckades: {error}")
+        return {"error": str(error)}
+
+
+def _shorts_step(settings: Settings, log: Callable[[str], None]) -> dict:
+    """Blankningsregistret från FI (högst en hämtning per dag); fel stoppar aldrig varvet."""
+    from . import shorts
+
+    try:
+        connection = connect(settings.db_path)
+        try:
+            return shorts.run(connection, settings, log=lambda _line: None)
+        finally:
+            connection.close()
+    except Exception as error:  # noqa: BLE001
+        log(f"blankning misslyckades: {error}")
+        return {"error": str(error)}
+
+
 def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: int, news_budget: int,
               log: Callable[[str], None] = logger.info) -> dict:
     from .web import latest_rows
@@ -219,6 +253,8 @@ def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: i
             connection.close()
         summary["market_history"] = _market_history_step(settings, log)
         summary["insiders"] = _insiders_step(settings, log)
+        summary["owners"] = _owners_step(settings, client, log)
+        summary["shorts"] = _shorts_step(settings, log)
     summary["finished_at"] = _now()
     log(json.dumps(summary, ensure_ascii=False))
     return summary

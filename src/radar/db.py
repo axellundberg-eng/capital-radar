@@ -184,6 +184,36 @@ CREATE TABLE IF NOT EXISTS insider_fetch (   -- senaste hämtning per bolag (hö
     fetched_at TEXT NOT NULL, rows INTEGER NOT NULL DEFAULT 0, matched INTEGER NOT NULL DEFAULT 0,
     unmatched INTEGER NOT NULL DEFAULT 0, error TEXT
 );
+CREATE TABLE IF NOT EXISTS shareholders (   -- största ägare ur rapporttext, se owners.py
+    company_id INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    as_of TEXT,
+    rank INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    shares REAL, pct_capital REAL, pct_votes REAL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (company_id, document_id, rank)
+);
+CREATE TABLE IF NOT EXISTS owner_fetch (   -- senaste ägartolkning per bolag
+    company_id INTEGER PRIMARY KEY,
+    document_id INTEGER,               -- rapporten som tolkades (NULL = ingen rapport med ägartabell)
+    status TEXT NOT NULL,              -- ok, no_table, failed
+    error TEXT,
+    tokens INTEGER NOT NULL DEFAULT 0,
+    fetched_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS short_positions (   -- FI:s blankningsregister, aktuell ögonblicksbild, se shorts.py
+    company_id INTEGER NOT NULL,
+    holder TEXT NOT NULL,
+    pct REAL NOT NULL,
+    position_date TEXT,
+    fetched_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS short_positions_company ON short_positions(company_id);
+CREATE TABLE IF NOT EXISTS short_fetch (   -- senaste hämtning av blankningsregistret (högst en per dag)
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    fetched_at TEXT NOT NULL, rows INTEGER NOT NULL DEFAULT 0, matched INTEGER NOT NULL DEFAULT 0, error TEXT
+);
 """
 
 

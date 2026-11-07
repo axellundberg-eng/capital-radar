@@ -31,7 +31,7 @@ const STATUS = { announced: "Annonserad", completed: "Genomförd", cancelled: "A
 const STATUS_CHIP = { announced: "pågår", completed: "genomförd", cancelled: "avbruten" };
 const ACUTE_TEXT = "Kassan räcker mindre än en månad enligt senaste rapporten. Bolaget behöver kapital nu eller har kreditlöften (visas om de finns i rapporten).";
 
-const garanti = { id: null, results: [], active: -1, timer: null, seq: 0, searching: false };
+const garanti = { id: null, results: [], active: -1, timer: null, seq: 0, searching: false, data: null, guarantor: null };
 const expandedProspects = new Set();
 const state = { items: [], band: "3_9", query: "", selected: null, overview: null, view: "list", prospects: null };
 const $ = (selector) => document.querySelector(selector);
@@ -676,13 +676,87 @@ function gAuth(d) {
   return gCard("Bemyndigande och nästa rapport", auth + rep);
 }
 
+function gPct(v, digits) { return v == null || Number.isNaN(Number(v)) ? "—" : `${num(Number(v), digits == null ? 1 : digits)} %`; }
+function gName(g) { return g && g.name != null ? g.name : g; }
+// Backend skickar emissionens garanter som texten "namn; namn" (financing.py), inte som lista.
+function gGuarantors(v) {
+  if (Array.isArray(v)) return v.map(gName).filter(Boolean).map(String);
+  return String(v || "").split(/[;,]/).map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean);
+}
+
+function gOwners(d) {
+  const o = d.owners;
+  if (!o || !Array.isArray(o.top) || !o.top.length) return gCard("Ägare", '<p class="source">Ägardata saknas för bolaget.</p>');
+  const chips = [["Topp 3", o.top3_pct, ""], ["Topp 10", o.top10_pct, ""], ["Fritt flöde ca", o.free_float_estimate_pct, "Uppskattning, inte en rapporterad siffra"]]
+    .filter(([, v]) => v != null).map(([l, v, h]) => `<span class="chip g-chip"${h ? ` title="${escapeHtml(h)}"` : ""}>${l}: ${gPct(v)}${h ? " (uppskattning)" : ""}</span>`).join("");
+  const top10 = o.top.slice(0, 10);
+  const sum = top10.reduce((a, t) => a + (Number(t.pct_capital) || 0), 0);
+  const shown = Math.max(0, Math.min(100, o.top10_pct != null ? Number(o.top10_pct) : sum));
+  const segs = top10.filter((t) => Number(t.pct_capital) > 0).map((t, i) => `<span class="g-seg s${i % 5}" style="width:${Math.min(100, Number(t.pct_capital))}%" title="${escapeHtml(t.name)}: ${gPct(t.pct_capital)}"></span>`).join("");
+  const rest = gPct(Math.max(0, 100 - shown));
+  const bar = `<div class="g-stack" role="img" aria-label="Topp 10 äger ${gPct(shown)} av kapitalet, övriga ${rest}">${segs}<span class="g-seg rest" style="flex:1" title="Övriga: ${rest}"></span></div>
+    <p class="source g-stack-legend">Topp 10 ${gPct(shown)} av kapitalet · övriga ${rest}</p>`;
+  const rows = o.top.map((t, i) => `<tr${i < 3 ? ' class="g-top"' : ""}><td>${escapeHtml(dash(t.name))}</td><td class="num">${gPct(t.pct_capital, 2)}</td><td class="num">${gPct(t.pct_votes, 2)}</td><td class="num">${t.shares != null ? Number(t.shares).toLocaleString("sv-SE") : "—"}</td></tr>`).join("");
+  const table = `<div class="table-wrap g-table"><table><thead><tr><th>Ägare</th><th class="num">Kapital</th><th class="num">Röster</th><th class="num">Antal aktier</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const src = [o.as_of ? `Per ${escapeHtml(date(o.as_of))}` : "", o.source_title ? escapeHtml(o.source_title) : ""].filter(Boolean).join(" · ");
+  return gCard("Ägare", `${src ? `<p class="source">${src}</p>` : ""}<div class="chips g-chips">${chips}</div>${bar}${table}`);
+}
+
+function gShort(d) {
+  const list = Array.isArray(d.short_positions) ? d.short_positions : [];
+  const total = d.short_total_pct;
+  const none = '<p class="source">Inga blankningspositioner över 0,5 % rapporterade.</p>';
+  if (!list.length && total == null) return gCard("Blankning", none);
+  const chip = total != null ? `<div class="chips g-chips"><span class="chip g-chip${Number(total) > 2 ? " warn" : ""}">Total blankning: ${gPct(total, 2)}</span></div>` : "";
+  const items = list.length ? `<ul class="facts g-short">${list.map((p) => `<li><div><span>${escapeHtml(dash(p.holder))}</span><strong>${gPct(p.pct, 2)}</strong></div><small>${escapeHtml(date(p.date))}</small></li>`).join("")}</ul>` : none;
+  return gCard("Blankning", chip + items);
+}
+
+function gHistory(d) {
+  const h = d.guarantee_history;
+  const all = h && Array.isArray(h.issues) ? h.issues : [];
+  if (!all.length) return gCard("Garantihistorik", '<p class="source">Ingen garantihistorik registrerad.</p>');
+  const sel = garanti.guarantor;
+  const issues = sel ? all.filter((i) => gGuarantors(i.guarantors).includes(sel)) : all;
+  const avg = h.avg_subscription_rate_pct != null ? `<div class="chips g-chips"><span class="chip g-chip">Snitt teckningsgrad: ${gPct(h.avg_subscription_rate_pct)}</span></div>` : "";
+  const gs = Array.isArray(h.guarantors) ? h.guarantors : [];
+  const gl = gs.length ? `<div class="g-guarantors" role="group" aria-label="Återkommande garanter">${gs.map((g) => `<button type="button" class="g-gbtn${g.name === sel ? " on" : ""}" data-guarantor="${escapeHtml(g.name)}" aria-pressed="${g.name === sel}">${escapeHtml(g.name)} <small>${g.issues} ggr${g.avg_fee_pct != null ? ` · snitt ${gPct(g.avg_fee_pct, 1)}` : ""}</small></button>`).join("")}</div>` : "";
+  const note = sel ? `<p class="source">Visar ${issues.length} av ${all.length} emissioner med ${escapeHtml(sel)}. Klicka igen på garanten för att visa alla.</p>` : "";
+  const rows = issues.map((i) => `<tr><td>${escapeHtml(date(i.date))}</td><td>${escapeHtml(TYPE[i.type] || dash(i.type))}</td><td class="num">${msek(i.amount, i.currency)}</td><td class="num">${gPct(i.subscription_rate_pct)}</td>
+    <td class="num">${msek(i.guarantee_amount, i.currency)}</td><td class="num">${msek(i.guarantee_utilized, i.currency)}</td><td class="num">${gPct(i.guarantee_fee_pct, 2)}</td><td>${escapeHtml(gGuarantors(i.guarantors).join(", ") || "—")}</td></tr>`).join("");
+  const table = issues.length ? `<div class="table-wrap g-table"><table><thead><tr><th>Datum</th><th>Typ</th><th class="num">Belopp</th><th class="num">Teckningsgrad</th><th class="num">Garanti</th><th class="num">Utnyttjad</th><th class="num">Ersättning</th><th>Garanter</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    : '<p class="source">Inga emissioner matchar vald garant.</p>';
+  return gCard("Garantihistorik", avg + gl + note + table);
+}
+
+function gWarrantState(w) {
+  const day = 86400000, now = Date.now();
+  const s = w.exercise_start ? Date.parse(w.exercise_start) : NaN, e = w.exercise_end ? Date.parse(w.exercise_end) : NaN;
+  if (!Number.isNaN(e) && e + day < now) return "";
+  if (!Number.isNaN(s) && s > now) return s - now <= 60 * day ? "soon" : "";
+  return !Number.isNaN(s) || !Number.isNaN(e) ? "open" : "";
+}
+
+function gWarrants(d) {
+  const list = Array.isArray(d.warrants_outstanding) ? d.warrants_outstanding : [];
+  if (!list.length) return gCard("Utestående teckningsoptioner", '<p class="source">Inga utestående teckningsoptioner registrerade.</p>');
+  const rows = list.map((w) => {
+    const st = gWarrantState(w);
+    const badge = st === "open" ? ' <span class="chip g-chip warn">öppen nu</span>' : st === "soon" ? ' <span class="chip g-chip warn">startar inom 60 dagar</span>' : "";
+    return `<tr${st ? ' class="g-hot"' : ""}><td class="num">${w.exercise_price != null ? `${num(w.exercise_price, 2)} ${escapeHtml(w.currency || "kr")}` : "—"}</td><td>${escapeHtml(date(w.exercise_start))} – ${escapeHtml(date(w.exercise_end))}${badge}</td><td class="num">${msek(w.amount, w.currency)}</td></tr>`;
+  }).join("");
+  return gCard("Utestående teckningsoptioner", `<div class="table-wrap g-table"><table><thead><tr><th class="num">Lösenpris</th><th>Lösenperiod</th><th class="num">Belopp</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+}
+
 function renderGarantiCompany(d) {
+  garanti.data = d;
   const upd = d.updated_at ? `<p class="source">Uppdaterad ${escapeHtml(String(d.updated_at).replace("T", " ").slice(0, 16))}</p>` : "";
-  $("#gCompany").innerHTML = `<div class="g-company fade-in">${gHeader(d)}${gNeed(d)}${gMarket(d)}${gInsiders(d)}${gFinancing(d)}${gAuth(d)}${upd}</div>`;
+  $("#gCompany").innerHTML = `<div class="g-company fade-in">${gHeader(d)}${gNeed(d)}${gMarket(d)}${gOwners(d)}${gShort(d)}${gInsiders(d)}${gFinancing(d)}<div id="gHistory">${gHistory(d)}</div>${gAuth(d)}${gWarrants(d)}${upd}</div>`;
 }
 
 async function openGaranti(id, push = true) {
   garanti.id = id;
+  garanti.guarantor = null;
   garanti.seq++;
   if (push) history.replaceState(null, "", `#garanti/${id}`);
   garanti.results = [];
@@ -717,6 +791,14 @@ $("#gSearch").addEventListener("keydown", (event) => {
 $("#gResults").addEventListener("click", (event) => {
   const li = event.target.closest("[data-gid]");
   if (li) openGaranti(Number(li.dataset.gid));
+});
+$("#gCompany").addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-guarantor]");
+  if (!btn || !garanti.data) return;
+  garanti.guarantor = garanti.guarantor === btn.dataset.guarantor ? null : btn.dataset.guarantor;
+  const host = $("#gHistory");
+  if (host) host.innerHTML = gHistory(garanti.data);
+  $("#gHistory [aria-pressed=true]")?.focus();
 });
 window.addEventListener("hashchange", routeHash);
 

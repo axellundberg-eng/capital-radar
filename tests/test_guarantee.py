@@ -103,3 +103,83 @@ def test_guarantee_for_company_without_data_has_nulls_not_invented_numbers(clien
     assert data["need"] is None and data["market"]["price"] is None and data["market"]["market_cap"] is None
     assert data["capacity"]["assessment"] == "okänd" and data["insiders"] == []
     assert data["insider_summary"]["buys"] == 0 and data["next_report"] is None
+
+
+# --- Tillägg v2: ägare, blankning, garantihistorik, teckningsoptioner ---------------------------------------------
+
+def test_assess_new_reasons():
+    base = guarantee.assess(10.0, 20.0)
+    assert base[0] == "lätt"
+    verdict, reasons = guarantee.assess(10.0, 20.0, short_total_pct=3.0)
+    assert verdict == "möjlig" and any("blankning" in r for r in reasons)
+    verdict, reasons = guarantee.assess(10.0, 20.0, avg_subscription_rate_pct=45.0)
+    assert verdict == "möjlig" and any("teckningsgrad" in r for r in reasons)
+    assert guarantee.assess(30.0, 60.0, short_total_pct=5.0)[0] == "svår"
+    verdict, reasons = guarantee.assess(30.0, 60.0, top3_pct=62.0)
+    assert verdict == "lätt" and any("ägarkoncentration" in r for r in reasons)
+    assert guarantee.assess(30.0, 60.0, top3_pct=62.0, short_total_pct=2.5)[0] == "svår"   # motvind väger tyngst
+    assert guarantee.assess(50.0, 60.0, top3_pct=80.0)[0] == "svår"                          # svår lyfts aldrig
+    assert guarantee.assess(None, None, short_total_pct=9.0)[0] == "okänd"
+    assert guarantee.assess(10.0, 20.0, top3_pct=50.0, short_total_pct=2.0, avg_subscription_rate_pct=60.0) == base
+
+
+def _event(connection, event_id, **fields):
+    values = {"type": "rights_issue", "status": "completed", "gross_amount": 50e6, "currency": "SEK",
+              "event_date": "2026-03-01", **fields}
+    with connection:
+        connection.execute("INSERT OR IGNORE INTO news(document_id, company_id, title) VALUES (?,1,'PM')", (event_id,))
+        columns = ", ".join(values)
+        connection.execute(f"INSERT INTO financing_events(id, news_document_id, company_id, created_at, {columns}) "
+                           f"VALUES (?,?,1,'x',{', '.join('?' * len(values))})",
+                           (event_id, event_id, *values.values()))
+
+
+def test_guarantee_payload_v2_fields(settings):
+    connection = connect(settings.db_path)
+    with connection:
+        connection.execute("INSERT INTO companies(id, name, isin) VALUES (1,'Alfa','SE0001')")
+        connection.execute("INSERT INTO reports(document_id, company_id, title, published_at) VALUES (5,1,'Q3 2026','2026-10-20')")
+        connection.executemany(
+            "INSERT INTO shareholders(company_id, document_id, as_of, rank, name, shares, pct_capital, pct_votes, created_at)"
+            " VALUES (1,5,'2026-09-30',?,?,?,?,?,'x')",
+            [(1, "Alfa Invest", 1000.0, 30.0, 35.0), (2, "Beta AB", None, 15.0, None), (3, "Gamma", None, 10.0, None),
+             (4, "Delta", None, 4.0, None)])
+        connection.executemany(
+            "INSERT INTO short_positions(company_id, holder, pct, position_date, fetched_at) VALUES (1,?,?,?,'x')",
+            [("Fond B", 0.8, "2026-11-05"), ("Fond A", 1.5, "2026-11-06")])
+    _event(connection, 1, event_date="2026-03-01", guarantee_amount=30e6, guarantee_fee_pct=8.0,
+           guarantors="Alfa Invest; Beta AB, Gamma", subscription_rate_pct=50.0, guarantee_utilized=10e6)
+    _event(connection, 2, type="directed_issue", event_date="2025-06-01", guarantee_fee_pct=6.0,
+           guarantors="alfa invest", subscription_rate_pct=70.0, gross_amount=20e6)
+    _event(connection, 3, event_date="2025-01-01")                                   # inga garantiuppgifter
+    _event(connection, 4, status="cancelled", event_date="2024-01-01", guarantee_amount=1.0)
+    _event(connection, 5, type="warrants", status="completed", gross_amount=None, event_date="2026-02-01",
+           exercise_price=4.5, exercise_start="2026-09-01", exercise_end="2027-03-01")
+    _event(connection, 6, type="warrants", status="completed", gross_amount=None, event_date="2024-02-01",
+           exercise_end="2025-03-01")                                                 # utgångna
+    _event(connection, 7, type="warrants", status="announced", gross_amount=None, event_date="2026-10-01")
+    _event(connection, 8, type="warrants", status="completed", gross_amount=None, event_date="2026-01-01")
+    connection.close()
+    connection = connect(settings.db_path)
+    data = guarantee.build(connection, 1, today="2026-11-07")
+    owners_block = data["owners"]
+    assert owners_block["as_of"] == "2026-09-30" and owners_block["source_title"] == "Q3 2026"
+    assert [o["name"] for o in owners_block["top"]][:2] == ["Alfa Invest", "Beta AB"]
+    assert owners_block["top3_pct"] == 55.0 and owners_block["top10_pct"] == 59.0
+    assert owners_block["free_float_estimate_pct"] == 45.0                          # 100 - (30 + 15 + 10)
+    assert [p["holder"] for p in data["short_positions"]] == ["Fond A", "Fond B"] and data["short_total_pct"] == 2.3
+    history = data["guarantee_history"]
+    assert [i["date"] for i in history["issues"]] == ["2026-03-01", "2025-06-01"]
+    assert history["issues"][0]["guarantee_utilized"] == 10e6 and history["avg_subscription_rate_pct"] == 60.0
+    guarantors = {g["name"]: g for g in history["guarantors"]}
+    assert guarantors["Alfa Invest"] == {"name": "Alfa Invest", "issues": 2, "avg_fee_pct": 7.0}
+    assert guarantors["Gamma"]["issues"] == 1 and history["guarantors"][0]["name"] == "Alfa Invest"
+    assert [w["date"] for w in data["warrants_outstanding"]] == ["2026-10-01", "2026-02-01"]
+    assert data["warrants_outstanding"][1]["exercise_price"] == 4.5
+    connection.close()
+
+
+def test_payload_v2_fields_are_empty_without_data(client):
+    data = client.get("/api/guarantee/2").json()
+    assert data["owners"] is None and data["short_positions"] == [] and data["short_total_pct"] is None
+    assert data["guarantee_history"] is None and data["warrants_outstanding"] == []

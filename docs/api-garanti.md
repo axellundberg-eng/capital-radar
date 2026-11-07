@@ -27,3 +27,22 @@ Sök bolag på namn, ticker eller ISIN (skiftlägesokänsligt, delsträng). Tom 
   "updated_at": "ISO-tid"
 }
 404 om bolaget saknas.
+
+## Tillägg (v2): ägare, blankning, garantihistorik, teckningsoptioner
+Nya fält i GET /api/guarantee/{company_id} (null eller [] när underlag saknas):
+
+  "owners": {"as_of": "YYYY-MM-DD", "source_document_id": n, "source_title": "...",
+             "top": [{"name", "shares", "pct_capital", "pct_votes"}],      största först, max 15
+             "top3_pct": tal, "top10_pct": tal, "free_float_estimate_pct": tal},
+  "short_positions": [{"holder", "pct", "date"}],                         aktuella, störst först
+  "short_total_pct": tal,
+  "guarantee_history": {
+      "issues": [{"date", "type", "amount", "subscription_rate_pct", "guarantee_amount",
+                  "guarantee_utilized", "guarantee_fee_pct", "guarantors"}],   nyast först
+      "guarantors": [{"name", "issues", "avg_fee_pct"}],                   oftast förekommande först
+      "avg_subscription_rate_pct": tal},
+  "warrants_outstanding": [{"date", "exercise_price", "exercise_start", "exercise_end", "amount", "currency"}]
+
+Bedömningen i "capacity" får nya skäl när underlaget finns: hög ägarkoncentration (top3 > 50 %) gör
+garantin lättare (större ägare kan teckna), hög blankning (> 2 %) och låg historisk teckningsgrad
+(< 60 %) gör den svårare.
