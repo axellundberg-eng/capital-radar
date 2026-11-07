@@ -42,10 +42,15 @@ class ShortError(Exception):
 
 
 def fetch_file(url: str = URL, timeout: float = TIMEOUT) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    """Hämta registret. httpx används i stället för urllib: FI:s server omdirigerar till en 404-sida när
+    anropet begär okomprimerat innehåll och stänger anslutningen, vilket urllib alltid gör."""
+    import httpx
+
     try:
-        with urllib.request.urlopen(request, timeout=min(timeout, 60.0)) as response:
-            return response.read(MAX_BYTES)
+        response = httpx.get(url, headers={"User-Agent": USER_AGENT}, timeout=min(timeout, 60.0),
+                             follow_redirects=False)
+        response.raise_for_status()
+        return response.content[:MAX_BYTES]
     except Exception as error:  # nät- och HTTP-fel behandlas lika
         raise ShortError(f"anrop misslyckades: {type(error).__name__}") from error
 
