@@ -164,6 +164,36 @@ def _fx_step(settings: Settings, log: Callable[[str], None]) -> dict:
         return {"error": str(error)}
 
 
+def _market_history_step(settings: Settings, log: Callable[[str], None]) -> dict:
+    """Kurssammandrag (högst en hämtning per bolag och dag, 150 bolag per varv); ett fel stoppar aldrig varvet."""
+    from . import market
+
+    try:
+        connection = connect(settings.db_path)
+        try:
+            return market.run(connection, settings, limit=150, log=lambda _line: None)
+        finally:
+            connection.close()
+    except Exception as error:  # noqa: BLE001
+        log(f"kurshistorik misslyckades: {error}")
+        return {"error": str(error)}
+
+
+def _insiders_step(settings: Settings, log: Callable[[str], None]) -> dict:
+    """Insynshandel från FI (högst en hämtning per bolag och dag, 100 bolag per varv); fel stoppar aldrig varvet."""
+    from . import insiders
+
+    try:
+        connection = connect(settings.db_path)
+        try:
+            return insiders.run(connection, settings, limit=100, log=lambda _line: None)
+        finally:
+            connection.close()
+    except Exception as error:  # noqa: BLE001
+        log(f"insynshandel misslyckades: {error}")
+        return {"error": str(error)}
+
+
 def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: int, news_budget: int,
               log: Callable[[str], None] = logger.info) -> dict:
     from .web import latest_rows
@@ -187,6 +217,8 @@ def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: i
             summary["changes"] = record_changes(connection, latest_rows(connection))
         finally:
             connection.close()
+        summary["market_history"] = _market_history_step(settings, log)
+        summary["insiders"] = _insiders_step(settings, log)
     summary["finished_at"] = _now()
     log(json.dumps(summary, ensure_ascii=False))
     return summary

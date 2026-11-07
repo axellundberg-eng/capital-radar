@@ -24,6 +24,9 @@ Granskning (se agents/radar-reviewer.md):
                                   | --date D | --advisers "..." --reason "..."
     python -m radar corrections list [--company ID]  |  corrections revert ID
     python -m radar fx                     hämta dagens växelkurser från Riksbanken (högst en gång per dag)
+    python -m radar market [--limit N]     kurshistorik och omsättning från Nasdaq (högst en gång per dag och bolag)
+    python -m radar insiders [--limit N]   insynshandel från Finansinspektionen (senaste 12 mån)
+    python -m radar slugs [--apply]        matcha bolag utan MFN-sida; utan --apply skrivs bara förslag ut
 """
 
 from __future__ import annotations
@@ -320,6 +323,12 @@ def main(argv: list[str] | None = None) -> int:
     correct.add_argument("--date")
     correct.add_argument("--advisers")
     sub.add_parser("fx", help="hämta dagens växelkurser från Riksbanken")
+    for name, text in (("market", "kurshistorik och omsättning från Nasdaq"),
+                       ("insiders", "insynshandel från Finansinspektionen")):
+        extra = sub.add_parser(name, help=text)
+        extra.add_argument("--limit", type=int)
+    slugs = sub.add_parser("slugs", help="matcha bolag utan MFN-sida mot MFN:s sökning")
+    slugs.add_argument("--apply", action="store_true", help="skriv träffar på ISIN och exakt namn")
     corrections = sub.add_parser("corrections", help="lista eller ångra rättelser")
     corrections.add_argument("action", choices=["list", "revert"])
     corrections.add_argument("id", type=int, nargs="?")
@@ -346,6 +355,22 @@ def main(argv: list[str] | None = None) -> int:
         return qualify_command(args, connection, today)
     if args.command == "review":
         return review_command(args, connection, today)
+    if args.command in ("market", "insiders"):
+        from . import insiders, market
+
+        module = market if args.command == "market" else insiders
+        print(json.dumps(module.run(connection, settings, limit=args.limit, log=lambda _line: None),
+                         ensure_ascii=False, default=str))
+        return 0
+    if args.command == "slugs":
+        from . import slugs as slug_matcher
+
+        proposals = slug_matcher.dry_run(connection, settings, log=lambda *_: None)
+        out = {"proposals": [{k: p.get(k) for k in ("id", "name", "isin", "slug", "method", "score")} for p in proposals]}
+        if args.apply:
+            out["applied"] = slug_matcher.apply(connection, proposals)
+        print(json.dumps(out, ensure_ascii=False, indent=1, default=str))
+        return 0
     if args.command == "fx":
         from . import fx
 

@@ -159,6 +159,31 @@ CREATE TABLE IF NOT EXISTS authorizations (    -- bemyndiganden att emittera akt
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS authorizations_company ON authorizations(company_id, meeting_date);
+CREATE TABLE IF NOT EXISTS market_history_summary (   -- kurshistorik i sammandrag per bolag, se market.py
+    company_id INTEGER PRIMARY KEY,
+    isin TEXT, order_book TEXT,        -- Nasdaqs orderboks-id, sparas så att nästa hämtning kräver ett anrop
+    currency TEXT,
+    price REAL, price_change_1m_pct REAL, price_change_3m_pct REAL, price_change_12m_pct REAL,
+    avg_daily_turnover_3m REAL,        -- SEK per handelsdag (stängningskurs x volym)
+    avg_daily_volume_3m REAL,          -- antal aktier per handelsdag
+    high_52w REAL, low_52w REAL,
+    as_of TEXT, source TEXT, fetched_at TEXT NOT NULL, error TEXT
+);
+CREATE TABLE IF NOT EXISTS insider_trades (   -- Finansinspektionens insynsregister, se insiders.py
+    id INTEGER PRIMARY KEY,
+    company_id INTEGER NOT NULL,
+    published TEXT, transaction_date TEXT,
+    person TEXT, role TEXT, transaction_type TEXT,   -- karaktär: Förvärv, Avyttring, ...
+    volume REAL, price REAL, currency TEXT, value REAL,   -- value = volym x pris i transaktionens valuta
+    instrument TEXT,
+    source_key TEXT NOT NULL UNIQUE
+);
+CREATE INDEX IF NOT EXISTS insider_company ON insider_trades(company_id, transaction_date);
+CREATE TABLE IF NOT EXISTS insider_fetch (   -- senaste hämtning per bolag (högst en per dag)
+    company_id INTEGER PRIMARY KEY,
+    fetched_at TEXT NOT NULL, rows INTEGER NOT NULL DEFAULT 0, matched INTEGER NOT NULL DEFAULT 0,
+    unmatched INTEGER NOT NULL DEFAULT 0, error TEXT
+);
 """
 
 

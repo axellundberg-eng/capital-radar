@@ -20,6 +20,7 @@ from . import __version__
 from .db import connect
 from .authorizations import latest as latest_authorizations
 from .calendar import next_report
+from . import guarantee
 from .fx import latest_rates
 from .qualify import load_history, load_market, qualify, recent_financing
 from .settings import Settings
@@ -226,6 +227,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             group.sort(key=lambda i: (-i["score"], i["runway_today"] or 0, i["name"].casefold()))
         structural.sort(key=lambda i: i["name"].casefold())
         return JSONResponse({"items": out, "raising": raising, "structural": structural}, headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/search")
+    def search(q: str = "", limit: int = 20) -> JSONResponse:
+        connection = db()
+        try:
+            items = guarantee.search(connection, q, max(1, min(limit, 20)))
+        finally:
+            connection.close()
+        return JSONResponse(items, headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/guarantee/{company_id}")
+    def guarantee_view(company_id: int) -> JSONResponse:
+        connection = db()
+        try:
+            payload = guarantee.build(connection, company_id, date.today().isoformat())
+        finally:
+            connection.close()
+        if payload is None:
+            raise HTTPException(404, "Bolaget finns inte")
+        return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
     app.mount("/static", StaticFiles(directory=str(static)), name="static")
 

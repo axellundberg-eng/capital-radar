@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Capital Radar</title>
-  <link rel="stylesheet" href="static/styles.css?v=12">
+  <link rel="stylesheet" href="static/styles.css?v=13">
 </head>
 <body>
   <header class="top">
@@ -22,6 +22,7 @@
       <div class="views" id="views" role="tablist" aria-label="Vy">
         <button class="view active" data-view="list" role="tab" aria-selected="true">Lista <span class="cnt"></span></button>
         <button class="view" data-view="prospects" role="tab" aria-selected="false">Prospekt <span class="cnt"></span></button>
+        <button class="view" data-view="garanti" role="tab" aria-selected="false">Garanti</button>
       </div>
 
       <div id="listView">
@@ -95,6 +96,15 @@
           </table>
         </div>
       </div>
+
+      <div id="garantiView" hidden>
+        <div class="g-search">
+          <label for="gSearch" class="g-label">Sök bolag att garantera</label>
+          <input id="gSearch" type="search" autocomplete="off" placeholder="Bolagsnamn, ticker eller ISIN" role="combobox" aria-expanded="false" aria-controls="gResults" aria-autocomplete="list">
+          <ul id="gResults" class="g-results" role="listbox" aria-label="Sökträffar"></ul>
+        </div>
+        <div id="gCompany" aria-live="polite"></div>
+      </div>
     </section>
 
     <aside class="detail" id="detail" aria-live="polite">
@@ -102,6 +112,6 @@
     </aside>
   </main>
 
-  <script src="static/app.js?v=18" defer></script>
+  <script src="static/app.js?v=19" defer></script>
 </body>
 </html>

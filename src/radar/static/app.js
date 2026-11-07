@@ -31,6 +31,7 @@ const STATUS = { announced: "Annonserad", completed: "Genomförd", cancelled: "A
 const STATUS_CHIP = { announced: "pågår", completed: "genomförd", cancelled: "avbruten" };
 const ACUTE_TEXT = "Kassan räcker mindre än en månad enligt senaste rapporten. Bolaget behöver kapital nu eller har kreditlöften (visas om de finns i rapporten).";
 
+const garanti = { id: null, results: [], active: -1, timer: null, seq: 0, searching: false };
 const expandedProspects = new Set();
 const state = { items: [], band: "3_9", query: "", selected: null, overview: null, view: "list", prospects: null };
 const $ = (selector) => document.querySelector(selector);
@@ -354,7 +355,13 @@ function setView(view) {
   document.querySelectorAll(".view").forEach((b) => { const on = b.dataset.view === view; b.classList.toggle("active", on); b.setAttribute("aria-selected", on); });
   $("#listView").hidden = view !== "list";
   $("#prospectView").hidden = view !== "prospects";
+  $("#garantiView").hidden = view !== "garanti";
+  document.querySelector(".layout").classList.toggle("garanti-mode", view === "garanti");
   if (view === "prospects") loadProspects();
+  if (view === "garanti") {
+    if (!location.hash.startsWith("#garanti")) history.replaceState(null, "", "#garanti" + (garanti.id ? "/" + garanti.id : ""));
+    $("#gSearch").focus();
+  } else if (location.hash.startsWith("#garanti")) history.replaceState(null, "", location.pathname + location.search);
 }
 
 function explanation(d) {
@@ -528,4 +535,191 @@ document.addEventListener("keydown", (event) => {
   select(id);
 });
 $("#search").addEventListener("input", (event) => { state.query = event.target.value; renderRows(); });
+// ---------- Fliken Garanti: sök ett bolag och se vad som avgör om en emission kan garanteras ----------
+const ASSESS = { "lätt": "good", "möjlig": "mid", "svår": "bad", "okänd": "none" };
+
+function dash(value) { return value == null || value === "" ? "—" : value; }
+function num(value, digits = 1) { return value == null ? "—" : Number(value).toLocaleString("sv-SE", { maximumFractionDigits: digits }); }
+function signedPct(value) { return value == null ? "—" : `${value > 0 ? "+" : ""}${num(value)} %`; }
+function pctClass(value) { return value == null ? "" : value > 0 ? "up" : value < 0 ? "down" : ""; }
+function bandPill(band, runway) {
+  if (runway == null && !band) return "";
+  return `<span class="pill ${band ? `band-${band}` : "muted"}">${runway != null ? months(runway) : "—"}</span>`;
+}
+
+function renderGResults() {
+  const box = $("#gResults");
+  const input = $("#gSearch");
+  const q = input.value.trim();
+  input.setAttribute("aria-expanded", String(garanti.results.length > 0));
+  if (!q) {
+    box.innerHTML = garanti.id ? "" : '<li class="g-empty">Skriv ett bolagsnamn, en ticker eller ett ISIN-nummer för att se vad som avgör om en emission kan garanteras.</li>';
+    input.removeAttribute("aria-activedescendant");
+    return;
+  }
+  if (!garanti.results.length) {
+    box.innerHTML = `<li class="g-empty">${garanti.searching ? "Söker…" : `Inga bolag matchar "${escapeHtml(q)}".`}</li>`;
+    return;
+  }
+  box.innerHTML = garanti.results.map((r, i) => `
+    <li role="option" id="gOpt${i}" data-gid="${r.id}" class="g-opt${i === garanti.active ? " active" : ""}" aria-selected="${i === garanti.active}">
+      <span class="g-name"><strong>${escapeHtml(r.name)}</strong><small>${escapeHtml([r.symbol, r.market].filter(Boolean).join(" · "))}</small></span>
+      <span class="g-run">${bandPill(r.band, r.runway_today)}</span></li>`).join("");
+  if (garanti.active >= 0) {
+    input.setAttribute("aria-activedescendant", `gOpt${garanti.active}`);
+    document.getElementById(`gOpt${garanti.active}`)?.scrollIntoView({ block: "nearest" });
+  } else input.removeAttribute("aria-activedescendant");
+}
+
+async function gSearch() {
+  const q = $("#gSearch").value.trim();
+  const seq = ++garanti.seq;
+  if (!q) { garanti.results = []; garanti.active = -1; garanti.searching = false; renderGResults(); return; }
+  garanti.searching = true;
+  try {
+    const data = await api(`api/search?q=${encodeURIComponent(q)}&limit=20`);
+    if (seq !== garanti.seq) return;
+    garanti.results = Array.isArray(data) ? data : (data.items || []);
+    garanti.active = garanti.results.length ? 0 : -1;
+    garanti.searching = false;
+    renderGResults();
+  } catch (error) {
+    if (seq !== garanti.seq) return;
+    garanti.results = [];
+    garanti.searching = false;
+    $("#gResults").innerHTML = `<li class="g-empty">Sökningen misslyckades (${escapeHtml(error.message)}). Försök igen.</li>`;
+  }
+}
+
+function gCard(title, body) { return `<section class="g-card"><h3>${title}</h3>${body}</section>`; }
+function gKv(label, value, hint) {
+  return `<div class="g-kv"${hint ? ` title="${escapeHtml(hint)}"` : ""}><span>${label}</span><strong>${value}</strong></div>`;
+}
+
+function gHeader(d) {
+  const c = d.company || {};
+  const r = d.runway || {};
+  const verdict = (d.capacity && d.capacity.assessment) || "okänd";
+  const reasons = ((d.capacity && d.capacity.reasons) || []).map((t) => `<li>${escapeHtml(t)}</li>`).join("");
+  return `<section class="g-card g-head">
+    <div class="g-head-top">
+      <div><h2>${escapeHtml(c.name || "Okänt bolag")}</h2>
+        <p class="source">${escapeHtml([c.symbol, c.market, c.segment, c.sector].filter(Boolean).join(" · "))}</p></div>
+      <div class="g-badges">${bandPill(r.band, r.runway_today)}
+        <span class="g-verdict v-${ASSESS[verdict] || "none"}" title="Bedömd möjlighet att garantera behovet">Garanti: ${escapeHtml(verdict)}</span></div>
+    </div>
+    ${reasons ? `<ul class="g-reasons">${reasons}</ul>` : ""}</section>`;
+}
+
+function gNeed(d) {
+  const n = d.need, r = d.runway || {};
+  let body;
+  if (n) {
+    // Belopp i behovsdelen är redan omräknade till SEK (docs/api-garanti.md); n.currency är bara rapportens valuta.
+    const orig = n.currency || "SEK";
+    const cells = [["Burn 12 mån", n.operating_12m], ["+ Lån inom 12 mån", n.debt_due_12m], ["− Kassa", n.cash_today],
+      ["− Outnyttjad kredit", n.available_credit], ["= Nettobehov", n.net_need], ["+ Emissionskostnad", n.issue_costs], ["= Bruttobehov", n.gross_need]];
+    body = `<div class="g-eq">${cells.map(([l, v], i) => `<div class="g-kv${i === 6 ? " total" : ""}"><span>${l}</span><strong>${msek(v, "SEK")}</strong></div>`).join("")}</div>
+      ${orig !== "SEK" && n.sek_per_unit ? `<p class="source">Omräknat från ${escapeHtml(orig)} (${num(n.sek_per_unit, 3)} kr per enhet).</p>` : ""}`;
+  } else body = '<p class="source">Kapitalbehov kan inte beräknas: underlag saknas.</p>';
+  const rw = `<div class="g-grid">${gKv("Runway idag", months(r.runway_today))}${gKv("Endast kassa", months(r.runway_cash_today), "Utan outnyttjad kredit")}${gKv("Pro forma", months(r.runway_pro_forma), "Om säkrad finansiering kommer in")}${gKv("Kassa idag", msek(r.cash_today, r.currency))}${gKv("Burn / mån", msek(r.monthly_burn, r.currency))}</div>`;
+  const flagTexts = r.flag_text ? Object.values(r.flag_text) : [];
+  const flags = flagTexts.length ? `<ul class="g-reasons warn">${flagTexts.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>` : "";
+  const src = r.period_end ? `<p class="source">Rapport ${date(r.period_end)}${r.months_since_report != null ? ` (${months(r.months_since_report)} sedan)` : ""}.</p>` : "";
+  return gCard("Kapitalbehov", body + rw + src + flags);
+}
+
+function gMarket(d) {
+  const m = d.market || {}, c = d.capacity || {};
+  if (m.market_cap == null && m.price == null) {
+    return gCard("Marknad", `<p class="source">Marknadsdata saknas${m.error ? ` (${escapeHtml(m.error)})` : ""}.</p>`);
+  }
+  const ch = (label, v) => `<div class="g-kv"><span>${label}</span><strong class="${pctClass(v)}">${signedPct(v)}</strong></div>`;
+  const range = m.low_52w != null || m.high_52w != null ? `${num(m.low_52w, 2)} – ${num(m.high_52w, 2)}` : "—";
+  const days = c.turnover_days_for_need != null ? `${num(c.turnover_days_for_need)} dagars omsättning` : "—";
+  const share = c.need_share_of_market_cap_pct != null ? `${num(c.need_share_of_market_cap_pct)} % av börsvärdet` : "—";
+  const foot = [m.as_of ? `Per ${date(m.as_of)}` : "", m.source ? escapeHtml(m.source) : "", m.error ? escapeHtml(m.error) : ""].filter(Boolean).join(" · ");
+  return gCard("Marknad", `<div class="g-grid">${gKv("Börsvärde", msek(m.market_cap))}${gKv("Kurs", m.price != null ? `${num(m.price, 2)} kr` : "—")}
+    ${ch("1 mån", m.price_change_1m_pct)}${ch("3 mån", m.price_change_3m_pct)}${ch("12 mån", m.price_change_12m_pct)}
+    ${gKv("Omsättning / dag (3 mån)", msek(m.avg_daily_turnover_3m))}${gKv("52 veckor", range)}</div>
+    <div class="g-callouts"><div><span>Behovet motsvarar</span><strong>${days}</strong></div><div><span>Behovet motsvarar</span><strong>${share}</strong></div></div>
+    ${foot ? `<p class="source">${foot}</p>` : ""}`);
+}
+
+function gInsiders(d) {
+  const s = d.insider_summary, rows = d.insiders || [];
+  const sum = s ? `<div class="g-grid">${gKv(`Köp (${s.months || 6} mån)`, `${msek(s.buys)}${s.buyers != null ? ` · ${s.buyers} pers.` : ""}`)}
+    ${gKv("Sälj", `${msek(s.sells)}${s.sellers != null ? ` · ${s.sellers} pers.` : ""}`)}${gKv("Netto", `<span class="${pctClass(s.net)}">${msek(s.net)}</span>`)}</div>` : "";
+  const table = rows.length ? `<div class="table-wrap g-table"><table><thead><tr><th>Datum</th><th>Person</th><th>Roll</th><th>Typ</th><th class="num">Antal</th><th class="num">Kurs</th><th class="num">Värde</th></tr></thead><tbody>
+    ${rows.map((t) => `<tr><td>${date(t.date)}</td><td>${escapeHtml(dash(t.person))}</td><td>${escapeHtml(dash(t.role))}</td><td>${escapeHtml(dash(t.transaction))}</td>
+      <td class="num">${num(t.volume, 0)}</td><td class="num">${num(t.price, 2)}</td><td class="num">${msek(t.value, t.currency)}</td></tr>`).join("")}</tbody></table></div>`
+    : '<p class="source">Inga insynshandlingar registrerade.</p>';
+  return gCard("Insynshandel", sum + table);
+}
+
+function gFinancing(d) {
+  const list = d.financing || [];
+  const items = list.map((e) => `<li><div><span>${date(e.date)} · ${TYPE[e.type] || e.type} · ${STATUS[e.status] || e.status}</span>
+      <strong>${e.amount != null ? msek(e.amount, e.currency) : "belopp saknas"}</strong></div>${terms(e)}
+      <small>Rådgivare: ${e.advisers ? escapeHtml(e.advisers) : "ej angivet"}</small>
+      ${e.url ? `<a href="${escapeHtml(e.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(e.title || "Pressmeddelande")}</a>` : ""}
+      ${e.quote ? `<q>${escapeHtml(e.quote)}</q>` : ""}</li>`).join("");
+  const n = d.emissions_24m != null ? `<p class="source">${d.emissions_24m} emissioner senaste 24 månaderna.</p>` : "";
+  return gCard("Emissionshistorik 24 mån", n + (items ? `<ul class="facts">${items}</ul>` : '<p class="source">Inga finansieringshändelser de senaste 24 månaderna.</p>'));
+}
+
+function gAuth(d) {
+  const a = d.authorization, r = d.next_report;
+  const auth = a ? `<p>Stämma ${escapeHtml(date(a.meeting_date))}: ${a.max_dilution_pct != null ? `högst ${num(a.max_dilution_pct)} % av aktierna` : a.max_shares != null ? `högst ${Number(a.max_shares).toLocaleString("sv-SE")} aktier` : "omfattning ej angiven"}${a.directed_allowed ? ", även riktad emission" : ""}.</p>`
+    : '<p class="source">Inget bemyndigande registrerat.</p>';
+  const rep = r ? `<p>Nästa rapport: <strong>${escapeHtml(date(r.date))}</strong>${r.title ? ` (${escapeHtml(r.title)})` : ""}</p>` : '<p class="source">Nästa rapportdatum okänt.</p>';
+  return gCard("Bemyndigande och nästa rapport", auth + rep);
+}
+
+function renderGarantiCompany(d) {
+  const upd = d.updated_at ? `<p class="source">Uppdaterad ${escapeHtml(String(d.updated_at).replace("T", " ").slice(0, 16))}</p>` : "";
+  $("#gCompany").innerHTML = `<div class="g-company fade-in">${gHeader(d)}${gNeed(d)}${gMarket(d)}${gInsiders(d)}${gFinancing(d)}${gAuth(d)}${upd}</div>`;
+}
+
+async function openGaranti(id, push = true) {
+  garanti.id = id;
+  garanti.seq++;
+  if (push) history.replaceState(null, "", `#garanti/${id}`);
+  garanti.results = [];
+  renderGResults();
+  $("#gSearch").setAttribute("aria-expanded", "false");
+  $("#gCompany").innerHTML = '<div class="g-company"><div class="g-card"><span class="sk" style="width:50%;height:24px"></span><span class="sk" style="width:30%;margin-top:10px"></span></div><div class="g-card"><span class="sk block"></span></div><div class="g-card"><span class="sk block"></span></div></div>';
+  try {
+    const d = await api(`api/guarantee/${id}`);
+    if (garanti.id !== id) return;
+    renderGarantiCompany(d);
+  } catch (error) {
+    if (garanti.id !== id) return;
+    $("#gCompany").innerHTML = `<div class="g-card"><p class="source">${error.message === "API 404" ? "Bolaget hittades inte." : `Bolaget kunde inte läsas (${escapeHtml(error.message)}).`}</p></div>`;
+  }
+}
+
+function routeHash() {
+  const m = location.hash.match(/^#garanti(?:\/(\d+))?$/);
+  if (!m) return;
+  setView("garanti");
+  if (m[1] && Number(m[1]) !== garanti.id) openGaranti(Number(m[1]), false);
+}
+
+$("#gSearch").addEventListener("input", () => { clearTimeout(garanti.timer); garanti.timer = setTimeout(gSearch, 200); });
+$("#gSearch").addEventListener("keydown", (event) => {
+  const n = garanti.results.length;
+  if (event.key === "ArrowDown" && n) { event.preventDefault(); garanti.active = (garanti.active + 1) % n; renderGResults(); }
+  else if (event.key === "ArrowUp" && n) { event.preventDefault(); garanti.active = (garanti.active - 1 + n) % n; renderGResults(); }
+  else if (event.key === "Enter" && garanti.results[garanti.active]) { event.preventDefault(); openGaranti(garanti.results[garanti.active].id); }
+  else if (event.key === "Escape") { $("#gSearch").value = ""; garanti.results = []; renderGResults(); }
+});
+$("#gResults").addEventListener("click", (event) => {
+  const li = event.target.closest("[data-gid]");
+  if (li) openGaranti(Number(li.dataset.gid));
+});
+window.addEventListener("hashchange", routeHash);
+
+renderGResults();
 load();
+routeHash();
