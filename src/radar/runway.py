@@ -84,6 +84,12 @@ class Runway:
     burn_basis: str | None = None       # ltm, annual eller longest_period
     cash_today: float | None = None     # kassa idag (rapportens kassa rullad fram), rapportens valuta
     currency: str | None = None         # rapportens valuta
+    # Uppdelning av finansieringen efter rapporten (rapportens valuta, netto kassaeffekt); summan av
+    # equity_after_report och debt_after_report är confirmed_financing.
+    equity_after_report: float = 0.0    # emissioner, teckningsoptioner och övrigt
+    debt_after_report: float = 0.0      # lån, brygglån, konvertibler, utnyttjad kredit minus återbetalningar
+    equity_announced: float = 0.0       # annonserat men inte genomfört
+    debt_announced: float = 0.0
     secured_financing: float = 0.0      # säkrad del (åtaganden + garantier) av annonserade emissioner, netto
     runway_pro_forma: float | None = None   # runway om den säkrade delen kommer in
 
@@ -168,6 +174,9 @@ def _ltm(facts: list[Fact], periods: list[Period], period_end: str) -> dict | No
             "monthly_burn": max(0.0, (investments + lease - cfo) / 12), "basis": "ltm"}
 
 
+DEBT_SPLIT_TYPES = ("loan", "bridge_loan", "convertible", "credit_facility", "repayment")
+
+
 def _apply_financing(result: Runway, financing: tuple | None) -> float:
     """Registrerar finansieringen och returnerar den bekräftade kassan som läggs till."""
     if financing is None:
@@ -182,6 +191,20 @@ def _apply_financing(result: Runway, financing: tuple | None) -> float:
         result.flags.append("raise_announced")
     if any(e.get("unconverted") for e in events):
         result.flags.append("unconverted_currency")   # kurs saknades: beloppet räknas inte
+    for e in events:
+        if e.get("unconverted") or e.get("type") in NON_CASH_TYPES:
+            continue
+        debt = e.get("type") in DEBT_SPLIT_TYPES
+        if e["status"] == "completed":
+            if debt:
+                result.debt_after_report += e.get("cash") or 0.0
+            else:
+                result.equity_after_report += e.get("cash") or 0.0
+        elif e["status"] == "announced" and e.get("amount"):
+            if debt:
+                result.debt_announced += e["amount"]
+            else:
+                result.equity_announced += e["amount"]
     return confirmed
 
 

@@ -108,3 +108,16 @@ def test_pro_forma_runway_counts_only_the_secured_part():
     plain = compute(facts, END, today=END, financing=summarize(
         [Event("rights_issue", "announced", 50e6, None, "SEK", "2026-08-01", "q", "t", "u")], END, "SEK"))
     assert plain.runway_pro_forma is None and plain.secured_financing == 0
+
+
+def test_financing_is_split_into_equity_and_debt():
+    events = [Event("rights_issue", "completed", 50e6, None, "SEK", "2026-08-01", "q", "t", "u", issue_costs=5e6),
+              Event("bridge_loan", "completed", 10e6, None, "SEK", "2026-07-15", "q", "t", "u"),
+              Event("repayment", "completed", 4e6, None, "SEK", "2026-08-20", "q", "t", "u"),
+              Event("loan", "announced", 8e6, None, "SEK", "2026-09-01", "q", "t", "u")]
+    facts = [Fact("cash", 12e6, None, END), flow("operating_cash_flow", -6e6, "2026-01-01")]
+    result = compute(facts, END, today="2026-09-30", financing=summarize(events, END, "SEK"))
+    assert result.equity_after_report == pytest.approx(45e6)
+    assert result.debt_after_report == pytest.approx(6e6)                # 10 in, 4 tillbaka
+    assert result.debt_announced == pytest.approx(8e6) and result.equity_announced == 0
+    assert result.equity_after_report + result.debt_after_report == pytest.approx(result.confirmed_financing)

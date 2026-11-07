@@ -186,6 +186,48 @@ function prospectRow(item, expandable) {
     </tr>`;
 }
 
+// Ruta i detaljpanelen: genomförd finansiering efter rapporten och det som är annonserat men inte klart.
+// Klick på rutan fäller ut affärerna bakom beloppet (capitalDetail nedan).
+const DEBT_TYPES = ["loan", "bridge_loan", "convertible", "credit_facility", "repayment"];
+function capitalBox(kind, label, done, announced, d, hint) {
+  const value = done ? msek(done, d.currency) : "—";
+  const months = done && d.monthly_burn ? ` · ${done > 0 ? "+" : ""}${(done / d.monthly_burn).toLocaleString("sv-SE", { maximumFractionDigits: 1 })} mån` : "";
+  const note = announced ? `${msek(announced, d.currency)} annonserat` : "efter rapporten";
+  return `<button type="button" class="kpi-btn" data-capital="${kind}" aria-expanded="false" title="${escapeHtml(hint)}">
+    <span>${label}</span><strong>${value}</strong><small>${note}${months}</small><i class="kpi-chevron" aria-hidden="true"></i></button>`;
+}
+
+function capitalDetail(d, kind) {
+  const events = (d.financing_events || []).filter((e) => e.type !== "set_off"
+    && (kind === "debt") === DEBT_TYPES.includes(e.type));
+  if (!events.length) return '<p class="source">Ingen sådan finansiering efter rapporten.</p>';
+  const rows = events.map((e) => {
+    const effect = e.unconverted ? "räknas inte (växelkurs saknas)"
+      : e.status === "completed" ? `kassa ${msek(e.cash, d.currency)}${d.monthly_burn && e.cash ? ` · ${(e.cash / d.monthly_burn).toLocaleString("sv-SE", { maximumFractionDigits: 1 })} mån runway` : ""}`
+      : e.status === "announced" ? "annonserad, ingår inte ännu" : "avbruten";
+    const notes = [e.issue_costs != null ? `kostnader ${msek(e.issue_costs, d.currency)}` : (e.status === "completed" && !DEBT_TYPES.includes(e.type) && e.net_amount == null ? "kostnad enligt schablon 10 %" : ""),
+      e.paid_in_shares ? `${msek(e.paid_in_shares, d.currency)} till garanter i aktier (ingen kassa)` : "",
+      e.original_currency ? `omräknat från ${e.original_currency}` : ""].filter(Boolean).join(" · ");
+    return `<li class="${e.status}"><div><span>${date(e.date)} · ${TYPE[e.type] || e.type}</span>
+      <strong>${e.amount != null ? msek(e.amount, d.currency) : "—"}</strong></div>
+      <small>${effect}${notes ? " · " + notes : ""}</small>
+      ${e.url ? `<a href="${escapeHtml(e.url)}" target="_blank" rel="noopener">${escapeHtml(e.title || "Pressmeddelande")}</a>` : ""}</li>`;
+  }).join("");
+  return `<ul class="capital-list">${rows}</ul>`;
+}
+
+function toggleCapital(button) {
+  const box = $("#capitalDetail");
+  const d = state.detail;
+  if (!box || !d) return;
+  const open = button.getAttribute("aria-expanded") === "true";
+  document.querySelectorAll("[data-capital]").forEach((b) => b.setAttribute("aria-expanded", "false"));
+  if (open) { box.classList.remove("open"); return; }
+  button.setAttribute("aria-expanded", "true");
+  box.innerHTML = `<h4>${button.querySelector("span").textContent}</h4>${capitalDetail(d, button.dataset.capital)}`;
+  box.classList.add("open");
+}
+
 // Villkor och utfall för en emission: garanti, teckning, pris, rabatt, utspädning, TO-villkor.
 function terms(e) {
   const cur = e.currency;
@@ -393,6 +435,7 @@ function pdfLink(d, page) {
 }
 
 function renderDetail(d) {
+  state.detail = d;
   const periods = d.periods.map((p) => `<tr><td>${p.months} mån från ${date(p.start)}</td>
     <td class="num">${msek(p.operating_cash_flow, d.currency)}</td><td class="num">${msek(-p.investments, d.currency)}</td>
     <td class="num">${msek(p.monthly_burn, d.currency)}</td></tr>`).join("");
@@ -413,8 +456,13 @@ function renderDetail(d) {
       <div><span>Runway idag</span><strong class="band-${d.band}">${d.cash_flow_positive ? "Positivt" : months(d.runway_today)}</strong></div>
       <div><span>Vid rapporten</span><strong>${months(d.runway_at_report)}</strong></div>
       <div><span>Burn / mån</span><strong>${d.cash_flow_positive ? "—" : msek(d.monthly_burn, d.currency)}</strong></div>
-      <div><span>Kassa</span><strong>${msek(d.cash, d.currency)}</strong></div>${pro}
+      <div><span>Kassa</span><strong>${msek(d.cash, d.currency)}</strong></div>
+      ${capitalBox("equity", "Kapital från emissioner", d.equity_after_report, d.equity_announced, d,
+        "Nyemissioner, riktade emissioner och teckningsoptioner efter rapporten, netto efter kostnader. Klicka för affärerna.")}
+      ${capitalBox("debt", "Lån, netto", d.debt_after_report, d.debt_announced, d,
+        "Lån, brygglån, konvertibler och utnyttjad kredit efter rapporten, minus återbetalningar. Klicka för affärerna.")}${pro}
     </div>
+    <div id="capitalDetail" class="capital-detail" aria-live="polite"></div>
     ${nextRep}
     <p class="explain">${explanation(d)}${financingNote(d)}</p>
     ${flags ? `<ul class="flags">${flags}</ul>` : ""}
@@ -460,6 +508,8 @@ async function load() {
 }
 
 document.addEventListener("click", (event) => {
+  const capital = event.target.closest("[data-capital]");
+  if (capital) { toggleCapital(capital); return; }
   const viewButton = event.target.closest("[data-view]");
   if (viewButton) { setView(viewButton.dataset.view); return; }
   const bandButton = event.target.closest("[data-band]");
