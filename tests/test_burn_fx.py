@@ -63,10 +63,10 @@ def test_fx_refresh_stores_rates_and_never_guesses(tmp_path):
             raise OSError("429")
         return {"date": "2026-11-06", "value": 11.026}
 
-    counts = fx.refresh(connection, {"EUR", "USD", "XYZ"}, fetch=fake, sleep=lambda s: None, today="2026-11-06")
+    counts = fx.refresh(connection, {"EUR", "USD", "XYZ"}, fetch=fake, sleep=lambda s: None)
     assert counts == {"fetched": 1, "fresh": 0, "unsupported": 1, "failed": 1}
     assert fx.latest_rates(connection) == {"SEK": 1.0, "EUR": 11.026}
-    assert fx.refresh(connection, {"EUR"}, fetch=fake, sleep=lambda s: None, today="2026-11-06")["fresh"] == 1
+    assert fx.refresh(connection, {"EUR"}, fetch=fake, sleep=lambda s: None)["fresh"] == 1
     assert fx.convert(10, "EUR", "SEK", fx.latest_rates(connection)) == pytest.approx(110.26)
     assert fx.convert(10, "USD", "SEK", fx.latest_rates(connection)) is None
     assert fx.converter(connection)(1.0, "EUR", "SEK", "2026-12-01") == pytest.approx(11.026)
