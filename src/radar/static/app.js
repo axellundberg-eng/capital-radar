@@ -394,12 +394,31 @@ function financingNote(d) {
   return parts.join("");
 }
 
+// Kort, läsbar sammanfattning av affären på vanlig svenska.
+function dealSummary(e, d) {
+  const cur = e.currency || d.currency;
+  const what = `${TYPE[e.type] || e.type}${e.amount != null ? ` på ${msek(e.amount, cur)}` : ""}`;
+  const when = e.status === "completed" ? `genomfördes ${date(e.date)}` : e.status === "cancelled" ? `avbröts ${date(e.date)}` : `annonserades ${date(e.date)} och är inte genomförd`;
+  const extras = [];
+  if (e.guarantee_amount != null) extras.push(`garanterades till ${msek(e.guarantee_amount, cur)}`);
+  if (e.subscription_rate_pct != null) extras.push(`tecknades till ${e.subscription_rate_pct} %`);
+  if (e.dilution_pct != null) extras.push(`utspädning ${e.dilution_pct.toLocaleString("sv-SE")} %`);
+  return `${what} ${when}${extras.length ? `. ${extras.join(", ").replace(/^./, (c) => c.toUpperCase())}` : ""}.`;
+}
+
 function financingItem(e, d) {
   const drawn = e.type === "credit_facility" && e.drawn_amount != null ? ` · utnyttjat ${msek(e.drawn_amount, d.currency)}` : "";
-  return `<li><div><strong>${STATUS[e.status] || e.status}</strong>
-    <span>${e.amount != null ? msek(e.amount, d.currency) : "belopp saknas"}${drawn} · ${date(e.date)}</span></div>
+  const amount = e.amount != null ? msek(e.amount, d.currency) : "belopp saknas";
+  const terms_ = terms(e);
+  const link = e.url
+    ? `<a class="src-link" href="${escapeHtml(e.url)}" target="_blank" rel="noopener noreferrer">${e.status === "completed" ? "Läs utfallet på MFN" : "Läs pressmeddelandet på MFN"} →</a>`
+    : "";
+  return `<li>
+    <div class="fi-head"><strong>${STATUS[e.status] || e.status}</strong><span>${amount}${drawn} · ${date(e.date)}</span></div>
+    <p class="fi-sum">${escapeHtml(dealSummary(e, d))}</p>
+    ${terms_ ? `<div class="fi-terms">${terms_}</div>` : ""}
     ${e.quote ? `<q>${escapeHtml(e.quote)}</q>` : ""}
-    ${e.url ? `<a href="${escapeHtml(e.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(e.title || "Pressmeddelande")}</a>` : escapeHtml(e.title || "")}</li>`;
+    ${link}</li>`;
 }
 
 function creditReserve(d) {

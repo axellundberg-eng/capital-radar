@@ -289,14 +289,18 @@ def recent_financing(rows: list[dict], today: str) -> tuple[int, list[dict]]:
         if round_ is None:
             continue
         merged.append(round_)
-        meta[(round_.type, round_.date, round_.amount)] = (min(e.date for e in group)[:10], len(group))
+        # Länken går till utfallet (senaste pressmeddelandet i affären) när det finns, annars till det första.
+        linked = sorted((e for e in group if e.url), key=lambda e: (e.status == "completed", e.date))
+        link = (linked[-1].url, linked[-1].title) if linked else (None, None)
+        meta[(round_.type, round_.date, round_.amount)] = (min(e.date for e in group)[:10], len(group), link)
     rounds = attach_set_offs(merged)
     equity = [e for e in rounds if e.type in EQUITY_TYPES]
     listing = []
     for e in sorted(rounds, key=lambda e: e.date, reverse=True):
-        first, count = meta.get((e.type, e.date, e.amount), (e.date[:10], 1))
+        first, count, (url, title) = meta.get((e.type, e.date, e.amount), (e.date[:10], 1, (None, None)))
         entry = {"type": e.type, "status": e.status, "date": e.date[:10], "first_date": first,
                  "press_releases": count, "amount": e.amount, "currency": e.currency, "quote": e.quote,
+                 "url": url, "title": title,
                  "advisers": e.advisers, "paid_in_shares": e.paid_in_shares}
         entry.update({key: getattr(e, key) for key in TERMS})
         before, issued = e.shares_before, e.shares_issued
