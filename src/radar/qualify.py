@@ -252,7 +252,7 @@ def load_history(connection: sqlite3.Connection) -> dict[int, list[dict]]:
     overrides = event_overrides(connection)
     history: dict[int, list[dict]] = {}
     for row in connection.execute(
-            """SELECT f.*, n.title FROM financing_events f LEFT JOIN news n ON n.document_id = f.news_document_id
+            """SELECT f.*, n.title, n.url FROM financing_events f LEFT JOIN news n ON n.document_id = f.news_document_id
                ORDER BY f.event_date DESC"""):
         fixed = apply_event_row(reclassify(dict(row)), overrides.get(row["id"]))
         if fixed is not None:
@@ -276,7 +276,7 @@ def recent_financing(rows: list[dict], today: str) -> tuple[int, list[dict]]:
     cutoff = (date.fromisoformat(today[:10]) - timedelta(days=RECENT_DAYS)).isoformat()
     recent = [r for r in rows if r["status"] != "cancelled" and (r["event_date"] or "")[:10] >= cutoff]
     events = [Event(r["type"], r["status"], r["gross_amount"], r["net_amount"], r["currency"], r["event_date"],
-                    r.get("quote"), None, None, r.get("drawn_amount"), r.get("advisers"),
+                    r.get("quote"), r.get("title"), r.get("url"), r.get("drawn_amount"), r.get("advisers"),
                     **{key: r.get(key) for key in TERMS}) for r in recent]
     groups: list[list[Event]] = []
     for event in sorted(events, key=lambda e: e.date):
