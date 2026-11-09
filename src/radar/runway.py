@@ -12,8 +12,9 @@
   hela investeringskassaflödet (flaggas).
 - Utflöden efter periodens slut som rapporten själv nämner (t.ex. amortering,
   fakta `post_period_outflow`) dras från kassan innan den rullas fram. Inflöden
-  efter perioden (`post_period_inflow`) läggs inte till (de kommer från
-  nyhetssteget) utan visas bara. Lån som förfaller inom 12 månader
+  efter perioden som rapporten nämner (`post_period_inflow`, t.ex. försäljningslikvid,
+  förlikning, inbetald fordran) läggs till, utom när en finansieringshändelse från
+  nyhetssteget med liknande belopp redan räknas (då är det samma pengar). Lån som förfaller inom 12 månader
   (`debt_due_12m`) ändrar inte huvudtalet utan ger en varning med egen runway.
 - Kassan rullas fram med burn från periodslut till idag.
 - Kreditfaciliteter är en reserv: outnyttjad kredit (rapport + nyheter) ger `runway_with_credit`
@@ -294,6 +295,12 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
                    and not any(abs(f.value - r) <= 0.25 * max(f.value, r) for r in news_repayments))
     result.post_period_outflows = outflows
     result.reported_inflows_after_period = _sum(facts, "post_period_inflow")
+    news_amounts = [e.get("amount") or 0.0 for e in result.financing_events if e.get("type") != "repayment"]
+    inflows = sum(f.value for f in facts if f.kind == "post_period_inflow" and f.value > 0
+                  and not any(abs(f.value - a) <= 0.25 * max(f.value, a) for a in news_amounts))
+    if inflows:
+        result.flags.append("post_period_inflows")
+        extra += inflows
     if outflows:
         result.flags.append("post_period_outflows")
         extra -= outflows

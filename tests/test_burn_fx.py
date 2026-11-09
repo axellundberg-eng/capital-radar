@@ -146,3 +146,15 @@ def test_large_undrawn_credit_line_is_not_acute_or_exhausted():
     result = compute(facts, END, today="2026-07-15")
     assert "acute" not in result.flags and "cash_exhausted_since_report" not in result.flags
     assert result.runway_today > 1 and result.runway_cash_today < 1
+
+
+def test_reported_inflow_after_period_is_added_unless_news_already_counts_it():
+    # Rapporten nämner försäljningslikvid 20 efter perioden; ingen nyhet täcker den.
+    facts = [Fact("cash", 6e6, None, END), flow("operating_cash_flow", -6e6, "2026-01-01"),
+             Fact("post_period_inflow", 20e6, "2026-07-10", END)]
+    result = compute(facts, END, today=END)
+    assert result.runway_today == pytest.approx(26.0) and "post_period_inflows" in result.flags
+    # Samma emission både i rapporten och som genomförd nyhet: räknas en gång.
+    issue = Event("directed_issue", "completed", 20e6, None, "SEK", "2026-07-10", "q", "t", "u", issue_costs=0)
+    once = compute(facts, END, today=END, financing=summarize([issue], END, "SEK"))
+    assert once.runway_today == pytest.approx(26.0) and "post_period_inflows" not in once.flags

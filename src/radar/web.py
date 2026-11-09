@@ -37,6 +37,7 @@ FLAG_TEXT = {
     "includes_short_term_investments": "Likviditeten inkluderar kortfristiga placeringar",
     "cash_exhausted_since_report": "Kassan borde vara slut sedan rapporten: kontrollera ny finansiering",
     "raise_announced": "En emission eller finansiering är annonserad men inte genomförd",
+    "post_period_inflows": "Inbetalningar efter perioden som rapporten nämner (t.ex. försäljning, förlikning) är tillagda kassan",
     "post_period_outflows": "Utbetalningar efter perioden (t.ex. amortering) är avdragna från kassan",
     "debt_due_within_12m": "Lån förfaller inom 12 månader: runway efter amortering är klart kortare",
     "financing_received": "Genomförd finansiering efter rapporten ingår i runway",

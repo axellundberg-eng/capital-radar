@@ -361,13 +361,13 @@ def test_company_without_full_report_stays_visible_as_missing(tmp_path, legacy_d
 XSPRAY = [("cash", 180e6, None), ("operating_cash_flow", -79.2e6, "2026-01-01")]
 
 
-def test_post_period_outflow_is_subtracted_and_inflow_only_shown():
+def test_post_period_outflow_is_subtracted_and_inflow_added():
     base = compute(facts(*XSPRAY), END, today="2026-09-30")
     result = compute(facts(*XSPRAY, ("post_period_outflow", 50e6, "2026-07-10"),
                            ("post_period_inflow", 30e6, "2026-08-01")), END, today="2026-09-30")
-    assert round(base.runway_today - result.runway_today, 1) == 3.8
+    assert round(base.runway_today - result.runway_today, 1) == 1.5     # netto 20 ut / 13,2 per mån
     assert result.post_period_outflows == 50e6 and result.reported_inflows_after_period == 30e6
-    assert "post_period_outflows" in result.flags
+    assert "post_period_outflows" in result.flags and "post_period_inflows" in result.flags
     assert result.runway_at_report == base.runway_at_report
 
 
