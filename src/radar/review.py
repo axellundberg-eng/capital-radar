@@ -29,7 +29,9 @@ CHECKS = {
     "stale_report": (1, "Senaste rapporten är äldre än 7 månader: nyare rapport saknas eller är inte läst"),
     "missing_runway": (1, "Rapport finns men runway kunde inte räknas"),
 }
-NUMBER = re.compile(r"-?\(?\d{1,3}(?:[  ,.]\d{3})*(?:[.,]\d+)?\)?|-?\(?\d+(?:[.,]\d+)?\)?")
+# Tusentalsformatet kräver minst en grupp, så att årtal som 2026 läses hela (och filtreras bort) och inte
+# delas upp i fragment som 202 och 6.
+NUMBER = re.compile(r"-?\(?\d{1,3}(?:[  ,.]\d{3}(?!\d))+(?:[.,]\d+)?\)?|-?\(?\d+(?:[.,]\d+)?\)?")
 SCALES = (1.0, 1e3, 1e6)
 
 LATEST = """
@@ -210,7 +212,7 @@ def since_default(connection: sqlite3.Connection) -> str:
 #   läggs till om faktumet saknas), 'delete' (tas bort) eller 'report_period_end' (rapportens periodslut).
 # target 'event': event_id anger händelsen; field 'hide', 'status', 'type', 'gross_amount', 'currency',
 #   'event_date' eller 'advisers'.
-FACT_FIELDS = ("value", "delete", "report_period_end")
+FACT_FIELDS = ("value", "delete", "report_period_end", "scale")
 EVENT_FIELDS = ("hide", "status", "type", "gross_amount", "currency", "event_date", "advisers")
 
 
@@ -231,6 +233,11 @@ def apply_fact_corrections(connection: sqlite3.Connection, document_id: int, fac
     for c in active_corrections(connection, "fact", document_id=document_id):
         if c["field"] == "report_period_end":
             period_end = c["new_value"]
+            continue
+        if c["field"] == "scale":
+            # Hela rapporten i fel enhet (t.ex. TSEK lästes som SEK): alla belopp multipliceras med faktorn.
+            factor = float(c["new_value"])
+            facts = [Fact(f.kind, f.value * factor, f.period_start, f.period_end) for f in facts]
             continue
 
         def same(f, c=c) -> bool:

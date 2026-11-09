@@ -45,8 +45,12 @@ Regler:
 """
 
 
+_DAY: str | None = None   # dagen som körningen gäller; tidsstämplar får samma dag som kontrollen jämför med
+
+
 def _now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    return f"{_DAY}{stamp[10:]}" if _DAY else stamp
 
 
 def _percent(value) -> float | None:
@@ -151,6 +155,8 @@ def run(connection: sqlite3.Connection, settings: Settings | None, client: ChatC
     """Tolka ägartabeller för högst `limit` bolag inom tokenbudgeten. Returnerar räknare."""
     counts = {"processed": 0, "ok": 0, "no_table": 0, "failed": 0, "skipped": 0, "tokens": 0, "remaining": 0}
     today = today or date.today().isoformat()
+    global _DAY
+    _DAY = today
     for company in candidates(connection, today):
         found = matching_document(connection, company["id"])
         document_id = found[0] if found else None

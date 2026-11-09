@@ -160,8 +160,12 @@ def ingest(connection: sqlite3.Connection, company_id: int, company_name: str, i
             "new": store_trades(connection, trades)}
 
 
+_DAY: str | None = None   # dagen som körningen gäller; tidsstämplar får samma dag som kontrollen jämför med
+
+
 def _now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    return f"{_DAY}{stamp[10:]}" if _DAY else stamp
 
 
 def _record_fetch(connection: sqlite3.Connection, company_id: int, counts: dict | None, error: str | None) -> None:
@@ -204,6 +208,8 @@ def run(connection: sqlite3.Connection, settings: Settings, *, limit: int | None
         sleep: Callable[[float], None] = time.sleep, today: str | None = None) -> dict[str, int]:
     """Hämta insynshandel för bolag som inte hämtats idag (högst `limit` per körning), med paus emellan."""
     today = today or date.today().isoformat()
+    global _DAY
+    _DAY = today
     wanted = candidates(connection, today)
     counts = {"fetched": 0, "failed": 0, "new_trades": 0, "unmatched_rows": 0, "remaining": 0}
     for index, company in enumerate(wanted):

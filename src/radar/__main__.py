@@ -20,6 +20,7 @@ Granskning (se agents/radar-reviewer.md):
     python -m radar correct fact --document D --kind cash --period-end 2026-09-30 --value 8612000 --reason "..."
     python -m radar correct fact --document D --kind operating_cash_flow --period-start ... --delete --reason "..."
     python -m radar correct period --document D --period-end 2026-09-30 --reason "..."
+    python -m radar correct scale --document D --factor 1000 --reason "..."   hela rapporten i fel enhet
     python -m radar correct event --id N --hide | --status S | --type T | --amount A | --currency C
                                   | --date D | --advisers "..." --reason "..."
     python -m radar corrections list [--company ID]  |  corrections revert ID
@@ -167,6 +168,17 @@ def correct_command(args, connection, today: str) -> int:
         result = refresh_runway(connection, document, today=today) if document else {}
         print(json.dumps({"reverted": args.id, "runway": _runway_brief(result)}, ensure_ascii=False))
         return 0
+    if args.target == "scale":
+        if args.document is None or not args.factor:
+            raise ValueError("--document och --factor krävs")
+        company = connection.execute("SELECT company_id FROM reports WHERE document_id=?", (args.document,)).fetchone()
+        if company is None:
+            raise ValueError(f"rapport {args.document} finns inte")
+        ids = [review.add_correction(connection, target="fact", field="scale", reason=args.reason,
+                                     company_id=company[0], document_id=args.document, new_value=args.factor)]
+        result = refresh_runway(connection, args.document, today=today)
+        print(json.dumps({"corrections": ids, "runway": _runway_brief(result)}, ensure_ascii=False))
+        return 0
     if args.target in ("fact", "period"):
         if args.document is None:
             raise ValueError("--document krävs")
@@ -306,7 +318,8 @@ def main(argv: list[str] | None = None) -> int:
     review.add_argument("--before", type=int, help="antal flaggor före rundan")
     review.add_argument("--note", default="")
     correct = sub.add_parser("correct", help="rätta ett faktum, ett periodslut eller en händelse (kräver --reason)")
-    correct.add_argument("target", choices=["fact", "period", "event"])
+    correct.add_argument("target", choices=["fact", "period", "event", "scale"])
+    correct.add_argument("--factor", type=float, help="scale: multiplicera alla belopp i rapporten, t.ex. 1000")
     correct.add_argument("--reason", required=True)
     correct.add_argument("--document", type=int)
     correct.add_argument("--kind")

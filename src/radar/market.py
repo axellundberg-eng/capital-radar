@@ -110,8 +110,12 @@ def summarize(points: list[dict], sek_per_unit: float | None = 1.0) -> dict:
             "low_52w": min(lows) if covered and lows else None, "as_of": last["date"]}
 
 
+_DAY: str | None = None   # dagen som körningen gäller; tidsstämplar får samma dag som kontrollen jämför med
+
+
 def _now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    return f"{_DAY}{stamp[10:]}" if _DAY else stamp
 
 
 FIELDS = ("price", "price_change_1m_pct", "price_change_3m_pct", "price_change_12m_pct",
@@ -179,6 +183,8 @@ def run(connection: sqlite3.Connection, settings: Settings, *, limit: int | None
     from .fx import latest_rates
 
     today = today or date.today().isoformat()
+    global _DAY
+    _DAY = today
     wanted = candidates(connection, today)
     counts = {"fetched": 0, "failed": 0, "remaining": 0}
     rates = latest_rates(connection)

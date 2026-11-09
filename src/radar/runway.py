@@ -305,6 +305,11 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
     result.ltm = _ltm(facts, result.periods, period_end)
     burn = result.ltm["monthly_burn"] if result.ltm else chosen.monthly_burn
     result.burn_basis = result.ltm["basis"] if result.ltm else "longest_period"
+    if result.ltm and burn == 0 and chosen.monthly_burn > 0:
+        # Tolv månader positiva men innevarande år bränner: nästan alltid en engångsinbetalning förra året.
+        # Burn räknas då som snittet för innevarande år (längsta perioden), inte som noll.
+        burn, result.burn_basis = chosen.monthly_burn, "longest_period"
+        result.flags.append("ltm_one_off")
     faster_recent = (len(result.periods) > 1 and recent.monthly_burn > 0
                      and recent.monthly_burn > burn * RECENT_RATIO)
     if chosen.investments_basis == "investing_cash_flow":

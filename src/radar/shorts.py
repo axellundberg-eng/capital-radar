@@ -137,8 +137,12 @@ def match_positions(connection: sqlite3.Connection, positions: list[dict]) -> li
     return matched
 
 
+_DAY: str | None = None   # dagen som körningen gäller; tidsstämplar får samma dag som kontrollen jämför med
+
+
 def _now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    stamp = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    return f"{_DAY}{stamp[10:]}" if _DAY else stamp
 
 
 def store(connection: sqlite3.Connection, matched: list[dict], rows: int) -> None:
@@ -167,6 +171,8 @@ def run(connection: sqlite3.Connection, settings: Settings | None = None, *, log
         fetch: Fetcher = fetch_file, today: str | None = None) -> dict:
     """Hämta och lagra blankningsregistret, högst en gång per dag (ett misslyckat försök räknas inte)."""
     today = today or date.today().isoformat()
+    global _DAY
+    _DAY = today
     last = connection.execute("SELECT fetched_at, error FROM short_fetch WHERE id=1").fetchone()
     if last and last["fetched_at"].startswith(today) and not last["error"]:
         return {"skipped": 1, "fetched": 0, "rows": 0, "matched": 0}

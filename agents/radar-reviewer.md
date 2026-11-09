@@ -30,6 +30,7 @@ motivering i klartext och datan ska hänga ihop.
 |---|---|
 | Ändra ett värde | `correct fact --document D --kind cash --period-end 2026-09-30 --value 8612000 --reason "..."` |
 | Ta bort ett felaktigt faktum | `correct fact --document D --kind operating_cash_flow --period-start 2026-01-01 --period-end 2026-06-30 --delete --reason "..."` |
+| Hela rapporten i fel enhet (TSEK lästes som SEK) | `correct scale --document D --factor 1000 --reason "..."` |
 | Rätta rapportens periodslut | `correct period --document D --period-end 2026-09-30 --reason "..."` |
 | Dölj en felaktig händelse | `correct event --id N --hide --reason "..."` |
 | Ändra en händelse | `correct event --id N --status completed --amount 25000000 --currency SEK --reason "..."` |

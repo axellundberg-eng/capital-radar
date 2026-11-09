@@ -134,3 +134,19 @@ def test_truncated_answer_is_not_retried_every_cycle(tmp_path):
     assert _fail(connection, 10, "extrahera", "tomt svar (finish_reason=length)")["status"] == "too_long"
     assert connection.execute("SELECT status FROM reports WHERE document_id=10").fetchone()[0] == "too_long"
     assert _fail(connection, 10, "hämta", "timeout")["status"] == "failed"
+
+
+def test_year_is_not_split_into_fragments():
+    # "2026" ska inte bli "202" + "6" och se ut som en första kolumn.
+    assert review.column_mismatch(67_000, "Likvida medel uppgick per 30 september 2026 till 67 KSEK (1 574)") is None
+    assert review._numbers("Kassa Q3 2026 R12 8 612 19 884") == [3.0, 2026.0, 12.0, 8612.0, 19884.0]
+
+
+def test_scale_correction_multiplies_the_whole_report(tmp_path):
+    connection = seed(tmp_path)
+    before = refresh_runway(connection, 10, today=TODAY)
+    review.add_correction(connection, target="fact", field="scale", reason="TSEK lästes som SEK", company_id=1,
+                          document_id=10, new_value=1000)
+    after = refresh_runway(connection, 10, today=TODAY)
+    assert after["cash"] == before["cash"] * 1000
+    assert after["periods"][0]["operating_cash_flow"] == before["periods"][0]["operating_cash_flow"] * 1000

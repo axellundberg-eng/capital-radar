@@ -121,3 +121,19 @@ def test_financing_is_split_into_equity_and_debt():
     assert result.debt_after_report == pytest.approx(6e6)                # 10 in, 4 tillbaka
     assert result.debt_announced == pytest.approx(8e6) and result.equity_announced == 0
     assert result.equity_after_report + result.debt_after_report == pytest.approx(result.confirmed_financing)
+
+
+def test_one_off_last_year_does_not_make_a_burning_company_positive():
+    # Förra året +100 (engångsinbetalning), i år -12 på sex månader: burn ska vara snittet 2/mån, inte 0.
+    facts = [Fact("cash", 30e6, None, END), flow("operating_cash_flow", -12e6, "2026-01-01"),
+             flow("operating_cash_flow", -6e6, "2025-01-01", "2025-06-30"),
+             flow("operating_cash_flow", 100e6, "2025-01-01", "2025-12-31")]
+    result = compute(facts, END, today=END)
+    assert not result.cash_flow_positive and result.monthly_burn == pytest.approx(2e6)
+    assert result.burn_basis == "longest_period" and "ltm_one_off" in result.flags
+    # Ett lönsamt säsongsbolag (positivt även i år) påverkas inte.
+    seasonal = [Fact("cash", 30e6, None, END), flow("operating_cash_flow", 5e6, "2026-01-01"),
+                flow("operating_cash_flow", -3e6, "2026-04-01"),
+                flow("operating_cash_flow", 4e6, "2025-01-01", "2025-06-30"),
+                flow("operating_cash_flow", 20e6, "2025-01-01", "2025-12-31")]
+    assert compute(seasonal, END, today=END).cash_flow_positive
