@@ -229,6 +229,13 @@ function toggleCapital(button) {
   box.classList.add("open");
 }
 
+// En affär kan bestå av flera pressmeddelanden (beslut, utfall, registrering): visa första och sista datum.
+function roundDates(e) {
+  const span = e.first_date && e.first_date !== e.date ? `${escapeHtml(date(e.first_date))} → ${escapeHtml(date(e.date))}` : escapeHtml(date(e.date));
+  const count = e.press_releases > 1 ? ` <span class="muted-count" title="Antal pressmeddelanden som ingår i affären">(${e.press_releases} pm)</span>` : "";
+  return span + count;
+}
+
 // Villkor och utfall för en emission: garanti, teckning, pris, rabatt, utspädning, TO-villkor.
 function terms(e) {
   const cur = e.currency;
@@ -251,7 +258,7 @@ function terms(e) {
 // Utfällbar rad under ett prospekt: de senaste finansieringshändelserna i detalj.
 function prospectDetail(item) {
   const list = (item.recent_financing || []).map((e) => `
-    <li><div><span>${escapeHtml(e.date)} · ${TYPE[e.type] || e.type} · ${STATUS[e.status] || e.status}</span>
+    <li><div><span>${roundDates(e)} · ${TYPE[e.type] || e.type} · ${STATUS[e.status] || e.status}</span>
       <strong>${e.amount != null ? msek(e.amount, e.currency) : "belopp saknas"}</strong></div>
       ${terms(e)}
       <small>Rådgivare: ${e.advisers ? escapeHtml(e.advisers) : "ej angivet"}</small>
@@ -659,7 +666,7 @@ function gInsiders(d) {
 
 function gFinancing(d) {
   const list = d.financing || [];
-  const items = list.map((e) => `<li><div><span>${date(e.date)} · ${TYPE[e.type] || e.type} · ${STATUS[e.status] || e.status}</span>
+  const items = list.map((e) => `<li><div><span>${roundDates(e)} · ${TYPE[e.type] || e.type} · ${STATUS[e.status] || e.status}</span>
       <strong>${e.amount != null ? msek(e.amount, e.currency) : "belopp saknas"}</strong></div>${terms(e)}
       <small>Rådgivare: ${e.advisers ? escapeHtml(e.advisers) : "ej angivet"}</small>
       ${e.url ? `<a href="${escapeHtml(e.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(e.title || "Pressmeddelande")}</a>` : ""}

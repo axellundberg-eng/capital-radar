@@ -266,8 +266,8 @@ def _credit_and_acute(result: Runway, cash_today: float) -> None:
         result.flags.append("credit_reserve")
     # Ny finansiering in efter rapporten (emission, lån, brygglån, dragen kredit) häver "akut".
     refinanced = any(e["status"] == "completed" and (e.get("cash") or 0) > 0 for e in result.financing_events)
-    # Akut mäts mot kassan: en kreditlinje som räcker i flera månader gör inte bolaget akut.
-    if (result.runway_cash_today or 0) < 1 and not refinanced:
+    # Akut mäts mot kassa plus outnyttjad kredit: en kreditlinje som räcker i flera månader gör inte bolaget akut.
+    if (result.runway_today or 0) < 1 and not refinanced:
         result.flags.append("acute")
 
 
@@ -330,7 +330,7 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
             result.flags.append("recent_period_burning")   # positivt totalt, men senaste perioden bränner
         return result
     result.runway_at_report = round(cash / burn, 1)
-    if (cash + extra) / burn < since:
+    if (cash + extra + result.available_credit) / burn < since:
         # Kassan borde redan vara slut: nästan alltid ny finansiering efter rapporten.
         result.flags.append("cash_exhausted_since_report")
     cash_today = max(0.0, cash + extra - burn * since)

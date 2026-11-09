@@ -22,7 +22,7 @@ def test_recent_financing_counts_equity_rounds_once_and_skips_loans_and_old_even
             row("directed_issue", "cancelled", "2026-07-01")]
     count, listing = recent_financing(rows, TODAY)
     assert count == 2  # rätt-emissionen räknas en gång; lånet, teckningsoptionerna och den gamla emissionen inte
-    assert len(listing) == 5  # avbrutna och händelser äldre än 24 månader visas inte
+    assert len(listing) == 4  # samma rätt-emission (annonserad + genomförd) är en affär; avbrutna och gamla visas inte
     assert listing[0]["date"] == "2026-10-20" and listing[-1]["date"] == "2025-06-01"
 
 
@@ -59,3 +59,14 @@ def test_warrant_terms_are_parsed():
          "exercise_price": 0.85, "exercise_start": "2026-12-01", "exercise_end": "2026-12-15"}]})
     event = parse_financing(raw, "2026-11-01")[0]
     assert event.exercise_price == 0.85 and event.exercise_start == "2026-12-01" and event.exercise_end == "2026-12-15"
+
+
+def test_round_steps_are_merged_into_one_deal():
+    # Beslut, utfall och registrering (svenska + engelska) av samma företrädesemission blir en affär.
+    rows = [row("rights_issue", "announced", "2026-09-03", 57.5e6), row("rights_issue", "announced", "2026-09-03", 58e6),
+            row("rights_issue", "completed", "2026-10-01", 57.5e6), row("rights_issue", "completed", "2026-10-08", 57.5e6),
+            row("loan", "completed", "2026-05-01", 5e6)]
+    count, listing = recent_financing(rows, TODAY)
+    assert count == 1 and len(listing) == 2
+    deal = listing[0]
+    assert deal["status"] == "completed" and deal["first_date"] == "2026-09-03" and deal["press_releases"] == 4

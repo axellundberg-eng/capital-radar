@@ -264,44 +264,45 @@ RECENT_DAYS = 730  # 24 månader
 
 
 def recent_financing(rows: list[dict], today: str) -> tuple[int, list[dict]]:
-    """(antal emissioner, finansieringshändelser) de senaste 24 månaderna, nyast först.
+    """(antal emissioner, affärer) de senaste 24 månaderna, nyast först.
 
-    Emissioner är företrädes- och riktade emissioner. En runda räknas en gång även om den finns både
-    som annonserad och som genomförd (dedupe). Lån, kreditfaciliteter och konvertibler visas i listan
-    men räknas inte som emissioner."""
+    Varje affär är en runda: beslut, informationsdokument, utfall och registrering (på svenska och
+    engelska) slås ihop med samma regel som runway-beräkningen (rounds.dedupe: samma typ inom ett
+    tidsfönster och ungefär samma belopp). Raden får bästa status, första och sista datum, antal
+    pressmeddelanden och villkoren samlade från alla versioner. Kvittningsemissioner läggs på emissionen
+    de hör till. Emissioner (antalet) är företrädes- och riktade emissioner."""
+    from .rounds import _merge, _same_round, attach_set_offs
+
     cutoff = (date.fromisoformat(today[:10]) - timedelta(days=RECENT_DAYS)).isoformat()
     recent = [r for r in rows if r["status"] != "cancelled" and (r["event_date"] or "")[:10] >= cutoff]
     events = [Event(r["type"], r["status"], r["gross_amount"], r["net_amount"], r["currency"], r["event_date"],
-                    r.get("quote"), None, None, r.get("drawn_amount"), r.get("advisers")) for r in recent]
-    equity = [e for e in dedupe(events) if e.type in EQUITY_TYPES]
-    listing, seen = [], set()
-    for r in sorted(recent, key=lambda r: r["event_date"] or "", reverse=True):
-        amount = r["gross_amount"] if r["gross_amount"] is not None else r["net_amount"]
-        # Samma händelse från den svenska och den engelska versionen av pressmeddelandet visas en gång.
-        key = (r["type"], r["status"], (r["event_date"] or "")[:10], round(amount / 1e5) if amount else None)
-        if key in seen:
-            # Den andra språkversionen kan ha uppgifter som saknas i den första.
-            if listing:
-                for field in ("advisers", *TERMS):
-                    if r.get(field) is not None and listing[-1].get(field) is None:
-                        listing[-1][field] = r[field]
+                    r.get("quote"), None, None, r.get("drawn_amount"), r.get("advisers"),
+                    **{key: r.get(key) for key in TERMS}) for r in recent]
+    groups: list[list[Event]] = []
+    for event in sorted(events, key=lambda e: e.date):
+        target = next((g for g in groups if any(_same_round(event, other) for other in g)), None)
+        (target.append(event) if target is not None else groups.append([event]))
+    meta = {}
+    merged = []
+    for group in groups:
+        round_ = _merge(group)
+        if round_ is None:
             continue
-        seen.add(key)
-        entry = {"type": r["type"], "status": r["status"], "date": (r["event_date"] or "")[:10],
-                 "amount": amount, "currency": r["currency"], "quote": r.get("quote"), "advisers": r.get("advisers")}
-        entry.update({key: r.get(key) for key in TERMS})
-        before, issued = r.get("shares_before"), r.get("shares_issued")
+        merged.append(round_)
+        meta[(round_.type, round_.date, round_.amount)] = (min(e.date for e in group)[:10], len(group))
+    rounds = attach_set_offs(merged)
+    equity = [e for e in rounds if e.type in EQUITY_TYPES]
+    listing = []
+    for e in sorted(rounds, key=lambda e: e.date, reverse=True):
+        first, count = meta.get((e.type, e.date, e.amount), (e.date[:10], 1))
+        entry = {"type": e.type, "status": e.status, "date": e.date[:10], "first_date": first,
+                 "press_releases": count, "amount": e.amount, "currency": e.currency, "quote": e.quote,
+                 "advisers": e.advisers, "paid_in_shares": e.paid_in_shares}
+        entry.update({key: getattr(e, key) for key in TERMS})
+        before, issued = e.shares_before, e.shares_issued
         # Utspädning = nya aktier / aktier efter emissionen.
         entry["dilution_pct"] = round(100 * issued / (before + issued), 1) if before and issued else None
         listing.append(entry)
-    # Kvittningsemissioner (garantiersättning i aktier) visas som en del av emissionen de hör till.
-    for entry in [e for e in listing if e["type"] == "set_off"]:
-        parents = [p for p in listing if p["type"] in EQUITY_TYPES
-                   and abs((date.fromisoformat(p["date"]) - date.fromisoformat(entry["date"])).days) <= 45]
-        if parents:
-            parent = min(parents, key=lambda p: abs((date.fromisoformat(p["date"]) - date.fromisoformat(entry["date"])).days))
-            parent["paid_in_shares"] = (parent.get("paid_in_shares") or 0.0) + (entry["amount"] or 0.0)
-            listing.remove(entry)
     return len(equity), listing
 
 

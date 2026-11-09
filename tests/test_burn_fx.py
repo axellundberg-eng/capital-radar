@@ -137,3 +137,12 @@ def test_one_off_last_year_does_not_make_a_burning_company_positive():
                 flow("operating_cash_flow", 4e6, "2025-01-01", "2025-06-30"),
                 flow("operating_cash_flow", 20e6, "2025-01-01", "2025-12-31")]
     assert compute(seasonal, END, today=END).cash_flow_positive
+
+
+def test_large_undrawn_credit_line_is_not_acute_or_exhausted():
+    # Kassan räcker en halv månad men en outnyttjad kreditlina på 60 ger tio månader till.
+    facts = [Fact("cash", 3e6, None, END), flow("operating_cash_flow", -36e6, "2026-01-01"),
+             Fact("undrawn_credit", 60e6, None, END)]
+    result = compute(facts, END, today="2026-07-15")
+    assert "acute" not in result.flags and "cash_exhausted_since_report" not in result.flags
+    assert result.runway_today > 1 and result.runway_cash_today < 1
