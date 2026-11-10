@@ -20,6 +20,12 @@ import sqlite3
 from datetime import date, datetime, timedelta, timezone
 
 ACTIVE_DAYS = 270
+# En stämmogodkänd emission genomförs normalt inom ett par månader: äldre beslut utan registrerat
+# utfall beror oftare på luckor i datan än på en kapitalanskaffning som fortfarande pågår.
+ACTIVE_DAYS_BY_KIND = {"stamma_issue": 120, "plan": ACTIVE_DAYS, "evaluating": ACTIVE_DAYS}
+# Stämman godkänner ofta ett styrelsebeslut som redan registrerats med styrelsens datum, så en
+# genomförd emission en tid före signalen släcker den också.
+LOOKBACK_DAYS = {"stamma_issue": 90, "plan": 30, "evaluating": 30}
 NEWS_DAYS = 365
 QUOTE_CHARS = 320
 EQUITY = ("rights_issue", "directed_issue", "warrants", "convertible")
@@ -43,7 +49,7 @@ WEAK = (r"utvärderar|utvärderas|att\s+utvärdera|överväger|undersöker|ser\s
 # Mjuka formuleringar som inte är ett besked: negationer och riskavsnittens "kan komma att behöva".
 HEDGE = (r"inte\s+(?:något|har\s+något)\s+behov|inget\s+behov|utan\s+(?:behov\s+av\s+)?kapitaltillskott|no\s+need|not\s+need"
          r"|may\s+need|might\s+need|could\s+need|kan\s+(?:komma\s+att\s+)?behöva|cannot\s+be\s+excluded|inte\s+uteslutas"
-         r"|portföljbolag|portfolio\s+compan|onoterade|värdering|valuation|betalnings-\s+och\s+finansieringslösning|slutkund|customers?['’]?\s+financing")
+         r"|portföljbolag|portfolio\s+compan|onoterade|värdering|valuation|vägledning|betalnings-\s+och\s+finansieringslösning|slutkund|customers?['’]?\s+financing")
 DONE = (r"genomförde|genomförd\b|har\s+genomfört|genomfördes|genomförts|tillfördes|tillförts|slutförde|avslutades|registrerades"
         r"|övertecknad|utfall|completed|carried\s+out|was\s+(?:oversubscribed|registered)|raised\s+(?:approximately|SEK|MSEK)"
         # Rapportkalendrar, redovisningstext, riskavsnitt och villkor i en redan annonserad emission.
@@ -164,24 +170,30 @@ def run(connection: sqlite3.Connection, *, today: str | None = None) -> dict[str
 
 
 def active(connection: sqlite3.Connection, history: dict[int, list[dict]], today: str) -> dict[int, dict]:
-    """Aktuell signal per bolag: högst `ACTIVE_DAYS` gammal och ingen genomförd emission efteråt.
+    """Aktuell signal per bolag: inte för gammal (`ACTIVE_DAYS_BY_KIND`) och ingen genomförd emission
+    efter signalen eller kort före den (`LOOKBACK_DAYS`).
 
     `history` är qualify.load_history (händelser med granskningens rättelser). Stämmobeslut går före
     planer och planer före utvärderingar; inom samma slag nyare före äldre och med tidpunkt först."""
-    cutoff = (date.fromisoformat(today[:10]) - timedelta(days=ACTIVE_DAYS)).isoformat()
+    day = date.fromisoformat(today[:10])
+    cutoff = (day - timedelta(days=max(ACTIVE_DAYS_BY_KIND.values()))).isoformat()
     try:
         rows = connection.execute(
             "SELECT * FROM financing_signals WHERE published_at >= ?", (cutoff,)).fetchall()
     except sqlite3.OperationalError:
         return {}
-    rows = sorted(rows, key=lambda r: r["published_at"] or "", reverse=True)       # nyast först ...
+    rows = [r for r in rows if r["published_at"] >= (
+        day - timedelta(days=ACTIVE_DAYS_BY_KIND.get(r["kind"], ACTIVE_DAYS))).isoformat()]
+    rows.sort(key=lambda r: r["published_at"] or "", reverse=True)                 # nyast först ...
     rows.sort(key=lambda r: (KIND_ORDER.get(r["kind"], 9), r["timing"] is None))   # ... inom slag (stabil sortering)
     result: dict[int, dict] = {}
     for row in rows:
         if row["company_id"] in result:
             continue
+        since = (date.fromisoformat(row["published_at"])
+                 - timedelta(days=LOOKBACK_DAYS.get(row["kind"], 30))).isoformat()
         raised = any(e.get("type") in EQUITY and e.get("status") == "completed"
-                     and (e.get("event_date") or "")[:10] >= row["published_at"]
+                     and (e.get("event_date") or "")[:10] >= since
                      for e in history.get(row["company_id"], []))
         if not raised:
             result[row["company_id"]] = {key: row[key] for key in

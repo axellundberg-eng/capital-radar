@@ -68,5 +68,9 @@ def test_run_and_active_signal_is_cleared_by_a_later_completed_issue(tmp_path):
     history = {2: [{"type": "rights_issue", "status": "completed", "event_date": "2026-10-10"}],
                1: [{"type": "loan", "status": "completed", "event_date": "2026-09-01"}]}
     assert set(plans.active(connection, history, "2026-11-10")) == {1}
-    # För gammal signal (mer än 270 dagar) visas inte.
+    # Stämman godkände ett styrelsebeslut som registrerats en månad före stämman: också genomfört.
+    earlier = {2: [{"type": "rights_issue", "status": "completed", "event_date": "2026-08-15"}]}
+    assert set(plans.active(connection, earlier, "2026-11-10")) == {1}
+    # Stämmobeslut gäller i 120 dagar, planer i 270.
+    assert set(plans.active(connection, {}, "2027-02-01")) == {1}
     assert plans.active(connection, {}, "2027-08-01") == {}
