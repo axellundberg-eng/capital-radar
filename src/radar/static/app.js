@@ -93,17 +93,47 @@ function visible() {
     && (!q || item.name.toLowerCase().includes(q)));
 }
 
+// Stämmobeslut om emission eller uttalad plan att ta in kapital, som inte är en annonserad emission än.
+const SIGNAL = {
+  stamma_issue: ["Stämman har beslutat om emission", "raise"],
+  plan: ["Planerad kapitalanskaffning", "raise"],
+  evaluating: ["Utvärderar finansiering", "raise soft"],
+};
+
+function signalPill(item) {
+  const s = item.capital_signal;
+  if (!s || item.band === "raising" || !SIGNAL[s.kind]) return "";
+  const [label, cls] = SIGNAL[s.kind];
+  const when = s.timing ? ` · ${escapeHtml(s.timing)}` : "";
+  return `<small><span class="pill ${cls}" title="${escapeHtml(s.quote || "")}">${label}${when}</span></small>`;
+}
+
+function signalSection(d) {
+  const s = d.capital_signal;
+  if (!s || d.band === "raising" || !SIGNAL[s.kind]) return "";
+  const source = s.source === "report" ? "rapporten" : "pressmeddelandet";
+  const link = s.url ? ` · <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer">Öppna ${source} →</a>` : "";
+  const intro = s.kind === "stamma_issue"
+    ? "En bolagsstämma har beslutat om en emission, men ingen genomförd emission har registrerats efter beslutet."
+    : s.kind === "plan"
+      ? `Bolaget har sagt att det ska ta in kapital${s.timing ? ` (${escapeHtml(s.timing)})` : ""}, men ingen emission är annonserad.`
+      : "Bolaget säger att det utvärderar ny finansiering. Ingen emission är annonserad.";
+  return `<div class="signal-box ${SIGNAL[s.kind][1]}"><strong>${SIGNAL[s.kind][0]}</strong>
+    <p>${intro}</p>${s.quote ? `<q>${escapeHtml(s.quote)}</q>` : ""}
+    <p class="source">Källa: ${source}, ${escapeHtml(date(s.published_at))}${link}</p></div>`;
+}
+
 function runwayCell(item) {
   if (item.status !== "ok") return '<span class="pill muted">Saknar data</span>';
-  if (item.cash_flow_positive) return '<span class="pill good">Positivt</span>';
+  if (item.cash_flow_positive) return `<span class="pill good">Positivt</span>${signalPill(item)}`;
   if (item.band === "structural") return `<span class="pill band-structural" title="${escapeHtml(STRUCT_WARNING)}">Strukturell förändring</span><small>Gammal runway ${months(item.runway_today)}</small>`;
-  if (item.band === "exhausted") return '<span class="pill band-exhausted" title="Kassan borde vara slut sedan rapporten">Slut?</span>';
-  if (item.band === "acute") return `<span class="pill band-acute" title="${ACUTE_TEXT}">${months(item.runway_today)}</span><small>Akut: under 1 mån</small>${proForma(item)}${creditNote(item)}`;
+  if (item.band === "exhausted") return `<span class="pill band-exhausted" title="Kassan borde vara slut sedan rapporten">Slut?</span>${signalPill(item)}`;
+  if (item.band === "acute") return `<span class="pill band-acute" title="${ACUTE_TEXT}">${months(item.runway_today)}</span><small>Akut: under 1 mån</small>${proForma(item)}${signalPill(item)}${creditNote(item)}`;
   const recent = item.recent_runway_today != null
     ? `<small title="I senaste periodens takt">${months(item.recent_runway_today)} i senaste takt</small>` : "";
   const raise = item.band === "raising" ? '<small><span class="pill raise">Pågående kapitalanskaffning</span></small>' : "";
   const pill = item.band === "raising" ? "band-under_3" : `band-${item.band}`;
-  return `<span class="pill ${pill}">${months(item.runway_today)}</span>${recent}${proForma(item)}${raise}${creditNote(item)}`;
+  return `<span class="pill ${pill}">${months(item.runway_today)}</span>${recent}${proForma(item)}${raise}${signalPill(item)}${creditNote(item)}`;
 }
 
 // Runway idag inkluderar outnyttjad kreditlinje; här visas hur mycket som är kassan utan kredit.
@@ -178,7 +208,7 @@ function prospectRow(item, expandable) {
     <tr data-id="${item.id}" class="${state.selected === item.id ? "selected" : ""}${expandable ? " expandable" : ""}${open ? " open" : ""}" tabindex="0"${aria}>
       <td>${chev}<span class="namecell"><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.market || "")}</small>${nextReport(item)}</span></td>
       <td class="num"><span class="score ${scoreClass(item.score)}" title="${escapeHtml(item.summary)}">${item.score}</span></td>
-      <td class="num"><span class="pill band-${item.band}">${months(item.runway_today)}</span>${proForma(item)}</td>
+      <td class="num"><span class="pill band-${item.band}">${months(item.runway_today)}</span>${proForma(item)}${signalPill(item)}</td>
       <td class="num">${msek(item.capital_need)}</td>
       <td class="num">${item.market_cap ? msek(item.market_cap) : "okänt"}</td>
       <td class="num">${pct(item.share)}</td>
@@ -497,6 +527,7 @@ function renderDetail(d) {
     </div>
     <div id="capitalDetail" class="capital-detail" aria-live="polite"></div>
     ${nextRep}
+    ${signalSection(d)}
     <p class="explain">${explanation(d)}${financingNote(d)}</p>
     ${flags ? `<ul class="flags">${flags}</ul>` : ""}
     ${qualificationSection(d)}

@@ -336,6 +336,7 @@ def main(argv: list[str] | None = None) -> int:
     correct.add_argument("--date")
     correct.add_argument("--advisers")
     sub.add_parser("fx", help="hämta dagens växelkurser från Riksbanken")
+    sub.add_parser("plans", help="bygg om signaler om stämmobeslut och planerad kapitalanskaffning")
     for name, text in (("market", "kurshistorik och omsättning från Nasdaq"),
                        ("insiders", "insynshandel från Finansinspektionen")):
         extra = sub.add_parser(name, help=text)
@@ -374,6 +375,11 @@ def main(argv: list[str] | None = None) -> int:
         module = market if args.command == "market" else insiders
         print(json.dumps(module.run(connection, settings, limit=args.limit, log=lambda _line: None),
                          ensure_ascii=False, default=str))
+        return 0
+    if args.command == "plans":
+        from . import plans
+
+        print(json.dumps(plans.run(connection), ensure_ascii=False))
         return 0
     if args.command == "slugs":
         from . import slugs as slug_matcher

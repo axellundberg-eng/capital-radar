@@ -23,7 +23,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from . import authorizations
+from . import authorizations, plans
 from .batch import run_latest
 from .collect import collect_all
 from .db import connect
@@ -137,6 +137,19 @@ def _collect_step(settings: Settings) -> dict:
         connection.close()
 
 
+def _plans_step(settings: Settings, log: Callable[[str], None]) -> dict:
+    """Bygg om signalerna om planerad kapitalanskaffning (bara reguljära uttryck, inga anrop)."""
+    try:
+        connection = connect(settings.db_path)
+        try:
+            return plans.run(connection)
+        finally:
+            connection.close()
+    except Exception as error:  # noqa: BLE001
+        log(f"plans misslyckades: {error}")
+        return {"error": str(error)}
+
+
 def _authorizations_step(settings: Settings, log: Callable[[str], None]) -> dict:
     """Läs stämmokommunikéer för emissionsbemyndiganden; ett fel här stoppar aldrig varvet."""
     try:
@@ -242,6 +255,7 @@ def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: i
             summary["news"] = run_news(settings, client, today=today, token_budget=news_budget,
                                        log=lambda _line: None)
         summary["authorizations"] = _authorizations_step(settings, log)
+        summary["plans"] = _plans_step(settings, log)   # efter stämmotexterna, som den läser
         summary["fx"] = _fx_step(settings, log)
         connection = connect(settings.db_path)
         try:

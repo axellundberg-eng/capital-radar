@@ -159,6 +159,20 @@ CREATE TABLE IF NOT EXISTS authorizations (    -- bemyndiganden att emittera akt
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS authorizations_company ON authorizations(company_id, meeting_date);
+CREATE TABLE IF NOT EXISTS financing_signals (   -- stämmobeslut och uttalade planer om kapitalanskaffning, se plans.py
+    id INTEGER PRIMARY KEY,
+    company_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,                -- stamma_issue | plan | evaluating
+    source TEXT NOT NULL,              -- report | news
+    document_id INTEGER NOT NULL,
+    published_at TEXT,
+    timing TEXT,                       -- t.ex. "under första kvartalet 2027", om det anges
+    quote TEXT,
+    url TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(kind, document_id)
+);
+CREATE INDEX IF NOT EXISTS financing_signals_company ON financing_signals(company_id, published_at);
 CREATE TABLE IF NOT EXISTS market_history_summary (   -- kurshistorik i sammandrag per bolag, se market.py
     company_id INTEGER PRIMARY KEY,
     isin TEXT, order_book TEXT,        -- Nasdaqs orderboks-id, sparas så att nästa hämtning kräver ett anrop

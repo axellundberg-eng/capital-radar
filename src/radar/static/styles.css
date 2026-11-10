@@ -331,3 +331,11 @@ tr.expand > td { padding: 0; background: var(--muted-bg); }
 .facts li .src-link { display: inline-block; margin-top: 6px; font-weight: 600; color: var(--accent); text-decoration: none; }
 .facts li .src-link:hover { text-decoration: underline; }
 .facts li q { line-height: 1.5; }
+
+/* Stämmobeslut och planerad kapitalanskaffning (plans.py) */
+.pill.raise.soft { background: var(--muted-bg); color: var(--target); border: 1px dashed var(--target); }
+.signal-box { border: 1px solid var(--target); background: var(--target-bg); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+.signal-box.soft { border-style: dashed; background: var(--muted-bg); }
+.signal-box strong { color: var(--target); }
+.signal-box p { margin: 4px 0 0; line-height: 1.5; }
+.signal-box q { display: block; margin-top: 6px; color: var(--muted); font-style: italic; line-height: 1.5; }

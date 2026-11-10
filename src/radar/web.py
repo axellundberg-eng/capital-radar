@@ -22,6 +22,7 @@ from .authorizations import latest as latest_authorizations
 from .calendar import next_report
 from . import guarantee
 from .fx import latest_rates
+from .plans import active as active_signals
 from .qualify import load_history, load_market, qualify, recent_financing
 from .settings import Settings
 
@@ -123,7 +124,15 @@ def latest_rows(connection: sqlite3.Connection) -> list[dict]:
         item["band"] = band(item)
         items.append(item)
     _attach_changes(connection, items)
+    _attach_signals(connection, items)
     return items
+
+
+def _attach_signals(connection: sqlite3.Connection, items: list[dict]) -> None:
+    """Stämmobeslut om emission eller uttalad plan att ta in kapital (plans.py), om de är aktuella."""
+    signals = active_signals(connection, load_history(connection), date.today().isoformat())
+    for item in items:
+        item["capital_signal"] = signals.get(item["id"])
 
 
 def _attach_changes(connection: sqlite3.Connection, items: list[dict]) -> None:
