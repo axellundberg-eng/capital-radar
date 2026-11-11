@@ -87,7 +87,20 @@ AUTHORIZATION = re.compile(r"bemyndig|authori[sz]", re.I)
 # Incitamentsprogram och kvittningar är emissioner men ingen kapitalanskaffning.
 NOT_RAISE = re.compile(r"incitament|personaloption|optionsprogram|nyckelpersoner|anställda|ledande\s+befattningshavare"
                        r"|incentive|employee|kvittning|set-?off|apportemission|in\s+kind|sammanläggning|split"
-                       r"|senior\s+executives", re.I)
+                       r"|senior\s+executives"
+                       # 16 kap. aktiebolagslagen: emission till styrelse, ledning och närstående, oftast en del av en
+                       # större emission som redan offentliggjorts.
+                       r"|16\s*kap\w*\.?\s+(?:i\s+)?aktiebolagslagen|chapter\s+16\s+of\s+the\s+swedish\s+companies\s+act", re.I)
+# Rubriker om en genomförd emission eller ett utfall. Ett stämmobeslut eller en kallelse kort före eller
+# när som helst efter en sådan rubrik gäller en emission som redan är gjord (även om händelsen saknas i
+# finansieringshistoriken, t.ex. för nyheter före rapportperioden som aldrig AI-granskats).
+DONE_TITLE = re.compile(
+    r"\bgenomför\s+(?:en\s+)?(?:\w+\s+)?(?:ny)?emission|\bhar\s+(?:framgångsrikt\s+)?genomfört\s+(?:en\s+)?\w*\s*(?:ny)?emission"
+    r"|utfall(?:et)?\s+(?:i|av|från)\b|offentliggör\s+utfall|övertecknad"
+    r"|announces?\s+(?:the\s+)?outcome|carries\s+out\s+(?:a\s+)?\w*\s*(?:share\s+)?issue"
+    r"|(?:successfully\s+)?complete[sd]?\s+(?:an?\s+)?(?:\w+\s+)?(?:directed\s+)?(?:share\s+|rights\s+)?issue"
+    r"|issue\s+(?:was\s+)?oversubscribed", re.I)
+DONE_TITLE_DAYS = 45
 # Stämman godkänner en del av en emission som redan är tecknad eller genomförd (t.ex. aktier till
 # styrelse och ledning i en riktad emission som offentliggjorts tidigare): ingen ny kapitalanskaffning.
 ALREADY_DONE = re.compile(r"(?:har\s+)?tecknats\s+och\s+tilldelats|har\s+tecknats|genomfördes\s+och\s+offentliggjordes"
@@ -255,6 +268,17 @@ def run(connection: sqlite3.Connection, *, today: str | None = None) -> dict[str
                 rows.append((report["company_id"], found["kind"], "report", report["document_id"],
                              (report["published_at"] or "")[:10], found["timing"], found["quote"], report["url"]))
     cutoff = (date.fromisoformat(today[:10]) - timedelta(days=NEWS_DAYS)).isoformat()
+    done_dates: dict[int, list[str]] = {}
+    for company_id, title, published in connection.execute(
+            "SELECT company_id, title, substr(published_at, 1, 10) FROM news WHERE substr(published_at, 1, 10) >= ?",
+            ((date.fromisoformat(cutoff) - timedelta(days=DONE_TITLE_DAYS)).isoformat(),)):
+        if DONE_TITLE.search(title or ""):
+            done_dates.setdefault(company_id, []).append(published)
+
+    def already_done(company_id: int, day: str) -> bool:
+        since = (date.fromisoformat(day) - timedelta(days=DONE_TITLE_DAYS)).isoformat()
+        return any(d >= since for d in done_dates.get(company_id, []))
+
     for news in connection.execute(
             """SELECT document_id, company_id, title, published_at, url, text FROM news
                WHERE text IS NOT NULL AND substr(published_at, 1, 10) >= ?""", (cutoff,)):
@@ -263,6 +287,9 @@ def run(connection: sqlite3.Connection, *, today: str | None = None) -> dict[str
         found_all = (egm,) if egm or EGM_TITLE.search(news["title"] or "") else (
             find_stamma_issue(news["text"]), find_plan(news["text"]))
         for found in found_all:
+            if found and found["kind"] in ("stamma_issue", "egm_called") and already_done(
+                    news["company_id"], (news["published_at"] or "")[:10]):
+                continue
             if found:
                 rows.append((news["company_id"], found["kind"], "news", news["document_id"],
                              (news["published_at"] or "")[:10], found["timing"], found["quote"], news["url"]))

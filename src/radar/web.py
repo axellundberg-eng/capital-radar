@@ -227,7 +227,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             reports, authorized = next_report(connection, date.today().isoformat()), latest_authorizations(connection)
         finally:
             connection.close()
-        need, out, raising, structural = [], [], [], []
+        need, out, just_funded, raising, structural = [], [], [], [], []
         for item in items:
             if item["band"] == "structural":
                 structural.append(item)  # inte poängsatt: siffrorna är inte tillförlitliga
@@ -238,15 +238,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             q = qualify(item, market.get(item["id"]), history.get(item["id"], []), rates)
             emissions, recent = recent_financing(history.get(item["id"], []), date.today().isoformat())
             # Bolag med uttalat eller indirekt kapitalbehov (markers.py) får en egen sektion överst.
-            target = raising if is_raising else (need if item.get("need_level") else out)
+            # Bolag som nyss tagit in kapital läggs i en egen grupp längst ned (troligen inget nära behov).
+            just_raised = any(m["key"] == "recent_raise" for m in item.get("markers") or [])
+            target = (raising if is_raising else just_funded if just_raised
+                      else need if item.get("need_level") else out)
             target.append(
                 {**item, **q.to_dict(), "market_error": (market.get(item["id"]) or {}).get("error"),
                  "emissions_24m": emissions, "recent_financing": recent,
                  "next_report": reports.get(item["id"]), "authorization": authorized.get(item["id"])})
-        for group in (need, out, raising):
+        for group in (need, out, just_funded, raising):
             group.sort(key=lambda i: (-i["score"], i["runway_today"] or 0, i["name"].casefold()))
         structural.sort(key=lambda i: i["name"].casefold())
-        return JSONResponse({"need": need, "items": out, "raising": raising, "structural": structural},
+        return JSONResponse({"need": need, "items": out, "recent": just_funded, "raising": raising, "structural": structural},
                             headers={"Cache-Control": "no-store"})
 
     @app.get("/api/search")

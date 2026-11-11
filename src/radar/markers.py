@@ -18,7 +18,7 @@ import sqlite3
 from datetime import date, timedelta
 
 from .calendar import next_report
-from .plans import active_all
+from .plans import DONE_TITLE, active_all
 
 # Ordning = visningsordning i filter och detaljpanel. (nyckel, etikett, nivå)
 MARKERS = (
@@ -34,6 +34,7 @@ MARKERS = (
     ("report_soon", "Rapport inom 30 dagar", "context"),
     ("mgmt_change", "VD eller CFO lämnar", "context"),
     ("lp_ended", "Likviditetsgaranti avslutas", "context"),
+    ("recent_raise", "Tog nyligen in kapital", "context"),
 )
 LABEL = {key: label for key, label, _tier in MARKERS}
 TIER = {key: tier for key, _label, tier in MARKERS}
@@ -45,6 +46,10 @@ WEAK_DAYS = 365
 WEAK_RATE = 80.0
 REPORT_DAYS = 30
 NEWS_DAYS = 120
+# En emission som genomförts de senaste fyra månaderna: nytt kapitalbehov är troligen inte nära, så bolaget
+# läggs i en egen grupp på prospektsidan. Källa: finansieringshistoriken eller en rubrik om utfall eller
+# genomförd emission (nyheter före rapportperioden AI-granskas inte och saknas därför ofta i historiken).
+RECENT_RAISE_DAYS = 120
 EQUITY = ("rights_issue", "directed_issue", "warrants", "convertible")
 MGMT = re.compile(r"\b(?:vd|ceo|cfo|finanschef|verkställande\s+direktör)\b.{0,50}"
                   r"(?:lämnar|avgår|slutar|frånträder|resign|steps?\s+down|leav|depart)", re.I)
@@ -109,7 +114,18 @@ def for_company(item: dict, signals: list[dict], events: list[dict], report: dic
             break
     if report and report.get("date") and report["date"] <= (day + timedelta(days=REPORT_DAYS)).isoformat():
         found["report_soon"] = _marker("report_soon", f"Nästa rapport {report['date']}.", report["date"])
+    raise_cutoff = (day - timedelta(days=RECENT_RAISE_DAYS)).isoformat()
+    done = sorted((e for e in events if e.get("type") in EQUITY and e.get("status") == "completed"
+                   and (e.get("event_date") or "")[:10] >= raise_cutoff),
+                  key=lambda e: e.get("event_date") or "", reverse=True)
+    if done:
+        e = done[0]
+        found["recent_raise"] = _marker("recent_raise", f"{e.get('title') or e.get('type')} "
+                                                        f"({_msek(e.get('gross_amount'), e.get('currency'))}).",
+                                        (e.get("event_date") or "")[:10], e.get("url"))
     for t in titles:   # nyast först
+        if "recent_raise" not in found and t["published_at"][:10] >= raise_cutoff and DONE_TITLE.search(t["title"]):
+            found["recent_raise"] = _marker("recent_raise", t["title"], t["published_at"][:10], t["url"])
         if "mgmt_change" not in found and MGMT.search(t["title"]):
             found["mgmt_change"] = _marker("mgmt_change", t["title"], t["published_at"][:10], t["url"])
         if "lp_ended" not in found and LP_ENDED.search(t["title"]):

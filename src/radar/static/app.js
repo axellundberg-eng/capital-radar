@@ -296,7 +296,7 @@ function markSelected() {
 function updateTabs() {
   const set = (view, n) => { const el = document.querySelector(`.view[data-view="${view}"] .cnt`); if (el) el.textContent = n == null ? "" : n; };
   set("list", state.items.length || null);
-  set("prospects", state.prospects ? state.prospects.need.length + state.prospects.items.length : null);
+  set("prospects", state.prospects ? state.prospects.need.length + state.prospects.items.length + state.prospects.recent.length : null);
 }
 
 function scoreClass(score) { return score >= 70 ? "high" : score >= 45 ? "mid" : "low"; }
@@ -461,18 +461,19 @@ function structuralRow(item) {
 function renderProspects(animate = true) {
   if (!state.prospects) return;
   const all = state.prospects;
-  renderFacets($("#pFacets"), [...all.need, ...all.items, ...all.raising, ...all.structural]);
+  renderFacets($("#pFacets"), [...all.need, ...all.items, ...all.recent, ...all.raising, ...all.structural]);
   const keep = (list) => list.filter((item) => facetMatch(item));
-  const [need, items, raising, structural] = [keep(all.need), keep(all.items), keep(all.raising), keep(all.structural)];
+  const [need, items, recent, raising, structural] = [keep(all.need), keep(all.items), keep(all.recent), keep(all.raising), keep(all.structural)];
   const filtered = FACETS.some((facet) => state.facets[facet].size);
   const none = filtered ? "Inga bolag matchar filtren." : "";
   $("#structuralRows").innerHTML = structural.length ? structural.map(structuralRow).join("")
     : `<tr><td colspan="4" class="empty">${none || "Inga bolag med strukturell förändring just nu."}</td></tr>`;
   const rows = (list) => list.map((item) => prospectRow(item, true) + (expandedProspects.has(item.id) ? prospectDetail(item) : "")).join("");
   const group = (title, text) => `<tr class="group-row"><td colspan="8">${title}<small>${text}</small></td></tr>`;
-  $("#prospectRows").innerHTML = need.length || items.length
+  $("#prospectRows").innerHTML = need.length || items.length || recent.length
     ? (need.length ? group("Uttalat kapitalbehov", `${need.length} bolag med stämmobeslut, kallelse, plan, osäkerhet om fortsatt drift eller indirekt behov`) + rows(need) : "")
       + (need.length && items.length ? group("Övriga prospekt", `${items.length} bolag`) : "") + rows(items)
+      + (recent.length ? group("Nyligen finansierade", `${recent.length} bolag som tagit in kapital de senaste 4 månaderna: troligen inget nära behov`) + rows(recent) : "")
     : `<tr><td colspan="8" class="empty">${none || "Inga prospekt just nu. Bolag hamnar här när runway understiger 9 månader utan annonserad emission. Se Lista för alla bolag."}</td></tr>`;
   $("#raisingRows").innerHTML = raising.length ? raising.map((item) => prospectRow(item, false)).join("")
     : `<tr><td colspan="8" class="empty">${none || "Inga bolag med pågående kapitalanskaffning."}</td></tr>`;
@@ -498,7 +499,7 @@ async function loadProspects() {
   $("#raisingRows").innerHTML = skeleton(8, 2);
   try {
     const data = await api("api/prospects");
-    state.prospects = { need: data.need || [], items: data.items, raising: data.raising || [], structural: data.structural || [] };
+    state.prospects = { need: data.need || [], items: data.items, recent: data.recent || [], raising: data.raising || [], structural: data.structural || [] };
     renderProspects();
   } catch (error) {
     $("#prospectRows").innerHTML = `<tr><td colspan="8" class="empty">Prospekten kunde inte läsas (${escapeHtml(error.message)}). Ladda om sidan för att försöka igen.</td></tr>`;

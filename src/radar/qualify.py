@@ -148,6 +148,10 @@ def check_no_raise(item: dict) -> Check:
     if "raise_announced" in (item.get("flags") or []):
         return Check("no_raise", "Ingen annonserad emission", "fail",
                      "En emission är redan annonserad: garantin är sannolikt ordnad.", weight)
+    recent = next((m for m in item.get("markers") or [] if m.get("key") == "recent_raise"), None)
+    if recent:
+        return Check("no_raise", "Ingen annonserad emission", "fail",
+                     f"Tog in kapital {recent.get('date') or 'nyligen'}: nytt kapitalbehov är troligen inte nära.", weight)
     return Check("no_raise", "Ingen annonserad emission", "pass", "Ingen annonserad emission funnen.", weight)
 
 

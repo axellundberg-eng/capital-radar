@@ -239,3 +239,29 @@ def test_sector_rewards_life_science_and_tech():
     assert check_sector("Health Care").status == "pass"
     assert check_sector("Technology").status == "pass"
     assert check_sector("Industrials").status == "warn"
+
+
+def test_prospects_put_recently_funded_last_and_stated_need_first(tmp_path):
+    # Datumen räknas från idag, eftersom endpointen använder dagens datum (testet beror inte på kalendern).
+    from datetime import date, timedelta
+
+    from fastapi.testclient import TestClient
+
+    from radar.web import create_app
+
+    settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "f")
+    connection = connect(settings.db_path)
+    seed(connection, 1, "Behov AB", "SE1", {**ok(4.7), "debt_due_12m": 50e6, "cash_today": 14e6}, cap=150e6)
+    seed(connection, 2, "Finansierat AB", "SE2", ok(5.0), cap=150e6)
+    seed(connection, 3, "Vanligt AB", "SE3", ok(5.0), cap=150e6)
+    recently = (date.today() - timedelta(days=30)).isoformat()
+    with connection:
+        connection.execute("INSERT INTO news(document_id, company_id, title, published_at, url) VALUES "
+                           "(901, 2, 'Finansierat AB offentliggör utfall i företrädesemissionen', ?, 'u')", (recently,))
+    connection.close()
+    data = TestClient(create_app(settings)).get("/api/prospects").json()
+    assert [i["name"] for i in data["need"]] == ["Behov AB"]                  # lån förfaller före kassan räcker
+    assert [i["name"] for i in data["items"]] == ["Vanligt AB"]
+    assert [i["name"] for i in data["recent"]] == ["Finansierat AB"]
+    funded = data["recent"][0]
+    assert next(c for c in funded["checks"] if c["key"] == "no_raise")["status"] == "fail"

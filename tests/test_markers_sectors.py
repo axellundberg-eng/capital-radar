@@ -93,7 +93,21 @@ def test_markers_are_cleared_by_a_later_issue_and_credit_covers_debt():
     events = [{"type": "bridge_loan", "status": "completed", "gross_amount": 5e6, "event_date": "2026-09-01"},
               {"type": "directed_issue", "status": "completed", "gross_amount": 20e6, "event_date": "2026-10-01"}]
     found = markers.for_company(_item(debt_due_12m=10e6, available_credit=8e6), [], events, None, [], TODAY)
-    assert found == []        # brygglånet återbetalt via emissionen; kredit + kassa täcker lånet
+    # Brygglånet återbetalt via emissionen och kredit + kassa täcker lånet; kvar är bara att bolaget nyss tagit in kapital.
+    assert [m["key"] for m in found] == ["recent_raise"]
+
+
+def test_recent_raise_from_a_headline_moves_the_company_out_of_the_prospect_ranking():
+    # Image Systems: företrädesemissionen syns bara som rubrik (nyheter före rapportperioden AI-granskas inte).
+    titles = [{"title": "Image Systems AB offentliggör utfall i företrädesemissionen", "published_at": "2026-09-07T08:00",
+               "url": "u"}]
+    found = markers.for_company(_item(), [], [], None, titles, TODAY)
+    assert [m["key"] for m in found] == ["recent_raise"] and found[0]["date"] == "2026-09-07"
+    old = [{"title": "Bolaget offentliggör utfall i företrädesemissionen", "published_at": "2026-05-01T08:00", "url": "u"}]
+    assert markers.for_company(_item(), [], [], None, old, TODAY) == []          # äldre än fyra månader
+    from radar.qualify import check_no_raise
+    check = check_no_raise({"flags": [], "markers": found})
+    assert check.status == "fail" and "2026-09-07" in check.reason
 
 
 # --- Bransch -------------------------------------------------------------------------------------------------
@@ -131,3 +145,25 @@ def test_icb_import_classification_and_manual_override(tmp_path):
     assert client.calls == 0 and sectors.load(connection)[2]["subsector"] == "gaming"   # manuellt skrivs aldrig över
     with pytest.raises(ValueError):
         sectors.set_manual(connection, 2, "okänd")
+
+
+def test_decisions_after_a_completed_issue_headline_are_not_signals(tmp_path):
+    # Climeon: riktad emission genomförd 9 sep (bara som rubrik, aldrig AI-granskad); kallelse 10 sep och
+    # stämmobeslut 29 sep om ledningens del enligt 16 kap. aktiebolagslagen.
+    connection = connect(tmp_path / "radar.db")
+    with connection:
+        connection.execute("INSERT INTO companies(id, name) VALUES (1, 'Climeon'), (2, 'Annat')")
+        connection.executemany("INSERT INTO news(document_id, company_id, title, published_at, url, text) VALUES (?,?,?,?,?,?)", [
+            (1, 1, "Climeon genomför en riktad nyemission av B-aktier om 50 MSEK", "2026-09-09", "u1", None),
+            (2, 1, "Climeon utreder förutsättningarna för att genomföra en riktad nyemission", "2026-09-09", "u2", None),
+            (3, 1, "Kallelse till extra bolagsstämma i Climeon AB", "2026-09-10", "u3",
+             "7. Beslut om riktad nyemission av B-aktier till teckningsberättigade."),
+            (4, 2, "Kallelse till extra bolagsstämma i Annat AB", "2026-10-10", "u4",
+             "7. Beslut om godkännande av styrelsens beslut om företrädesemission."),
+        ])
+    result = plans.run(connection, today=TODAY)
+    assert result["egm_called"] == 1                                         # bara bolag 2
+    assert plans.DONE_TITLE.search("Climeon genomför en riktad nyemission av B-aktier om 50 MSEK")
+    assert not plans.DONE_TITLE.search("Climeon utreder förutsättningarna för att genomföra en riktad nyemission")
+    leo = "Beslut om riktad nyemission av B-aktier till teckningsberättigade som omfattas av 16 kap aktiebolagslagen."
+    assert plans.find_egm_issue("Kallelse till extra bolagsstämma i X", leo) is None
