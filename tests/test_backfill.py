@@ -74,3 +74,21 @@ def test_backfill_reads_pre_period_news_target_group_first_and_stops_at_budget(t
     # Nästa varv fortsätter med prioritet 1; redan granskade och tvillingar läses aldrig igen.
     news.run_backfill(settings, client, today=TODAY, token_budget=50_000, workers=1, log=lambda _l: None)
     assert len(client.calls) == 2 and "Lång AB" in client.calls[1]
+
+
+def test_out_of_credit_stops_the_run_and_leaves_news_unreviewed(tmp_path):
+    settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "f")
+    connection = connect(settings.db_path)
+    _seed(connection)
+
+    class Broke:
+        calls = 0
+
+        def complete(self, system, user):
+            Broke.calls += 1
+            raise RuntimeError("Error code: 402 - {'error': {'message': 'Insufficient Balance'}}")
+
+    counts = news.run_backfill(settings, Broke(), today=TODAY, token_budget=10**9, workers=1, log=lambda _l: None)
+    assert Broke.calls == 1 and counts["out_of_credit"] == 1 and counts["budget_slut"] == 1
+    status = dict(connection.execute("SELECT document_id, status FROM news").fetchall())
+    assert status[100] == "new" and status[200] == "new"        # inget markerat som misslyckat

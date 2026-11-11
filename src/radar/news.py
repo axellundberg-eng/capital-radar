@@ -108,6 +108,12 @@ def _check(connection, settings: Settings, client: ChatClient, item: sqlite3.Row
     return _store(connection, item, events, tokens), tokens
 
 
+def out_of_credit(error: Exception) -> bool:
+    """Modellens saldo är slut (DeepSeek svarar 402 Insufficient Balance)."""
+    text = str(error)
+    return "Insufficient Balance" in text or "Error code: 402" in text or getattr(error, "status_code", None) == 402
+
+
 def candidates(connection: sqlite3.Connection, company_id: int, after_date: str, *,
                retry_failed: bool = False) -> list[sqlite3.Row]:
     """Obehandlade nyheter efter datumet vars rubrik klarar förfiltret, nyaste först."""
@@ -135,6 +141,13 @@ def process_company_news(connection: sqlite3.Connection, settings: Settings, cli
         try:
             status, tokens = _check(connection, settings, client, item)
         except Exception as error:  # noqa: BLE001 - felet sparas och visas
+            if out_of_credit(error):
+                # Slut på saldo hos modellen: nyheten lämnas ogranskad (inte "failed") och hela körningen
+                # stoppas via budgeten, så att resten inte markeras som misslyckade i onödan.
+                if budget is not None:
+                    budget.add(budget.limit)
+                counts["out_of_credit"] = 1
+                break
             _set(connection, item["document_id"], status="failed", error=str(error)[:500])
             counts["failed"] += 1
             continue
