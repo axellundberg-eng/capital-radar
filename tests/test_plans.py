@@ -19,6 +19,12 @@ def test_stamma_issue_is_found_but_not_authorizations_or_incentive_programs():
     incentive = ("Stämman beslutade om en riktad emission av aktier till ledande befattningshavare inom ramen för "
                  "ett incitamentsprogram.")
     assert plans.find_stamma_issue(incentive) is None
+    # Climeon: stämman godkände den del av en redan genomförd riktad emission som gick till ledningen
+    # (avstavat "befatt-ningshavare" i texten).
+    climeon = ("Stämman beslutade att besluta om en nyemission omfattande sammanlagt högst 539 500 B-aktier "
+               "riktad till ledande befatt-ningshavare som omfattas av 16 kap aktiebolagslagen. Samtliga aktier har "
+               "tecknats och tilldelats i samband med bolagsstämman.")
+    assert plans.find_stamma_issue(climeon) is None
 
 
 def test_plan_with_timing_beats_vaguer_sentences():

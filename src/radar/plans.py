@@ -79,8 +79,17 @@ STAMMA = re.compile(
 AUTHORIZATION = re.compile(r"bemyndig|authori[sz]", re.I)
 # Incitamentsprogram och kvittningar är emissioner men ingen kapitalanskaffning.
 NOT_RAISE = re.compile(r"incitament|personaloption|optionsprogram|nyckelpersoner|anställda|ledande\s+befattningshavare"
-                       r"|incentive|employee|kvittning|set-?off|apportemission|in\s+kind|sammanläggning|split", re.I)
+                       r"|incentive|employee|kvittning|set-?off|apportemission|in\s+kind|sammanläggning|split"
+                       r"|senior\s+executives", re.I)
+# Stämman godkänner en del av en emission som redan är tecknad eller genomförd (t.ex. aktier till
+# styrelse och ledning i en riktad emission som offentliggjorts tidigare): ingen ny kapitalanskaffning.
+ALREADY_DONE = re.compile(r"(?:har\s+)?tecknats\s+och\s+tilldelats|har\s+tecknats|genomfördes\s+och\s+offentliggjordes"
+                          r"|som\s+(?:ett\s+)?led\s+i\s+(?:det|den)\s+(?:accelererade|genomförda|tidigare)"
+                          r"|subscribed\s+(?:for\s+)?and\s+allotted|has\s+been\s+subscribed|was\s+carried\s+out\s+and\s+announced"
+                          r"|as\s+part\s+of\s+the\s+(?:accelerated|completed|previously)", re.I)
 SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-ZÅÄÖ0-9\"“])")
+# Avstavning vid radbrytning i PDF- och webbtext: "befatt-ningshavare" -> "befattningshavare".
+LINE_HYPHEN = re.compile(r"(?<=[a-zåäö])-(?=[a-zåäö])")
 
 
 def _now() -> str:
@@ -88,15 +97,19 @@ def _now() -> str:
 
 
 def _flat(text: str | None) -> str:
-    return " ".join((text or "").replace("­", "").split())
+    return LINE_HYPHEN.sub("", " ".join((text or "").replace("­", "").split()))
 
 
 def find_stamma_issue(text: str | None) -> dict | None:
     """Stämmobeslut om en emission (inte ett bemyndigande), annars None."""
     flat = _flat(text)
     for match in STAMMA.finditer(flat):
-        window = flat[match.start(): match.end() + 250]
-        if AUTHORIZATION.search(match.group(0)) or NOT_RAISE.search(window):
+        # Uteslutningar gäller meningen där beslutet står, inte nästa punkt i kommunikén (t.ex. ett
+        # incitamentsprogram eller en sammanläggning som beslutades vid samma stämma).
+        end = flat.find(". ", match.end())
+        window = flat[match.start(): min(end + 1 if end >= 0 else len(flat), match.end() + 300)]
+        context = flat[match.start(): match.end() + 500]   # beslutets stycke: redan tecknad eller genomförd?
+        if AUTHORIZATION.search(match.group(0)) or NOT_RAISE.search(window) or ALREADY_DONE.search(context):
             continue
         return {"kind": "stamma_issue", "timing": None, "quote": flat[match.start(): match.start() + QUOTE_CHARS]}
     return None
