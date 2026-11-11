@@ -22,7 +22,8 @@ from .authorizations import latest as latest_authorizations
 from .calendar import next_report
 from . import guarantee
 from .fx import latest_rates
-from .plans import active as active_signals
+from . import markers as marker_module
+from . import sectors as sector_module
 from .qualify import load_history, load_market, qualify, recent_financing
 from .settings import Settings
 
@@ -131,10 +132,12 @@ def latest_rows(connection: sqlite3.Connection) -> list[dict]:
 
 
 def _attach_signals(connection: sqlite3.Connection, items: list[dict]) -> None:
-    """Stämmobeslut om emission eller uttalad plan att ta in kapital (plans.py), om de är aktuella."""
-    signals = active_signals(connection, load_history(connection), date.today().isoformat())
+    """Markörer och viktigaste kapitalsignalen (markers.py) samt bransch (sectors.py) per bolag."""
+    marker_module.attach(connection, items, load_history(connection), date.today().isoformat())
+    sectors = sector_module.load(connection)
     for item in items:
-        item["capital_signal"] = signals.get(item["id"])
+        item["sector"] = sectors.get(item["id"])
+        item["need_level"] = marker_module.need_level(item["markers"])
 
 
 def _attach_changes(connection: sqlite3.Connection, items: list[dict]) -> None:
@@ -173,7 +176,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         for item in items:
             counts[item["band"]] = counts.get(item["band"], 0) + 1
         return JSONResponse({"companies": companies, "with_result": len(items), "bands": counts,
-                             "reports": reports, "flag_text": FLAG_TEXT, "band_text": BAND_TEXT},
+                             "reports": reports, "flag_text": FLAG_TEXT, "band_text": BAND_TEXT,
+                             "sectors": [list(t) for t in sector_module.TAXONOMY],
+                             "markers": [list(t) for t in marker_module.MARKERS]},
                             headers={"Cache-Control": "no-store"})
 
     @app.get("/api/companies")
@@ -222,7 +227,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             reports, authorized = next_report(connection, date.today().isoformat()), latest_authorizations(connection)
         finally:
             connection.close()
-        out, raising, structural = [], [], []
+        need, out, raising, structural = [], [], [], []
         for item in items:
             if item["band"] == "structural":
                 structural.append(item)  # inte poängsatt: siffrorna är inte tillförlitliga
@@ -232,14 +237,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 continue
             q = qualify(item, market.get(item["id"]), history.get(item["id"], []), rates)
             emissions, recent = recent_financing(history.get(item["id"], []), date.today().isoformat())
-            (raising if is_raising else out).append(
+            # Bolag med uttalat eller indirekt kapitalbehov (markers.py) får en egen sektion överst.
+            target = raising if is_raising else (need if item.get("need_level") else out)
+            target.append(
                 {**item, **q.to_dict(), "market_error": (market.get(item["id"]) or {}).get("error"),
                  "emissions_24m": emissions, "recent_financing": recent,
                  "next_report": reports.get(item["id"]), "authorization": authorized.get(item["id"])})
-        for group in (out, raising):
+        for group in (need, out, raising):
             group.sort(key=lambda i: (-i["score"], i["runway_today"] or 0, i["name"].casefold()))
         structural.sort(key=lambda i: i["name"].casefold())
-        return JSONResponse({"items": out, "raising": raising, "structural": structural}, headers={"Cache-Control": "no-store"})
+        return JSONResponse({"need": need, "items": out, "raising": raising, "structural": structural},
+                            headers={"Cache-Control": "no-store"})
 
     @app.get("/api/search")
     def search(q: str = "", limit: int = 20) -> JSONResponse:

@@ -136,8 +136,17 @@ def test_score_orders_better_prospects_first_and_stays_in_range():
     unknown = qualify(item(), None, [])
     worst = qualify(item(runway_today=14, flags=["raise_announced", "stale_report"], monthly_burn=0.2e6,
                         cash=0, months_since_report=0.0), None, [])
-    assert best.score == 100 > no_history.score > unknown.score > big_share.score > worst.score >= 0
-    assert "Poäng 100/100" in best.summary and "25 MSEK" in best.summary
+    # Utan uttalat kapitalbehov är högsta poängen 85; med en markör (stämmobeslut) blir den 100.
+    assert best.score == 85 > no_history.score > unknown.score > big_share.score > worst.score >= 0
+    assert "Poäng 85/100" in best.summary and "25 MSEK" in best.summary
+    stamma = {"key": "stamma_issue", "label": "Stämmobeslut om emission", "tier": "capital"}
+    debt = {"key": "debt_due", "label": "Lån förfaller före kassan räcker", "tier": "half"}
+    with_need = qualify(item(markers=[stamma]), cap, history(("rights_issue", "completed", 30e6, "2025-03-01")))
+    half = qualify(item(markers=[debt]), cap, history(("rights_issue", "completed", 30e6, "2025-03-01")))
+    assert with_need.score == 100 and half.score == 92          # halv poäng: 85 + 7,5 = 92,5 (round -> 92)
+    context_only = qualify(item(markers=[{"key": "report_soon", "label": "Rapport", "tier": "context"}]), cap,
+                           history(("rights_issue", "completed", 30e6, "2025-03-01")))
+    assert context_only.score == 85                              # sammanhang ger inga poäng
 
 
 def test_capital_need_includes_debt_credit_and_costs_in_sek():
@@ -210,7 +219,7 @@ def test_prospects_endpoint_ranks_and_filters(client):
     raising = client.get("/api/prospects").json()["raising"]
     assert [i["name"] for i in raising] == ["Annonserat AB"]  # visas separat i stället för att tas bort
     bra = items[0]
-    assert bra["score"] == 100 and bra["capital_need"] == pytest.approx(25e6) and bra["market_cap"] == 150e6
+    assert bra["score"] == 85 and bra["capital_need"] == pytest.approx(25e6) and bra["market_cap"] == 150e6
     assert bra["share"] == pytest.approx(25 / 150) and bra["last_issue"]["date"] == "2020-03-01"
     assert {c["key"] for c in bra["checks"]} >= {"runway", "size", "share", "history", "sector"}
     assert items[1]["market_cap"] is None and items[1]["share"] is None
@@ -219,7 +228,7 @@ def test_prospects_endpoint_ranks_and_filters(client):
 
 def test_detail_has_qualification_and_ui_has_prospect_view(client):
     detail = client.get("/api/companies/1").json()
-    assert detail["qualification"]["score"] == 100 and len(detail["qualification"]["checks"]) == 7
+    assert detail["qualification"]["score"] == 85 and len(detail["qualification"]["checks"]) == 8
     html = client.get("/").text
     assert 'data-view="prospects"' in html and "prospectRows" in html and "app.js?v=" in html
 

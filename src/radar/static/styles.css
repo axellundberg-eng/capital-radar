@@ -339,3 +339,37 @@ tr.expand > td { padding: 0; background: var(--muted-bg); }
 .signal-box strong { color: var(--target); }
 .signal-box p { margin: 4px 0 0; line-height: 1.5; }
 .signal-box q { display: block; margin-top: 6px; color: var(--muted); font-style: italic; line-height: 1.5; }
+
+/* Filter lager 1: valda runway-grupper är gröna (flerval) */
+.band.on { background: var(--watch-bg); border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+.band.on strong, .band.on span { color: var(--good); }
+
+/* Filter lager 2: bransch och markörer */
+.facets { display: flex; flex-direction: column; gap: 6px; margin: -2px 0 12px; }
+.facets:empty { display: none; }
+.facet-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.facet-label { font-size: 12px; font-weight: 600; color: var(--muted); min-width: 70px; }
+.facet-sub { font-size: 11px; color: var(--muted); margin-left: 4px; }
+.facet { font: inherit; font-size: 12px; background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 999px; padding: 3px 10px; cursor: pointer;
+  transition: background-color var(--t) var(--ease), border-color var(--t) var(--ease); }
+.facet small { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 2px; }
+.facet:hover { background: var(--muted-bg); }
+.facet:focus-visible, .band:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.facet.on { background: var(--watch-bg); border-color: var(--good); color: var(--good); font-weight: 600; }
+.facet.on small { color: var(--good); }
+.facet-clear { font: inherit; font-size: 12px; align-self: flex-start; background: none; border: 0; padding: 2px 0;
+  color: var(--accent); cursor: pointer; }
+.facet-clear:hover { text-decoration: underline; }
+tr.group-row td { background: var(--muted-bg); font-weight: 600; font-size: 13px; padding: 8px 10px; }
+tr.group-row small { display: inline; font-weight: 400; color: var(--muted); margin-left: 8px; }
+.markers li .tier { font-size: 11px; color: var(--muted); }
+.markers li.tier-capital { border-left: 3px solid var(--target); }
+.markers li.tier-half { border-left: 3px dashed var(--target); }
+.markers li small { display: block; margin-top: 4px; color: var(--muted); }
+@media (max-width: 720px) {
+  .facet-label { min-width: 100%; }
+}
+/* Kolumnerna får krympa under tabellens bredd: tabellen rullar i sidled i sin ruta i stället för att
+   göra hela sidan bredare än skärmen (mobil). */
+.layout > * { min-width: 0; }

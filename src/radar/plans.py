@@ -1,16 +1,20 @@
 """Signaler om kommande kapitalanskaffning som ännu inte är en annonserad emission.
 
-Två slag, båda med reguljära uttryck (inga AI-anrop):
+Fem slag, alla med reguljära uttryck (inga AI-anrop):
 
 - `stamma_issue`: en bolagsstämma har beslutat om en emission (eller godkänt styrelsens
   beslut). Ett rent bemyndigande räknas inte, det har nästan alla bolag.
+- `egm_called`: kallelse till extra bolagsstämma med emission, emissionsbemyndigande, minskning av
+  aktiekapitalet eller ändrade aktiekapitalgränser på dagordningen. Kommer före stämmobeslutet.
 - `plan`: bolaget säger att det ska ta in kapital, gärna med tidpunkt ("under första
   kvartalet 2027"). Kräver ett tydligt avsiktsverb, eller ett svagare verb ("utvärderar",
   "behöver") tillsammans med en tidsangivelse. Meningar om genomförda emissioner hoppas över.
+- `going_concern`: senaste rapporten anger väsentlig osäkerhet om fortsatt drift.
+- `evaluating`: bolaget utvärderar ny finansiering utan tidpunkt (svagare, visas som sammanhang).
 
 Källor: sidorna i varje bolags senaste rapport (redan sparade) och sparad text för
-pressmeddelanden de senaste 12 månaderna. Tabellen byggs om helt vid varje körning.
-En signal är aktiv i 270 dagar och släcks när bolaget därefter genomfört en emission.
+pressmeddelanden de senaste 12 månaderna. Kallelsernas text hämtas en gång (`fetch_notices`).
+Tabellen byggs om helt vid varje körning. En signal släcks när bolaget därefter genomfört en emission.
 """
 
 from __future__ import annotations
@@ -18,17 +22,21 @@ from __future__ import annotations
 import re
 import sqlite3
 from datetime import date, datetime, timedelta, timezone
+from typing import Callable
 
 ACTIVE_DAYS = 270
 # En stämmogodkänd emission genomförs normalt inom ett par månader: äldre beslut utan registrerat
 # utfall beror oftare på luckor i datan än på en kapitalanskaffning som fortfarande pågår.
-ACTIVE_DAYS_BY_KIND = {"stamma_issue": 120, "plan": ACTIVE_DAYS, "evaluating": ACTIVE_DAYS}
+ACTIVE_DAYS_BY_KIND = {"stamma_issue": 120, "egm_called": 120, "plan": ACTIVE_DAYS,
+                       "going_concern": ACTIVE_DAYS, "evaluating": ACTIVE_DAYS}
 # Stämman godkänner ofta ett styrelsebeslut som redan registrerats med styrelsens datum, så en
 # genomförd emission en tid före signalen släcker den också.
-LOOKBACK_DAYS = {"stamma_issue": 90, "plan": 30, "evaluating": 30}
+LOOKBACK_DAYS = {"stamma_issue": 90, "egm_called": 30, "plan": 30, "going_concern": 15, "evaluating": 30}
 NEWS_DAYS = 365
+NOTICE_DAYS = 120
 QUOTE_CHARS = 320
 EQUITY = ("rights_issue", "directed_issue", "warrants", "convertible")
+KIND_ORDER = {"stamma_issue": 0, "egm_called": 1, "plan": 2, "going_concern": 3, "evaluating": 4}
 
 RAISE = (r"kapitalanskaffning\w*|kapitaltillskott|nyemission\w*|företrädesemission\w*|riktad\w*\s+(?:ny)?emission\w*"
          r"|emission\s+av\s+(?:units|aktier|nya aktier)|(?:ytterligare|ny|extern|fortsatt|långsiktig)\s+finansiering"
@@ -44,7 +52,7 @@ STRONG = (r"avser\s+att|planerar\s+att|har\s+för\s+avsikt\s+att|förbereder\s+(
           r"|räknar\s+med\s+att\s+(?:genomföra|ta\s+in)|intends?\s+to|plans?\s+to|planning\s+to"
           r"|is\s+preparing|will\s+(?:carry\s+out|raise|conduct|seek|need)|expects?\s+to\s+(?:raise|carry\s+out)")
 WEAK = (r"utvärderar|utvärderas|att\s+utvärdera|överväger|undersöker|ser\s+över|arbetar\s+(?:aktivt\s+)?(?:med|för)|behöver|är\s+i\s+behov\s+av"
-        r"|behov\s+av|evaluat(?:es|ing|e)|exploring|considering|reviewing|needs?\s+(?:to|additional|further)|in\s+need\s+of"
+        r"|behov\s+av|evaluat(?:es|ing|e)|exploring|considering|reviewing|needs?\s+(?:to|additional|further)|in\s+need\s+of"
         r"|will\s+be\s+required|krävs")
 # Mjuka formuleringar som inte är ett besked: negationer och riskavsnittens "kan komma att behöva".
 HEDGE = (r"inte\s+(?:något|har\s+något)\s+behov|inget\s+behov|utan\s+(?:behov\s+av\s+)?kapitaltillskott|no\s+need|not\s+need"
@@ -67,7 +75,6 @@ TIMING = re.compile(
     r"\s+(?:månader\w*|months)", re.I)
 PLAN_RAISE, PLAN_STRONG, PLAN_WEAK, PLAN_DONE, PLAN_HEDGE = (
     re.compile(p, re.I) for p in (RAISE, STRONG, WEAK, DONE, HEDGE))
-KIND_ORDER = {"stamma_issue": 0, "plan": 1, "evaluating": 2}
 
 STAMMA = re.compile(
     r"(?:bolags)?stämman\s+(?:beslutade|beslöt|godkände|fattade\s+beslut)[^.]{0,200}?"
@@ -87,6 +94,25 @@ ALREADY_DONE = re.compile(r"(?:har\s+)?tecknats\s+och\s+tilldelats|har\s+tecknat
                           r"|som\s+(?:ett\s+)?led\s+i\s+(?:det|den)\s+(?:accelererade|genomförda|tidigare)"
                           r"|subscribed\s+(?:for\s+)?and\s+allotted|has\s+been\s+subscribed|was\s+carried\s+out\s+and\s+announced"
                           r"|as\s+part\s+of\s+the\s+(?:accelerated|completed|previously)", re.I)
+# Kallelse till extra bolagsstämma (rubrik) och emissionsärenden på dess dagordning (text).
+EGM_TITLE = re.compile(r"kallelse\s+till\s+extra\s+bolagsstämma|kallelse\s+till\s+extra\s+stämma"
+                       r"|notice\s+(?:of|to)\s+(?:attend\s+)?(?:the\s+|an\s+)?extra\s*ordinary\s+general\s+meeting"
+                       r"|notice\s+(?:of|to)\s+(?:attend\s+)?(?:the\s+|an\s+)?egm", re.I)
+EGM_AGENDA = re.compile(
+    r"(?:beslut|förslag\s+till\s+beslut|resolution|proposal)[^.]{0,80}?"
+    r"(?:(?:godkännande\s+av\s+styrelsens\s+beslut\s+om\s+)?(?:nyemission|företrädesemission|riktad\w*\s+(?:ny)?emission"
+    r"|emission\s+av\s+(?:units|aktier|nya\s+aktier))"
+    r"|bemyndigande[^.]{0,80}?(?:nyemission|emission|emittera)"
+    r"|minskning\s+av\s+aktiekapital\w*"
+    r"|ändring\s+av\s+bolagsordning\w*[^.]{0,60}?(?:gräns\w*|aktiekapital\w*|antal\s+aktier)"
+    r"|(?:approval\s+of\s+the\s+board['’]s\s+resolution\s+(?:on|regarding)\s+(?:a\s+)?)?(?:rights\s+issue|new\s+(?:share\s+)?issue"
+    r"|directed\s+(?:share\s+)?issue|issue\s+of\s+(?:units|new\s+shares|shares))"
+    r"|authori[sz]ation[^.]{0,80}?issu\w+"
+    r"|reduction\s+of\s+the\s+share\s+capital"
+    r"|amendment\s+of\s+the\s+articles[^.]{0,60}?(?:limits?|share\s+capital|number\s+of\s+shares))", re.I)
+GOING_CONCERN = re.compile(
+    r"väsentlig\w*\s+osäkerhet\w*[^.]{0,220}fortsatt\s+drift|fortsatt\s+drift[^.]{0,220}väsentlig\w*\s+osäkerhet"
+    r"|material\s+uncertaint\w*[^.]{0,220}going\s+concern|going\s+concern[^.]{0,220}material\s+uncertaint\w*", re.I)
 SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-ZÅÄÖ0-9\"“])")
 # Avstavning vid radbrytning i PDF- och webbtext: "befatt-ningshavare" -> "befattningshavare".
 LINE_HYPHEN = re.compile(r"(?<=[a-zåäö])-(?=[a-zåäö])")
@@ -98,6 +124,13 @@ def _now() -> str:
 
 def _flat(text: str | None) -> str:
     return LINE_HYPHEN.sub("", " ".join((text or "").replace("­", "").split()))
+
+
+def _sentence_at(flat: str, start: int, end: int) -> str:
+    """Meningen runt en träff, högst QUOTE_CHARS tecken."""
+    left = max(flat.rfind(". ", 0, start) + 2, 0)
+    right = flat.find(". ", end)
+    return flat[left: (right + 1) if right >= 0 else len(flat)][:QUOTE_CHARS]
 
 
 def find_stamma_issue(text: str | None) -> dict | None:
@@ -113,6 +146,30 @@ def find_stamma_issue(text: str | None) -> dict | None:
             continue
         return {"kind": "stamma_issue", "timing": None, "quote": flat[match.start(): match.start() + QUOTE_CHARS]}
     return None
+
+
+def find_egm_issue(title: str | None, text: str | None) -> dict | None:
+    """Kallelse till extra bolagsstämma med ett emissionsärende på dagordningen, annars None."""
+    if not EGM_TITLE.search(title or ""):
+        return None
+    flat = _flat(text)
+    for match in EGM_AGENDA.finditer(flat):
+        end = flat.find(". ", match.end())
+        window = flat[match.start(): min(end + 1 if end >= 0 else len(flat), match.end() + 300)]
+        if NOT_RAISE.search(window):
+            continue   # incitamentsprogram, kvittning eller sammanläggning är ingen kapitalanskaffning
+        # Dagordningar saknar ofta punkter mellan ärendena: citera från ärendet, inte från meningens början.
+        return {"kind": "egm_called", "timing": None, "quote": flat[match.start(): match.start() + QUOTE_CHARS]}
+    return None
+
+
+def find_going_concern(text: str | None) -> dict | None:
+    """Väsentlig osäkerhet om fortsatt drift i rapporttexten, annars None."""
+    flat = _flat(text)
+    match = GOING_CONCERN.search(flat)
+    if not match:
+        return None
+    return {"kind": "going_concern", "timing": None, "quote": _sentence_at(flat, match.start(), match.end())}
 
 
 def find_plan(text: str | None) -> dict | None:
@@ -150,6 +207,42 @@ def _latest_reports(connection: sqlite3.Connection) -> list[sqlite3.Row]:
                                   ORDER BY r2.published_at DESC, r2.document_id ASC LIMIT 1)""").fetchall()
 
 
+def notice_candidates(connection: sqlite3.Connection, today: str, limit: int) -> list[sqlite3.Row]:
+    """Kallelser till extra stämma de senaste NOTICE_DAYS dagarna som saknar sparad text."""
+    cutoff = (date.fromisoformat(today[:10]) - timedelta(days=NOTICE_DAYS)).isoformat()
+    rows = connection.execute(
+        """SELECT document_id, title, url FROM news WHERE text IS NULL AND url IS NOT NULL
+           AND substr(published_at, 1, 10) >= ? ORDER BY published_at DESC""", (cutoff,)).fetchall()
+    return [row for row in rows if EGM_TITLE.search(row["title"] or "")][:limit]
+
+
+def fetch_notices(connection: sqlite3.Connection, settings, *, today: str | None = None, limit: int = 40,
+                  fetch: Callable | None = None, throttle=None, log: Callable[[str], None] = lambda _l: None
+                  ) -> dict[str, int]:
+    """Hämta texten för kallelser till extra stämma (en gång per kallelse) så att dagordningen kan läsas."""
+    from . import mfn
+    from .fetch import fetch_text
+
+    fetch = fetch or (lambda url: fetch_text(url, timeout=min(settings.http_timeout, 60.0),
+                                             user_agent=settings.user_agent))
+    throttle = throttle or mfn.Throttle()
+    rows = notice_candidates(connection, today or date.today().isoformat(), limit)
+    counts = {"candidates": len(rows), "fetched": 0, "failed": 0}
+    for row in rows:
+        throttle.wait()
+        try:
+            text = fetch(row["url"])
+        except Exception as error:  # noqa: BLE001 - en sida får inte stoppa övriga
+            counts["failed"] += 1
+            log(f"kallelse {row['title'][:60]}: {error}")
+            continue
+        with connection:
+            connection.execute("UPDATE news SET text=? WHERE document_id=? AND text IS NULL",
+                               (text, row["document_id"]))
+        counts["fetched"] += 1
+    return counts
+
+
 def run(connection: sqlite3.Connection, *, today: str | None = None) -> dict[str, int]:
     """Bygg om tabellen `financing_signals` ur rapportsidor och sparad nyhetstext."""
     today = today or date.today().isoformat()
@@ -157,15 +250,19 @@ def run(connection: sqlite3.Connection, *, today: str | None = None) -> dict[str
     for report in _latest_reports(connection):
         text = " ".join(page for (page,) in connection.execute(
             "SELECT text FROM report_pages WHERE document_id=? ORDER BY page", (report["document_id"],)))
-        found = find_plan(text)
-        if found:
-            rows.append((report["company_id"], found["kind"], "report", report["document_id"],
-                         (report["published_at"] or "")[:10], found["timing"], found["quote"], report["url"]))
+        for found in (find_plan(text), find_going_concern(text)):
+            if found:
+                rows.append((report["company_id"], found["kind"], "report", report["document_id"],
+                             (report["published_at"] or "")[:10], found["timing"], found["quote"], report["url"]))
     cutoff = (date.fromisoformat(today[:10]) - timedelta(days=NEWS_DAYS)).isoformat()
     for news in connection.execute(
-            """SELECT document_id, company_id, published_at, url, text FROM news
+            """SELECT document_id, company_id, title, published_at, url, text FROM news
                WHERE text IS NOT NULL AND substr(published_at, 1, 10) >= ?""", (cutoff,)):
-        for found in (find_stamma_issue(news["text"]), find_plan(news["text"])):
+        egm = find_egm_issue(news["title"], news["text"])
+        # En kallelse beskriver förslag, inte beslut eller planer: läs den bara som kallelse.
+        found_all = (egm,) if egm or EGM_TITLE.search(news["title"] or "") else (
+            find_stamma_issue(news["text"]), find_plan(news["text"]))
+        for found in found_all:
             if found:
                 rows.append((news["company_id"], found["kind"], "news", news["document_id"],
                              (news["published_at"] or "")[:10], found["timing"], found["quote"], news["url"]))
@@ -175,19 +272,18 @@ def run(connection: sqlite3.Connection, *, today: str | None = None) -> dict[str
             """INSERT OR IGNORE INTO financing_signals(company_id, kind, source, document_id, published_at,
                timing, quote, url, created_at) VALUES (?,?,?,?,?,?,?,?,?)""",
             [(*row, _now()) for row in rows])
-    counts = {"signals": len(rows), "companies": len({row[0] for row in rows}),
-              "stamma_issue": sum(row[1] == "stamma_issue" for row in rows),
-              "plan": sum(row[1] == "plan" for row in rows),
-              "evaluating": sum(row[1] == "evaluating" for row in rows)}
+    counts = {"signals": len(rows), "companies": len({row[0] for row in rows})}
+    for kind in KIND_ORDER:
+        counts[kind] = sum(row[1] == kind for row in rows)
     return counts
 
 
-def active(connection: sqlite3.Connection, history: dict[int, list[dict]], today: str) -> dict[int, dict]:
-    """Aktuell signal per bolag: inte för gammal (`ACTIVE_DAYS_BY_KIND`) och ingen genomförd emission
-    efter signalen eller kort före den (`LOOKBACK_DAYS`).
+def active_all(connection: sqlite3.Connection, history: dict[int, list[dict]], today: str) -> dict[int, list[dict]]:
+    """Aktuella signaler per bolag, en per slag, ordnade efter vikt (KIND_ORDER).
 
-    `history` är qualify.load_history (händelser med granskningens rättelser). Stämmobeslut går före
-    planer och planer före utvärderingar; inom samma slag nyare före äldre och med tidpunkt först."""
+    En signal är aktuell när den inte är för gammal (`ACTIVE_DAYS_BY_KIND`) och ingen genomförd emission
+    finns efter signalen eller kort före den (`LOOKBACK_DAYS`). `history` är qualify.load_history
+    (händelser med granskningens rättelser). Inom samma slag går nyare före äldre och med tidpunkt först."""
     day = date.fromisoformat(today[:10])
     cutoff = (day - timedelta(days=max(ACTIVE_DAYS_BY_KIND.values()))).isoformat()
     try:
@@ -199,9 +295,11 @@ def active(connection: sqlite3.Connection, history: dict[int, list[dict]], today
         day - timedelta(days=ACTIVE_DAYS_BY_KIND.get(r["kind"], ACTIVE_DAYS))).isoformat()]
     rows.sort(key=lambda r: r["published_at"] or "", reverse=True)                 # nyast först ...
     rows.sort(key=lambda r: (KIND_ORDER.get(r["kind"], 9), r["timing"] is None))   # ... inom slag (stabil sortering)
-    result: dict[int, dict] = {}
+    result: dict[int, list[dict]] = {}
+    seen: set[tuple[int, str]] = set()
     for row in rows:
-        if row["company_id"] in result:
+        key = (row["company_id"], row["kind"])
+        if key in seen:
             continue
         since = (date.fromisoformat(row["published_at"])
                  - timedelta(days=LOOKBACK_DAYS.get(row["kind"], 30))).isoformat()
@@ -209,6 +307,12 @@ def active(connection: sqlite3.Connection, history: dict[int, list[dict]], today
                      and (e.get("event_date") or "")[:10] >= since
                      for e in history.get(row["company_id"], []))
         if not raised:
-            result[row["company_id"]] = {key: row[key] for key in
-                                         ("kind", "source", "published_at", "timing", "quote", "url")}
+            seen.add(key)
+            result.setdefault(row["company_id"], []).append(
+                {k: row[k] for k in ("kind", "source", "published_at", "timing", "quote", "url")})
     return result
+
+
+def active(connection: sqlite3.Connection, history: dict[int, list[dict]], today: str) -> dict[int, dict]:
+    """Den viktigaste aktuella signalen per bolag (för bannern)."""
+    return {company: signals[0] for company, signals in active_all(connection, history, today).items()}

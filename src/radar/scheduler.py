@@ -138,15 +138,34 @@ def _collect_step(settings: Settings) -> dict:
 
 
 def _plans_step(settings: Settings, log: Callable[[str], None]) -> dict:
-    """Bygg om signalerna om planerad kapitalanskaffning (bara reguljära uttryck, inga anrop)."""
+    """Hämta text för nya kallelser till extra stämma och bygg om signalerna om kapitalanskaffning."""
     try:
         connection = connect(settings.db_path)
         try:
-            return plans.run(connection)
+            notices = plans.fetch_notices(connection, settings, log=log)
+            return {"notices": notices, **plans.run(connection)}
         finally:
             connection.close()
     except Exception as error:  # noqa: BLE001
         log(f"plans misslyckades: {error}")
+        return {"error": str(error)}
+
+
+def _sectors_step(settings: Settings, client, log: Callable[[str], None]) -> dict:
+    """ICB-bransch ur gamla databasen och underbransch för nya bolag (begränsat antal AI-anrop per varv)."""
+    from . import sectors
+
+    try:
+        connection = connect(settings.db_path)
+        try:
+            result = {"icb": sectors.import_icb(connection, settings.legacy_db_path)}
+            if client is not None:
+                result["classify"] = sectors.classify(connection, client, limit=60, token_budget=80_000)
+            return result
+        finally:
+            connection.close()
+    except Exception as error:  # noqa: BLE001
+        log(f"sectors misslyckades: {error}")
         return {"error": str(error)}
 
 
@@ -256,6 +275,7 @@ def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: i
                                        log=lambda _line: None)
         summary["authorizations"] = _authorizations_step(settings, log)
         summary["plans"] = _plans_step(settings, log)   # efter stämmotexterna, som den läser
+        summary["sectors"] = _sectors_step(settings, client, log)
         summary["fx"] = _fx_step(settings, log)
         connection = connect(settings.db_path)
         try:

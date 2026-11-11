@@ -173,6 +173,14 @@ CREATE TABLE IF NOT EXISTS financing_signals (   -- stämmobeslut och uttalade p
     UNIQUE(kind, document_id)
 );
 CREATE INDEX IF NOT EXISTS financing_signals_company ON financing_signals(company_id, published_at);
+CREATE TABLE IF NOT EXISTS company_sectors (     -- bransch per bolag, se sectors.py
+    company_id INTEGER PRIMARY KEY,
+    icb TEXT,                          -- ICB-bransch från Nasdaq (gamla databasen), t.ex. Health Care
+    subsector TEXT,                    -- underbransch (sectors.TAXONOMY), satt av AI eller för hand
+    source TEXT,                       -- ai | manual
+    reason TEXT,
+    updated_at TEXT
+);
 CREATE TABLE IF NOT EXISTS market_history_summary (   -- kurshistorik i sammandrag per bolag, se market.py
     company_id INTEGER PRIMARY KEY,
     isin TEXT, order_book TEXT,        -- Nasdaqs orderboks-id, sparas så att nästa hämtning kräver ett anrop

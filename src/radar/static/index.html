@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Capital Radar</title>
-  <link rel="stylesheet" href="static/styles.css?v=17">
+  <link rel="stylesheet" href="static/styles.css?v=19">
 </head>
 <body>
   <header class="top">
@@ -26,7 +26,8 @@
       </div>
 
       <div id="listView">
-      <nav class="bands" id="bands" aria-label="Runway-grupper"></nav>
+      <nav class="bands" id="bands" aria-label="Runway-grupper (flerval)"></nav>
+      <div class="facets" id="facets" aria-label="Filter: bransch och markörer"></div>
 
       <div class="tools">
         <input id="search" type="search" placeholder="Sök bolag" aria-label="Sök bolag">
@@ -50,7 +51,8 @@
       </div>
 
       <div id="prospectView" hidden>
-        <p class="source">Bolag med runway under 9 månader och ingen annonserad emission, rankade efter prospektpoäng. Bolag med pågående kapitalanskaffning visas separat längst ner. Marknadsvärde från Nasdaq; saknas det visas "okänt".</p>
+        <p class="source">Bolag med runway under 9 månader och ingen annonserad emission, rankade efter prospektpoäng. Bolag med uttalat kapitalbehov (stämmobeslut, kallelse, plan, osäkerhet om fortsatt drift eller indirekt behov) visas överst. Pågående kapitalanskaffning visas separat längst ner. Marknadsvärde från Nasdaq; saknas det visas "okänt".</p>
+        <div class="facets" id="pFacets" aria-label="Filter: bransch och markörer"></div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -112,6 +114,6 @@
     </aside>
   </main>
 
-  <script src="static/app.js?v=25" defer></script>
+  <script src="static/app.js?v=26" defer></script>
 </body>
 </html>

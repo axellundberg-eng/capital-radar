@@ -336,7 +336,11 @@ def main(argv: list[str] | None = None) -> int:
     correct.add_argument("--date")
     correct.add_argument("--advisers")
     sub.add_parser("fx", help="hämta dagens växelkurser från Riksbanken")
-    sub.add_parser("plans", help="bygg om signaler om stämmobeslut och planerad kapitalanskaffning")
+    plans_cmd = sub.add_parser("plans", help="bygg om signaler om stämmobeslut och planerad kapitalanskaffning")
+    plans_cmd.add_argument("--fetch", type=int, default=0, help="hämta först text för högst N kallelser")
+    sectors_cmd = sub.add_parser("sectors", help="ICB-bransch och underbransch per bolag")
+    sectors_cmd.add_argument("--limit", type=int, default=60, help="högst så många AI-klassningar")
+    sectors_cmd.add_argument("--set", nargs=2, metavar=("BOLAG_ID", "UNDERBRANSCH"), help="sätt underbransch för hand")
     for name, text in (("market", "kurshistorik och omsättning från Nasdaq"),
                        ("insiders", "insynshandel från Finansinspektionen")):
         extra = sub.add_parser(name, help=text)
@@ -379,7 +383,21 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "plans":
         from . import plans
 
-        print(json.dumps(plans.run(connection), ensure_ascii=False))
+        notices = plans.fetch_notices(connection, settings, limit=args.fetch) if args.fetch else {}
+        print(json.dumps({"notices": notices, **plans.run(connection)}, ensure_ascii=False))
+        return 0
+    if args.command == "sectors":
+        from . import sectors
+
+        if args.set:
+            sectors.set_manual(connection, int(args.set[0]), args.set[1])
+            print(json.dumps({"set": args.set}, ensure_ascii=False))
+            return 0
+        result = {"icb": sectors.import_icb(connection, settings.legacy_db_path)}
+        client = _client(settings)
+        if client is not None and args.limit:
+            result["classify"] = sectors.classify(connection, client, limit=args.limit, token_budget=10**9)
+        print(json.dumps(result, ensure_ascii=False))
         return 0
     if args.command == "slugs":
         from . import slugs as slug_matcher

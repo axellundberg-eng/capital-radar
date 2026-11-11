@@ -38,7 +38,10 @@ SHARE_PASS, SHARE_WARN = 0.25, 0.40
 EQUITY_TYPES = ("rights_issue", "directed_issue")
 ISSUE_COST = 0.12   # emissionskostnader och garantiersättning, andel av bruttobeloppet
 TERMS = ('subscription_commitments', 'guarantee_amount', 'guarantee_fee_pct', 'guarantors', 'subscription_rate_pct', 'guarantee_utilized', 'issue_price', 'shares_issued', 'shares_before', 'discount_pct', 'exercise_price', 'exercise_start', 'exercise_end', 'issue_costs')
-WEIGHTS = {"runway": 20, "no_raise": 15, "size": 15, "share": 25, "history": 10, "quality": 5, "sector": 10}
+# Summa 100. "Uttalat kapitalbehov" (markers.py) väger 15; "ingen annonserad emission" skiljer dåligt mellan
+# prospekt (bolag med annonserad emission ligger i en egen sektion) och väger därför bara 5.
+WEIGHTS = {"runway": 20, "no_raise": 5, "size": 15, "share": 20, "history": 10, "quality": 5, "sector": 10,
+           "capital_need": 15}
 TARGET_SECTORS = ("health", "technology", "life science", "medical", "biotech", "pharma")
 FACTOR = {"pass": 1.0, "warn": 0.5, "fail": 0.0, "info": 0.0}
 TYPE_TEXT = {"rights_issue": "företrädesemission", "directed_issue": "riktad emission"}
@@ -195,7 +198,28 @@ def check_quality(item: dict, cap: float | None) -> Check:
     return Check("quality", "Datakvalitet", "pass", "Färsk rapport och känt marknadsvärde.", WEIGHTS["quality"])
 
 
-def check_sector(sector: str | None) -> Check:
+def check_capital_need(item: dict) -> Check:
+    """Uttalat kapitalbehov (markers.py): full poäng för capital, halv för half."""
+    weight, label = WEIGHTS["capital_need"], "Uttalat kapitalbehov"
+    markers = item.get("markers") or []
+    strong = [m["label"] for m in markers if m.get("tier") == "capital"]
+    weak = [m["label"] for m in markers if m.get("tier") == "half"]
+    if strong:
+        return Check("capital_need", label, "pass", ", ".join(strong + weak) + ".", weight)
+    if weak:
+        return Check("capital_need", label, "warn", ", ".join(weak) + " (indirekt kapitalbehov).", weight)
+    return Check("capital_need", label, "fail", "Inget uttalat kapitalbehov funnet.", weight)
+
+
+def check_sector(sector: str | None, company_sector: dict | None = None) -> Check:
+    """Underbransch (sectors.py) i första hand, annars Nasdaqs sektor ur marknadsdatan."""
+    sub = company_sector or {}
+    if sub.get("group"):
+        text = sub.get("label") or sub["group"]
+        if sub["group"] in ("life_science", "tech"):
+            return Check("sector", "Sektor", "pass", f"{text}: life science eller tech.", WEIGHTS["sector"])
+        return Check("sector", "Sektor", "warn", f"{text}: utanför life science och tech.", WEIGHTS["sector"])
+    sector = sector or sub.get("icb")
     if not sector:
         return Check("sector", "Sektor", "warn", "Sektor okänd.", WEIGHTS["sector"])
     if any(word in sector.lower() for word in TARGET_SECTORS):
@@ -231,7 +255,8 @@ def qualify(item: dict, market: dict | None, history: list[dict], rates: dict | 
     share = need / cap if need is not None and cap else None
     events = equity_events(history)
     checks = [check_runway(item), check_no_raise(item), check_size(need), check_share(need, cap),
-              check_history(events), check_quality(item, cap), check_sector(market.get("sector"))]
+              check_history(events), check_quality(item, cap),
+              check_sector(market.get("sector"), item.get("sector")), check_capital_need(item)]
     score = score_of(checks)
     last = events[0] if events else None
     last_issue = ({"type": last.type, "status": last.status, "date": last.date, "amount": last.amount,
