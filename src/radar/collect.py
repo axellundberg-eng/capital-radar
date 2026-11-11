@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 from . import calendar, mfn
-from .classify import classify
+from .classify import MEETING, classify
 from .db import connect, next_document_id
 from .fetch import allowed, fetch_pdf
 from .pdftext import pages as pdf_pages
@@ -36,7 +36,9 @@ logger = logging.getLogger(__name__)
 # innehållet. Därför läses de första sidorna, men bara för bolag vars senaste rapport är gammal och bara
 # för poster efter den rapporten. Varje PDF läses en gång (tabellen pdf_probes).
 STALE_DAYS = 100
-PROBE_PAGES = 3
+# Bara första sidan: en rapports förstasida säger vad den är, medan kallelser och kommentarer kan nämna
+# "delårsrapport januari–juni" längre in.
+PROBE_PAGES = 1
 REPORT_TEXT = re.compile(
     r"delårsrapport|halvårsrapport|kvartalsrapport|bokslutskommunik|interim report|half[- ]year report"
     r"|quarterly report|year[- ]end report|(?:januari|january)\s*[–-]\s*(?:mars|march|juni|june|september|december)"
@@ -165,6 +167,7 @@ def collect_company(connection: sqlite3.Connection, settings: Settings, company,
             counts["calendar"] += calendar.store_item(connection, company["id"], item)
             continue
         if (kind == "other" and stale and item.pdf_url and item.published_at[:10] > stale
+                and not MEETING.search(item.title) and not re.search(r"kallelse|notice", item.title, re.I)
                 and not is_known(connection, company["id"], item, ("reports",)) and probe(item.pdf_url)):
             kind = "report"
             counts["probed_reports"] += 1

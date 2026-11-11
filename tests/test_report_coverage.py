@@ -52,7 +52,9 @@ def test_stale_company_pdf_is_probed_once_and_stored_as_report(settings, monkeyp
                            BASE + "fortsatt-fokus", "sv", attachments=("https://mb.cision.com/Main/1/4338911.pdf",))
     other = mfn.MfnItem("Balco Group AB: Valberedning inför årsstämman", "2026-11-03T08:00:00+01:00",
                         BASE + "valberedning", "sv", attachments=("https://mb.cision.com/Main/1/999.pdf",))
-    monkeypatch.setattr(mfn, "fetch_items", lambda *a, **k: [headline, other])
+    notice = mfn.MfnItem("Kallelse till extra bolagsstämma i Balco", "2026-11-04T08:00:00+01:00",
+                         BASE + "kallelse", "sv", attachments=("https://mb.cision.com/Main/1/kallelse.pdf",))
+    monkeypatch.setattr(mfn, "fetch_items", lambda *a, **k: [headline, other, notice])
     asked = []
 
     def probe(url):
@@ -61,7 +63,8 @@ def test_stale_company_pdf_is_probed_once_and_stored_as_report(settings, monkeyp
 
     counts = collect.collect_company(connection, settings, {"id": 1, "name": "Balco", "mfn_slug": "balco-group"},
                                      probe=probe, today="2026-11-11")
-    assert counts["probed_reports"] == 1 and counts["new_reports"] == 1 and counts["new_news"] == 1
+    assert counts["probed_reports"] == 1 and counts["new_reports"] == 1 and counts["new_news"] == 2
+    assert not any(url.endswith("kallelse.pdf") for url in asked)          # kallelser läses aldrig
     row = connection.execute("SELECT title, pdf_url, attachments FROM reports WHERE source_url=?",
                              (headline.url,)).fetchone()
     assert row[1].endswith("4338911.pdf") and json.loads(row[2]) == list(headline.attachments)
