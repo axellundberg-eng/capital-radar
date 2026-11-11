@@ -129,10 +129,10 @@ function runwayCell(item) {
   if (item.status !== "ok") return '<span class="pill muted">Saknar data</span>';
   if (item.cash_flow_positive) return `<span class="pill good">Positivt</span>${signalPill(item)}`;
   if (item.band === "structural") return `<span class="pill band-structural" title="${escapeHtml(STRUCT_WARNING)}">Strukturell förändring</span><small>Gammal runway ${months(item.runway_today)}</small>`;
-  if (item.band === "exhausted") return `<span class="pill band-exhausted" title="Kassan borde vara slut sedan rapporten">Slut?</span>${signalPill(item)}`;
-  if (item.band === "acute") return `<span class="pill band-acute" title="${ACUTE_TEXT}">${months(item.runway_today)}</span><small>Akut: under 1 mån</small>${proForma(item)}${signalPill(item)}${creditNote(item)}`;
   const recent = item.recent_runway_today != null
     ? `<small title="I senaste periodens takt">${months(item.recent_runway_today)} i senaste takt</small>` : "";
+  if (item.band === "exhausted") return `<span class="pill band-exhausted" title="Kassan borde vara slut sedan rapporten">Slut?</span>${recent}${signalPill(item)}`;
+  if (item.band === "acute") return `<span class="pill band-acute" title="${ACUTE_TEXT}">${months(item.runway_today)}</span><small>Akut: under 1 mån</small>${recent}${proForma(item)}${signalPill(item)}${creditNote(item)}`;
   const raise = item.band === "raising" ? '<small><span class="pill raise">Pågående kapitalanskaffning</span></small>' : "";
   const pill = item.band === "raising" ? "band-under_3" : `band-${item.band}`;
   return `<span class="pill ${pill}">${months(item.runway_today)}</span>${recent}${proForma(item)}${raise}${signalPill(item)}${creditNote(item)}`;

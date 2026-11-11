@@ -35,8 +35,9 @@ from .rounds import EQUITY_COST, NON_CASH_TYPES, OUTFLOW_TYPES
 DAYS_PER_MONTH = 30.4375
 RECENT_RATIO = 1.5
 # Rullande tolv månader med en stor engångsrörelse (t.ex. ett förskott som förbrukats förra året) kan ge
-# många gånger högre burn än både innevarande år och senaste kvartalet. Är skillnaden större än så räknas
-# burn på det högsta av årets snitt och senaste kvartalet (Gold Town Games: 814 000 mot 109 000 kr/mån).
+# många gånger högre burn än både innevarande år och senaste kvartalet (Gold Town Games: 814 000 mot
+# 109 000 kr/mån). Huvudtalet bygger fortfarande på snittet (försiktigt), men runway i senaste takt visas
+# bredvid, räknad på det högsta av årets snitt och senaste kvartalet.
 LTM_DISTORTED_RATIO = 3.0
 STALE_MONTHS = 7.0
 
@@ -322,10 +323,8 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
         burn, result.burn_basis = chosen.monthly_burn, "longest_period"
         result.flags.append("ltm_one_off")
     current = max(chosen.monthly_burn, recent.monthly_burn)
-    if (result.ltm and burn > 0 and current > 0 and chosen.months >= 6
-            and burn > current * LTM_DISTORTED_RATIO):
-        burn, result.burn_basis = current, "current_year"
-        result.flags.append("ltm_distorted")
+    slower_recent = bool(result.ltm and burn > 0 and current > 0 and chosen.months >= 6
+                         and burn > current * LTM_DISTORTED_RATIO)
     faster_recent = (len(result.periods) > 1 and recent.monthly_burn > 0
                      and recent.monthly_burn > burn * RECENT_RATIO)
     if chosen.investments_basis == "investing_cash_flow":
@@ -340,6 +339,11 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
         result.recent_monthly_burn = recent.monthly_burn
         result.recent_runway_today = round(
             max(0.0, cash + extra - recent.monthly_burn * since) / recent.monthly_burn, 1)
+    elif slower_recent:
+        result.flags.append("ltm_distorted")
+        result.recent_monthly_burn = current
+        result.recent_runway_today = round(
+            max(0.0, cash + extra + result.available_credit - current * since) / current, 1)
     if burn == 0:
         result.cash_flow_positive = True
         if recent.monthly_burn > 0:

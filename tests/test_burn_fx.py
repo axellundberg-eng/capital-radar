@@ -172,9 +172,9 @@ def test_ltm_distorted_by_working_capital_swing_uses_current_year():
              flow("operating_investments", -2_427_177, "2025-01-01", "2025-06-30"),
              flow("operating_investments", -4_317_691, "2025-01-01", "2025-12-31")]
     result = compute(facts, END, today=END)
-    assert "ltm_distorted" in result.flags and result.burn_basis == "current_year"
-    assert result.monthly_burn == pytest.approx((984_296 - 658_116) / 3)        # senaste kvartalet, det högsta
-    assert result.runway_today == pytest.approx(9.0)
+    assert "ltm_distorted" in result.flags and result.burn_basis == "ltm"       # huvudtalet: försiktigt snitt
+    assert result.recent_monthly_burn == pytest.approx((984_296 - 658_116) / 3)  # senaste kvartalet, det högsta
+    assert result.recent_runway_today == pytest.approx(9.0) and result.runway_today == pytest.approx(1.2)
     # Ett bolag där tolv månader och i år ligger nära varandra påverkas inte.
     steady = [Fact("cash", 12e6, None, END), flow("operating_cash_flow", -6e6, "2026-01-01"),
               flow("operating_cash_flow", -5e6, "2025-01-01", "2025-06-30"),
