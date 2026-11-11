@@ -86,7 +86,7 @@ Siffrorna är rätt lästa, men metoden slår fel. Runway idag visas som **1,2 m
 
 Q3-rapporten väntas omkring 2026-11-20 (Q3 2025 publicerades 2025-11-20).
 
-### 5. Avnotering och brottsutredning syns inte (Eurobattery Minerals)
+### 5. Avnotering och brottsutredning syns inte (Eurobattery Minerals) — *felbedömt, se Utfall*
 
 Bolaget ligger i "Kassa slut" utan varningar, trots följande:
 
@@ -131,3 +131,21 @@ men talen ser ut som fel i listan. Visa "över 60 mån" i stället.
 | 5 | Lägg avnotering, konkurs, rekonstruktion, häktning och revisor avgår i nyhetsfiltret | Fel 5 | Liten kod |
 | 6 | Visa runway i senaste takt när den skiljer mycket från rullande tolv månader | Fel 4 | Liten kod |
 | 7 | Uppdatera valutakontrollen; visa "över 60 mån" | Fel 6–7 | Liten kod |
+
+## Utfall efter åtgärder (samma dag)
+
+Version c530fd0. Kontrollerna efter åtgärderna: **519 flaggor hos 222 bolag** (före: 545 hos 238).
+Gamla rapporter 15 → 4, valutalarm 11 → 0, "kassa slut utan förklaring" 21 → 17, enhetslarm 12 → 10.
+
+| # | Åtgärd | Resultat |
+|---|---|---|
+| 1 | Rubrikmönster, PDF-prov för bolag med gammal rapport, alla bilagor sparas och provas | Nyare rapporter lästa för Balco, Bulten, Eniro, Hedera (Q3), New Nordic, PION (Q3), Promimic, Irisity, GRANGEX, Spotr och MTI (Q2/halvår) |
+| 2 | `storage.googleapis.com` tillåten; överhoppade rapporter med fler PDF:er provas igen | PION Q3 läst; New Nordic och MTI läst ur rätt bilaga |
+| 3 | `correct scale` ×1000 | Summa Defence: kassa 2,86 MEUR, runway 1,7 mån (var 4 575). Genovis: kassa 163 MSEK |
+| 4 | Bitcoinköp satta till 0 i investeringarna | H100: burn 2,1 MSEK/mån, runway 4,1 mån (var "kassa slut"). K33: burn 4,9 MSEK/mån (var 15,1), fortfarande kassa slut |
+| 5 | Felbedömt i rapporten: Eurobatterys avnotering var redan registrerad och bolaget ligger under "Strukturell förändring". Kontrollen `exhausted_unexplained` hoppar nu över bolag med strukturflaggor | Falsklarmet borta |
+| 6 | Regel `ltm_distorted`: tolv månader mer än tre gånger högre burn än både årets snitt och senaste kvartalet | Huvudtalet är kvar på snittet (försiktigt); runway i senaste takt visas bredvid, även för akut och kassa slut. 7 bolag, bl.a. Gold Town Games: 1,2 mån i snitt, 37 mån i senaste takt (inklusive 3,5 MSEK som tagits in efter rapporten) |
+| 7 | Valutakontrollen flaggar bara händelser utan växelkurs; runway över 60 mån visas som "över 60 mån" | 11 falsklarm borta |
+
+**Kvar:** Heimstaden och Nicoccino publicerar rapporter utan PDF-bilaga på MFN; Safe Lane Gaming kräver
+OCR; Thinc är känd sedan tidigare. Häktning och revisorsavgång fångas inte som egna händelser.
