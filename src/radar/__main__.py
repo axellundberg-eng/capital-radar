@@ -99,13 +99,21 @@ def run_facit(connection, settings: Settings, client, today: str, *, force: bool
 
 
 def news_command(args, connection, settings: Settings, client, today: str) -> int:
-    if not args.latest:
-        print("Ange --latest.", flush=True)
+    if not (args.latest or args.backfill):
+        print("Ange --latest eller --backfill.", flush=True)
         return 2
     if client is None:
         print("Nyhetsläsningen kräver modellen (DeepSeek-nyckeln saknas).", flush=True)
         return 1
     connection.close()
+    if args.backfill:
+        from .news import run_backfill
+
+        counts = run_backfill(settings, client, today=today, months=args.months, token_budget=args.token_budget,
+                              workers=args.workers, max_items=max(args.max_items, 60), max_priority=args.max_priority,
+                              log=lambda line: print(line, flush=True))
+        print(json.dumps(counts, ensure_ascii=False), flush=True)
+        return 0
     counts = run_news(settings, client, today=today, max_runway=args.max_runway, workers=args.workers,
                       token_budget=args.token_budget, max_items=args.max_items, retry_failed=args.retry_failed,
                       log=lambda line: print(line, flush=True))
@@ -229,7 +237,8 @@ def schedule_command(args) -> int:
     settings = Settings.from_env()
     client = _client(settings)
     budgets = {"report_budget": int(os.getenv("RADAR_CYCLE_REPORT_TOKENS", "200000")),
-               "news_budget": int(os.getenv("RADAR_CYCLE_NEWS_TOKENS", "100000"))}
+               "news_budget": int(os.getenv("RADAR_CYCLE_NEWS_TOKENS", "100000")),
+               "backfill_budget": int(os.getenv("RADAR_CYCLE_BACKFILL_TOKENS", "100000"))}
     if args.once:
         print(json.dumps(run_cycle(settings, client, **budgets), ensure_ascii=False, default=str), flush=True)
         return 0
@@ -296,6 +305,11 @@ def main(argv: list[str] | None = None) -> int:
     news.add_argument("--token-budget", type=int, default=1_000_000)
     news.add_argument("--max-items", type=int, default=8, help="högst så många AI-granskade nyheter per bolag")
     news.add_argument("--retry-failed", action="store_true", help="försök igen med nyheter som misslyckats")
+    news.add_argument("--backfill", action="store_true",
+                      help="granska finansieringsnyheter bakåt (även före rapportperioden), målgruppen först")
+    news.add_argument("--months", type=int, default=24, help="--backfill: så många månader bakåt")
+    news.add_argument("--max-priority", type=int, default=2, choices=[0, 1, 2],
+                      help="--backfill: 0 = bara målgruppen, 1 = även övriga som bränner kassa, 2 = alla")
     qualify = sub.add_parser("qualify")
     qualify.add_argument("--refresh-market", action="store_true", help="hämta marknadsvärde igen även om det är färskt")
     collect = sub.add_parser("collect", help="samla MFN-poster själv i stället för att importera")

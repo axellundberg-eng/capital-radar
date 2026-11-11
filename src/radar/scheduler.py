@@ -261,7 +261,7 @@ def _shorts_step(settings: Settings, log: Callable[[str], None]) -> dict:
 
 
 def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: int, news_budget: int,
-              log: Callable[[str], None] = logger.info) -> dict:
+              backfill_budget: int = 0, log: Callable[[str], None] = logger.info) -> dict:
     from .web import latest_rows
 
     today = date.today().isoformat()
@@ -273,6 +273,12 @@ def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: i
         if client is not None:
             summary["news"] = run_news(settings, client, today=today, token_budget=news_budget,
                                        log=lambda _line: None)
+            if backfill_budget:
+                # Efter den löpande granskningen och med egen budget: historiken fylls på utan att tränga undan.
+                from .news import run_backfill
+
+                summary["backfill"] = run_backfill(settings, client, today=today, token_budget=backfill_budget,
+                                                   log=lambda _line: None)
         summary["authorizations"] = _authorizations_step(settings, log)
         summary["plans"] = _plans_step(settings, log)   # efter stämmotexterna, som den läser
         summary["sectors"] = _sectors_step(settings, client, log)
@@ -295,11 +301,12 @@ def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: i
 
 
 def loop(settings: Settings, client: ChatClient | None, *, interval_minutes: float,
-         report_budget: int, news_budget: int, first_delay: float = 120.0) -> None:
+         report_budget: int, news_budget: int, backfill_budget: int = 0, first_delay: float = 120.0) -> None:
     time.sleep(first_delay)  # låt webben och deployen komma igång först
     while True:
         try:
-            run_cycle(settings, client, report_budget=report_budget, news_budget=news_budget)
+            run_cycle(settings, client, report_budget=report_budget, news_budget=news_budget,
+                      backfill_budget=backfill_budget)
         except FileExistsError:
             logger.warning("schedule_skipped: ett annat varv pågår; försöker igen om fem minuter")
             time.sleep(RETRY_AFTER_SKIP_SECONDS)

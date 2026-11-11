@@ -5,6 +5,13 @@ periodslut, förfilter på rubriken, högst `max_items` AI-anrop per bolag,
 texten klipps till 12 000 tecken, redan bedömda nyheter hoppas över och en
 gemensam tokenbudget stoppar nya anrop när den är förbrukad.
 
+Bakåtgranskning (`run_backfill`): finansieringsnyheter de senaste 24 månaderna, även före rapportens
+periodslut, så att emissionshistoriken (belopp, villkor, garanter, teckningsgrad) blir komplett. Bolag i
+målgruppen granskas först. Egen tokenbudget, så att den löpande granskningen inte trängs undan.
+
+Tvillingar: MFN publicerar ofta samma pressmeddelande på svenska och engelska samma dag. Den engelska
+versionen hoppas över (status `twin`) när en svensk finns samma dag; finns bara en engelsk läses den.
+
 Samma körning söker också strukturella händelser (omvänt förvärv, fusion, bud m.fl.,
 se events.py och news_events.py) för bolag med runway under `event_runway` månader
 eller kassa slut enligt rapporten, med samma budget och samma kostnadsvakter.
@@ -13,10 +20,11 @@ eller kassa slut enligt rapporten, med samma budget och samma kostnadsvakter.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
 from .batch import Budget
@@ -38,6 +46,30 @@ ORDER BY c.name COLLATE NOCASE
 """
 SIGNALS = ("raise_announced", "financing_received", "structural_change", "public_offer", "delisting")
 EVENT_RUNWAY = 18.0   # strukturell kontroll för bolag med runway under så många månader
+BACKFILL_MONTHS = 24
+TARGET_RUNWAY = 18.0   # bakåtgranskningens första prioritet: runway under så många månader (eller kassa slut)
+ENGLISH = re.compile(r"\b(?:the|of|and|announces?|issue|shares|rights|directed|warrants|loan|board|resolves?|outcome"
+                     r"|subscription|completes?|completed|intends|carries|period|units|convertible)\b", re.I)
+# Svenska: ett ord med små bokstäver som innehåller å, ä eller ö (bolagsnamn skrivs med stor bokstav,
+# t.ex. "Mål AB announces ..."), eller ett typiskt svenskt ord.
+SWEDISH_WORD = re.compile(r"\b[a-zåäö]*[åäö][a-zåäö]*\b")
+SWEDISH = re.compile(r"\b(?:och|av|för|om|genomför|nyemission|företrädesemission|beslutar|utfall|teckning"
+                     r"|lån|riktad|inleds|sista)\b", re.I)
+
+
+def is_english(title: str | None) -> bool:
+    text = title or ""
+    return bool(ENGLISH.search(text)) and not SWEDISH.search(text) and not SWEDISH_WORD.search(text)
+
+
+def split_twins(rows: list[sqlite3.Row]) -> tuple[list[sqlite3.Row], list[sqlite3.Row]]:
+    """(att läsa, engelska tvillingar): engelska rubriker hoppas över när en svensk finns samma bolag och dag."""
+    swedish_days = {(r["company_id"], (r["published_at"] or "")[:10]) for r in rows if not is_english(r["title"])}
+    keep, twins = [], []
+    for row in rows:
+        day = (row["company_id"], (row["published_at"] or "")[:10])
+        (twins if is_english(row["title"]) and day in swedish_days else keep).append(row)
+    return keep, twins
 
 
 def _now() -> str:
@@ -92,7 +124,11 @@ def process_company_news(connection: sqlite3.Connection, settings: Settings, cli
                          budget: Budget | None = None, retry_failed: bool = False) -> dict[str, int]:
     """Nyaste först, högst `max_items` AI-granskade nyheter. Fel stoppar bara den nyheten."""
     counts = {"checked": 0, "financing": 0, "failed": 0, "tokens": 0}
-    for item in candidates(connection, company_id, after_date, retry_failed=retry_failed)[:max_items]:
+    keep, twins = split_twins(candidates(connection, company_id, after_date, retry_failed=retry_failed))
+    for twin in twins:   # samma pressmeddelande som den svenska versionen: inget eget AI-anrop
+        _set(connection, twin["document_id"], status="twin", error="engelsk version av en svensk nyhet samma dag")
+    counts["twins"] = len(twins)
+    for item in keep[:max_items]:
         if budget is not None and budget.exhausted():
             counts["budget_slut"] = 1
             break
@@ -107,6 +143,73 @@ def process_company_news(connection: sqlite3.Connection, settings: Settings, cli
         if budget is not None:
             budget.add(tokens)
     return counts
+
+
+def backfill_targets(connection: sqlite3.Connection) -> list[tuple[int, int | None, int]]:
+    """(bolag, senaste rapport eller None, prioritet) för alla bolag med MFN-nyheter, viktigast först.
+
+    Prioritet 0: målgruppen (runway under TARGET_RUNWAY, kassa slut, pågående kapitalanskaffning eller
+    strukturell förändring). 1: övriga som bränner kassa. 2: kassaflödespositiva och bolag utan runway."""
+    latest = {row["id"]: (row["document_id"], json.loads(row["result_json"])) for row in connection.execute(LATEST_RESULTS)}
+    targets = []
+    for (company_id,) in connection.execute("SELECT DISTINCT company_id FROM news"):
+        document_id, result = latest.get(company_id, (None, {}))
+        flags = result.get("flags", [])
+        if result.get("status") != "ok" or result.get("cash_flow_positive"):
+            priority = 2
+        elif ((result.get("runway_today") or 0) < TARGET_RUNWAY or "cash_exhausted_since_report" in flags
+              or any(flag in flags for flag in SIGNALS)):
+            priority = 0
+        else:
+            priority = 1
+        targets.append((company_id, document_id, priority))
+    return sorted(targets, key=lambda t: (t[2], t[0]))
+
+
+def run_backfill(settings: Settings, client: ChatClient, *, today: str, months: int = BACKFILL_MONTHS,
+                 token_budget: int = 100_000, workers: int = 4, max_items: int = 60, max_priority: int = 2,
+                 log: Callable[[str], None] = print) -> dict[str, int]:
+    """Granska ogranskade finansieringsnyheter de senaste `months` månaderna, målgruppen först.
+
+    Nyheter före rapportens periodslut ändrar inte runway (den räknar bara händelser efter periodslut) men
+    fyller emissionshistoriken, Garanti-sidan och markörer som "nyligen finansierad"."""
+    cutoff = (date.fromisoformat(today[:10]) - timedelta(days=round(months * 30.44))).isoformat()
+    main = connect(settings.db_path)
+    try:
+        jobs = [job for job in backfill_targets(main) if job[2] <= max_priority
+                and any(looks_like_financing(row["title"]) for row in candidates(main, job[0], cutoff))]
+    finally:
+        main.close()
+    budget, totals, lock = Budget(token_budget, 0), {"companies": len(jobs)}, threading.Lock()
+
+    def work(company_id: int, document_id: int | None, priority: int) -> dict:
+        if budget.exhausted():
+            return {"budget_slut": 1}
+        connection = connect(settings.db_path)
+        try:
+            counts = process_company_news(connection, settings, client, company_id, cutoff, max_items, budget=budget)
+            if document_id is not None and counts["financing"]:
+                refresh_runway(connection, document_id, today=today)
+        finally:
+            connection.close()
+        if counts["checked"] or counts["financing"] or counts["failed"]:
+            log(f"bakåt p{priority}: {counts['checked'] + counts['financing']} granskade, {counts['financing']} med "
+                f"finansiering, {counts['twins']} tvillingar, {counts['failed']} fel  bolag {company_id}")
+        return counts
+
+    # Prioriteterna körs i ordning så att budgeten går till målgruppen först.
+    for level in range(max_priority + 1):
+        batch = [job for job in jobs if job[2] == level]
+        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+            for future in as_completed(pool.submit(work, *job) for job in batch):
+                with lock:
+                    for key, value in future.result().items():
+                        totals[key] = totals.get(key, 0) + value
+        if budget.exhausted():
+            break
+    totals["tokens_used"] = totals.pop("tokens", 0)
+    totals["budget_slut"] = 1 if budget.exhausted() or totals.get("budget_slut") else 0
+    return totals
 
 
 def news_targets(connection: sqlite3.Connection, max_runway: float, event_runway: float = EVENT_RUNWAY
