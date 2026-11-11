@@ -36,8 +36,8 @@ Svara med enbart ett JSON-objekt:
   "short_term_investments": {"value": tal, "date": "YYYY-MM-DD", "page": sidnummer, "quote": "kort citat"} eller null,
   "cash_flows": [
     {"kind": "operating_cash_flow | capex | operating_investments | investing_cash_flow | lease_repayment",
-     "value": tal, "period_start": "YYYY-MM-DD", "period_end": "YYYY-MM-DD",
-     "page": sidnummer, "quote": "kort citat"}
+     "page": sidnummer, "quote": "radens etikett och siffror",
+     "columns": [{"period_start": "YYYY-MM-DD", "period_end": "YYYY-MM-DD", "value": tal}]}
   ],
   "events_after_period": [
     {"description": "kort text", "direction": "out | in", "amount": tal, "date": "YYYY-MM-DD" eller null,
@@ -72,9 +72,10 @@ Regler:
   skulder) vid periodens slut, exklusive leasing om det går att skilja. Annars null.
 - undrawn_credit = outnyttjade kreditfaciliteter, checkkredit eller beviljade kreditramar
   vid periodens slut (ramen minus utnyttjat belopp). Annars null.
-- Kassaflöden (alla kinds ovan): ta med varje periodkolumn som finns, både innevarande år (t.ex.
-  kvartalet och hittills i år) och jämförelsekolumnerna (samma period föregående år och föregående
-  helår). Ange alltid rätt period_start och period_end för varje kolumn.
+- Kassaflöden (alla kinds ovan): EN post per kind med ALLA periodkolumner i "columns", både
+  innevarande år (t.ex. kvartalet och hittills i år) och jämförelsekolumnerna (samma period
+  föregående år och föregående helår). Ange alltid rätt period_start och period_end för varje
+  kolumn. Citera tabellraden en gång i "quote", inte per kolumn.
 - Hoppa över en siffra hellre än att gissa.
 """
 
@@ -213,11 +214,17 @@ def parse_response(raw: str) -> Extraction:
     for item in data.get("cash_flows") or []:
         if not isinstance(item, dict) or item.get("kind") not in KINDS:
             continue
-        value = parse_number(item.get("value"))
-        if value is None:
-            continue
-        facts.append(ExtractedFact(item["kind"], value * multiplier, currency, parse_date(item.get("period_start")),
-                                   parse_date(item.get("period_end")) or end, item.get("page"), item.get("quote")))
+        # Nytt format: en post per tabellrad med alla periodkolumner. Äldre format: en post per kolumn.
+        columns = item.get("columns") if isinstance(item.get("columns"), list) else [item]
+        for column in columns:
+            if not isinstance(column, dict):
+                continue
+            value = parse_number(column.get("value"))
+            if value is None:
+                continue
+            facts.append(ExtractedFact(item["kind"], value * multiplier, currency,
+                                       parse_date(column.get("period_start")),
+                                       parse_date(column.get("period_end")) or end, item.get("page"), item.get("quote")))
     facts.extend(_post_period_facts(data, multiplier, currency, end))
     facts.extend(_credit_facts(data, multiplier, currency, end))
     return Extraction(parse_date(data.get("report_period_start")), end, currency, tuple(facts))

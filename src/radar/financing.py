@@ -96,8 +96,53 @@ Regler:
 """
 
 
+# Villkoren står i början av ett pressmeddelande; rådgivare, garanter och teckningsåtaganden står ofta sist.
+# Därför skickas början plus utdrag längre ned, i stället för hela texten. Rådgivare och garanter tas först
+# (fönster runt nyckelordet, så att de syns även i långa stycken), sedan övriga villkor i mån av plats.
+HEAD_CHARS = 5000
+TAIL_CHARS = 3500
+ADVISER_PARAGRAPH = re.compile(
+    r"rådgivare|advis|emissionsinstitut|issuing\s+agent|legal\s+counsel", re.I)
+PRIORITY_PARAGRAPH = re.compile(
+    r"garant|guarant|underwrit|teckningsåtagande|subscription\s+commitment|toppgaranti", re.I)
+KEY_PARAGRAPH = re.compile(
+    r"ersättning|compensation|premie|teckningskurs|subscription\s+price|utspädning|dilution"
+    r"|likvid|proceeds|kvittning|set-?off|utfall|outcome|teckningsgrad|subscribed", re.I)
+
+
+def _windows(paragraph: str, pattern: re.Pattern) -> list[tuple[int, int]]:
+    """Fönster runt varje träff i stycket, överlappande fönster sammanslagna."""
+    spans: list[tuple[int, int]] = []
+    for match in pattern.finditer(paragraph):
+        low, high = max(0, match.start() - 150), min(len(paragraph), match.end() + 250)
+        if spans and low <= spans[-1][1]:
+            spans[-1] = (spans[-1][0], max(spans[-1][1], high))
+        else:
+            spans.append((low, high))
+    return spans
+
+
+def trim_text(text: str) -> str:
+    """Början av texten plus utdrag längre ned (rådgivare och garanter först), högst cirka 8 500 tecken."""
+    text = text or ""
+    if len(text) <= HEAD_CHARS + TAIL_CHARS:
+        return text
+    paragraphs = [p.strip() for p in text[HEAD_CHARS:].split("\n") if p.strip()]
+    picked: list[str] = []
+    size = 0
+    for pattern in (ADVISER_PARAGRAPH, PRIORITY_PARAGRAPH, KEY_PARAGRAPH):
+        for paragraph in paragraphs:
+            for low, high in _windows(paragraph, pattern):
+                excerpt = paragraph[low:high]
+                if size >= TAIL_CHARS or any(excerpt in p for p in picked):
+                    continue
+                picked.append(excerpt[:TAIL_CHARS - size])
+                size += len(picked[-1])
+    return text[:HEAD_CHARS] + ("\n[…]\n" + "\n".join(picked) if picked else "")
+
+
 def build_message(title: str, published_at: str | None, text: str) -> str:
-    return f"Rubrik: {title}\nPublicerat: {(published_at or '')[:10]}\n\n{text}"
+    return f"Rubrik: {title}\nPublicerat: {(published_at or '')[:10]}\n\n{trim_text(text)}"
 
 
 def _scaled(value: float | None, multiplier: float) -> float | None:

@@ -92,3 +92,16 @@ def test_out_of_credit_stops_the_run_and_leaves_news_unreviewed(tmp_path):
     assert Broke.calls == 1 and counts["out_of_credit"] == 1 and counts["budget_slut"] == 1
     status = dict(connection.execute("SELECT document_id, status FROM news").fetchall())
     assert status[100] == "new" and status[200] == "new"        # inget markerat som misslyckat
+
+
+def test_informational_news_get_no_ai_call(tmp_path):
+    settings = replace(Settings.from_env(), db_path=tmp_path / "radar.db", files_path=tmp_path / "f")
+    connection = connect(settings.db_path)
+    _seed(connection)
+    with connection:
+        connection.execute("INSERT INTO news(document_id, company_id, title, published_at, url, text) VALUES "
+                           "(104, 1, 'Sista dag för handel med uniträtter i Mål AB:s företrädesemission', '2026-08-20', 'u', 'x')")
+    client = FakeClient()
+    counts = news.run_backfill(settings, client, today=TODAY, token_budget=10**9, workers=1, log=lambda _l: None)
+    assert counts["info"] == 1 and all("Sista dag" not in call for call in client.calls)
+    assert connection.execute("SELECT status FROM news WHERE document_id=104").fetchone()[0] == "info"

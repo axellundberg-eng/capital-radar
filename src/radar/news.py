@@ -57,6 +57,23 @@ SWEDISH = re.compile(r"\b(?:och|av|för|om|genomför|nyemission|företrädesemis
                      r"|lån|riktad|inleds|sista)\b", re.I)
 
 
+# Steg i en redan annonserad affär (teckningsperiod, handel med rätter, BTA, memorandum, nytt antal aktier).
+# De upprepar affären som beslutet och utfallet redan beskriver och granskas därför inte (status info).
+INFO = re.compile(
+    r"sista\s+dag\s+för\s+(?:handel|teckning)|last\s+day\s+(?:of|for)\s+(?:trading|subscription)"
+    r"|teckningsperiod\w*\b.{0,80}?\b(?:inleds|startar|börjar)|subscription\s+period\w*\b.{0,80}?\b(?:begins|starts|commences)"
+    r"|informationsmemorandum|information\s+memorandum|informationsdokument|information\s+document"
+    r"|prospekt\w*\s+(?:godkänt|godkänns|offentliggjort|offentliggörs|publicerat|publiceras)"
+    r"|prospectus\s+(?:approved|published)|\bbta\b|betalda\s+tecknade\s+aktier|paid\s+subscribed\s+shares"
+    r"|nytt\s+antal\s+aktier|new\s+number\s+of\s+shares|number\s+of\s+shares\s+and\s+votes|antal\s+aktier\s+och\s+röster"
+    r"|handel\s+med\s+(?:uniträtter|teckningsrätter)|trading\s+(?:in|with|of)\s+(?:unit|subscription)\s+rights"
+    r"|påminnelse|reminder", re.I)
+
+
+def is_info(title: str | None) -> bool:
+    return bool(INFO.search(title or ""))
+
+
 def is_english(title: str | None) -> bool:
     text = title or ""
     return bool(ENGLISH.search(text)) and not SWEDISH.search(text) and not SWEDISH_WORD.search(text)
@@ -134,6 +151,11 @@ def process_company_news(connection: sqlite3.Connection, settings: Settings, cli
     for twin in twins:   # samma pressmeddelande som den svenska versionen: inget eget AI-anrop
         _set(connection, twin["document_id"], status="twin", error="engelsk version av en svensk nyhet samma dag")
     counts["twins"] = len(twins)
+    info = [item for item in keep if is_info(item["title"])]
+    for item in info:    # steg i en redan känd affär: inget eget AI-anrop
+        _set(connection, item["document_id"], status="info", error="informationsmeddelande om en känd affär")
+    counts["info"] = len(info)
+    keep = [item for item in keep if not is_info(item["title"])]
     for item in keep[:max_items]:
         if budget is not None and budget.exhausted():
             counts["budget_slut"] = 1
