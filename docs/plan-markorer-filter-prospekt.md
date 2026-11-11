@@ -108,6 +108,7 @@ Steg 1–3 ger effekt på prospektsidan direkt. Steg 4 måste göras före brans
 
 ## Beslut som behövs
 
-1. Ranking: poäng (A), hård nivå (B) eller båda (A i poängen, B som sektion)?
+1. ~~Ranking~~ **Beslutat 2026-11-11: båda.** Poängkontrollen "Uttalat kapitalbehov" (A) och sektionen
+   "Uttalat kapitalbehov" överst på prospektsidan (B).
 2. Underbranscherna: räcker listan ovan, eller saknas någon?
 3. Ska "utvärderar finansiering" räknas som kapitalbehov (poäng) eller bara som sammanhang?
