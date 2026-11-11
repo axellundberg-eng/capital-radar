@@ -32,7 +32,11 @@ REPORT = re.compile(
     r"|\bq[1-4]\s*(?:interim |quarterly )?(?:report|rapport|results)\b"
     r"|\b(?:first|second|third|fourth)\s+quarter\s+(?:20\d\d\s+)?(?:report|results)\b"
     r"|report for the (?:first|second|third|fourth) quarter"
-    r"|rapporten? (?:för|från) (?:det )?(?:första|andra|tredje|fjärde) kvartalet",
+    r"|rapporten? (?:för|från) (?:det )?(?:första|andra|tredje|fjärde) kvartalet"
+    # Rubriker i nyhetsform: "Rapport tredje kvartalet 2026 - Hedera Group", "Tillväxt i kärnaffären i det
+    # andra kvartalet 2026", "Q2: Positiv EBITDA." och stavfelet "Kvartrapport Q1".
+    r"|\brapport (?:för )?(?:det )?(?:första|andra|tredje|fjärde) kvartalet"
+    r"|\b(?:i|under) det (?:första|andra|tredje|fjärde) kvartalet 20\d\d|^\s*q[1-4]\s*:|kvartrapport",
     re.I)
 FINANCING = re.compile(
     r"nyemission|företrädesemission|emission\b|emissionen|private placement|rights issue|(?:directed )?share issue"
@@ -48,7 +52,8 @@ REPORT_FILE = re.compile(
     r"kvartalsrapport|delarsrapport|delårsrapport|halvarsrapport|halvårsrapport|interim[-_ ]?report"
     r"|quarterly[-_ ]?report|half[-_ ]?year[-_ ]?report|bokslutskommunik|year[-_ ]?end[-_ ]?report"
     r"|arsredovisning|årsredovisning|annual[-_ ]?report"
-    r"|(?<![a-z0-9])q[1-4][-_ ]?20\d\d(?![0-9])|(?<![0-9])20\d\d[-_ ]?q[1-4](?![0-9a-z])",
+    r"|(?<![a-z0-9])q[1-4][-_ ]?20\d\d(?![0-9])|(?<![0-9])20\d\d[-_ ]?q[1-4](?![0-9a-z])"
+    r"|(?<![a-z0-9])q[1-4][-_ ]?(?:rapport|report)|(?:rapport|report)[-_ ]?q[1-4](?![0-9a-z])",   # bulten-q3-rapport-2026.pdf
     re.I)
 
 

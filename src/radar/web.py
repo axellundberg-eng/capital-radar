@@ -31,6 +31,8 @@ FLAG_TEXT = {
     "stale_report": "Senaste rapporten är äldre än 7 månader",
     "recent_period_burn_higher": "Senaste perioden bränner snabbare än snittet",
     "recent_period_burning": "Kassaflödespositivt totalt, men senaste perioden bränner",
+    "ltm_distorted": "Tolv månader innehåller en stor engångsrörelse (burn mer än tre gånger högre än i år): "
+                     "burn räknas på det högsta av årets snitt och senaste kvartalet",
     "ltm_one_off": "Tolv månader positiva (troligen engångspost) men innevarande år bränner: burn räknas på innevarande år",
     "unconverted_currency": "Finansiering i annan valuta räknas inte: växelkurs saknas",
     "secured_pro_forma": "Annonserad emission delvis säkrad (åtaganden och garantier): se pro forma-runway",

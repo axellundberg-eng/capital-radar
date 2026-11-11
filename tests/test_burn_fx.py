@@ -158,3 +158,25 @@ def test_reported_inflow_after_period_is_added_unless_news_already_counts_it():
     issue = Event("directed_issue", "completed", 20e6, None, "SEK", "2026-07-10", "q", "t", "u", issue_costs=0)
     once = compute(facts, END, today=END, financing=summarize([issue], END, "SEK"))
     assert once.runway_today == pytest.approx(26.0) and "post_period_inflows" not in once.flags
+
+
+def test_ltm_distorted_by_working_capital_swing_uses_current_year():
+    # Gold Town Games H1 2026: ett förskott 2025 förbrukades under andra halvåret 2025, så tolv månader
+    # bränner 814 000 kr/mån medan i år är 64 000 och senaste kvartalet 109 000.
+    facts = [Fact("cash", 979_753, None, END),
+             flow("operating_cash_flow", 658_116, "2026-04-01"), flow("operating_cash_flow", 1_556_692, "2026-01-01"),
+             flow("operating_cash_flow", 6_448_833, "2025-01-01", "2025-06-30"),
+             flow("operating_cash_flow", -1_044_965, "2025-01-01", "2025-12-31"),
+             flow("operating_investments", -984_296, "2026-04-01"),
+             flow("operating_investments", -1_943_649, "2026-01-01"),
+             flow("operating_investments", -2_427_177, "2025-01-01", "2025-06-30"),
+             flow("operating_investments", -4_317_691, "2025-01-01", "2025-12-31")]
+    result = compute(facts, END, today=END)
+    assert "ltm_distorted" in result.flags and result.burn_basis == "current_year"
+    assert result.monthly_burn == pytest.approx((984_296 - 658_116) / 3)        # senaste kvartalet, det högsta
+    assert result.runway_today == pytest.approx(9.0)
+    # Ett bolag där tolv månader och i år ligger nära varandra påverkas inte.
+    steady = [Fact("cash", 12e6, None, END), flow("operating_cash_flow", -6e6, "2026-01-01"),
+              flow("operating_cash_flow", -5e6, "2025-01-01", "2025-06-30"),
+              flow("operating_cash_flow", -11e6, "2025-01-01", "2025-12-31")]
+    assert "ltm_distorted" not in compute(steady, END, today=END).flags

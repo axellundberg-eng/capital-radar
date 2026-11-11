@@ -69,16 +69,42 @@ def _skip(connection: sqlite3.Connection, document_id: int) -> None:
                            "json_extract(result_json, '$.status') != 'missing_full_report'", (document_id,))
 
 
+def other_pdfs(connection: sqlite3.Connection, document_id: int) -> list[str]:
+    """Övriga PDF-bilagor till rapporten (utom den som redan används), i MFN:s ordning."""
+    row = connection.execute("SELECT pdf_url, attachments FROM reports WHERE document_id=?",
+                             (document_id,)).fetchone()
+    try:
+        attachments = json.loads(row[1]) if row and row[1] else []
+    except ValueError:
+        attachments = []
+    return [url for url in attachments
+            if url != row[0] and url.lower().split("?")[0].endswith(".pdf")]
+
+
+def _try_other_pdfs(connection: sqlite3.Connection, settings: Settings, document_id: int, *, today: str) -> bool:
+    """Första PDF:en var bara pressmeddelandet: pröva övriga bilagor. Sant när en har en balansräkning."""
+    for url in other_pdfs(connection, document_id):
+        with connection:
+            connection.execute("UPDATE reports SET pdf_url=?, status='new', pdf_path=NULL, error=NULL "
+                               "WHERE document_id=?", (url, document_id))
+        process(connection, settings, None, document_id, today=today)
+        if not lacks_balance_sheet(connection, document_id):
+            return True
+    return False
+
+
 def process_with_fallback(connection: sqlite3.Connection, settings: Settings, client: ChatClient | None,
                           document_id: int, *, today: str) -> dict:
-    """Senaste rapporten först; korta dokument utan siffror hoppas över mot en äldre rapport."""
+    """Senaste rapporten först; korta dokument utan siffror prövas mot rapportens övriga bilagor och
+    hoppas annars över mot en äldre rapport."""
     outcome: dict = {}
     for candidate in company_reports(connection, document_id)[:MAX_FALLBACKS + 1]:
         status = connection.execute("SELECT status FROM reports WHERE document_id=?", (candidate,)).fetchone()[0]
         if status == "skipped":
             continue
         process(connection, settings, None, candidate, today=today)  # hämta och text, inget AI-anrop
-        if lacks_balance_sheet(connection, candidate):
+        if lacks_balance_sheet(connection, candidate) and not _try_other_pdfs(
+                connection, settings, candidate, today=today):
             _skip(connection, candidate)
             continue
         outcome = process(connection, settings, client, candidate, today=today, model=settings.deepseek_model)

@@ -150,3 +150,19 @@ def test_scale_correction_multiplies_the_whole_report(tmp_path):
     after = refresh_runway(connection, 10, today=TODAY)
     assert after["cash"] == before["cash"] * 1000
     assert after["periods"][0]["operating_cash_flow"] == before["periods"][0]["operating_cash_flow"] * 1000
+
+
+def test_currency_check_only_flags_missing_rates_and_structural_cases_are_not_unexplained():
+    def checks(result):
+        row = {"company_id": 1, "name": "A", "document_id": 10,
+               "result_json": json.dumps({"status": "ok", "period_end": END, "cash": 5e6, "monthly_burn": 1e6,
+                                          "periods": [], **result})}
+        return {f.check for f in review.check_company(row, [], [], 3, TODAY)}
+
+    converted = {"financing_events": [{"type": "loan", "date": "2026-09-01", "original_currency": "EUR"}]}
+    assert "currency_mix" not in checks(converted)                 # omräknad med Riksbankens kurs
+    missing = {"financing_events": [{"type": "loan", "date": "2026-09-01", "currency": "XYZ", "unconverted": True}]}
+    assert "currency_mix" in checks(missing)
+    assert "exhausted_unexplained" in checks({"flags": ["cash_exhausted_since_report"]})
+    # Avnotering (Eurobattery) förklarar läget: bolaget ligger redan under strukturell förändring.
+    assert "exhausted_unexplained" not in checks({"flags": ["cash_exhausted_since_report", "delisting"]})

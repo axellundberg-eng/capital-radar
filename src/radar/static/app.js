@@ -46,7 +46,9 @@ function msek(value, currency) {
   return `${m.toLocaleString("sv-SE", { maximumFractionDigits: Math.abs(m) < 10 ? 1 : 0 })} M${(currency || "SEK").toUpperCase()}`;
 }
 function months(value) {
-  return value == null ? "—" : `${value.toLocaleString("sv-SE", { maximumFractionDigits: 1 })} mån`;
+  if (value == null) return "—";
+  if (value > 60) return "över 60 mån";   // bolag nära noll i burn: exakta tal som 1 225 mån ser ut som fel
+  return `${value.toLocaleString("sv-SE", { maximumFractionDigits: 1 })} mån`;
 }
 function date(value) { return value ? String(value).slice(0, 10) : "—"; }
 

@@ -19,7 +19,7 @@ CHECKS = {
     "cash_column": (3, "Kassan matchar inte första kolumnen i citatet: troligen fel period eller jämförelsekolumn"),
     "flow_same_value": (3, "Samma kassaflöde för två olika perioder: troligen samma kolumn läst två gånger"),
     "positive_but_burning": (3, "Markerat kassaflödespositivt men någon period visar burn"),
-    "currency_mix": (2, "Finansieringshändelse i annan valuta än rapporten: räknas inte i runway"),
+    "currency_mix": (2, "Finansieringshändelse i annan valuta saknar växelkurs: räknas inte i runway"),
     "burn_jump": (2, "Burn skiljer mer än 3 gånger mellan perioderna"),
     "odd_period": (2, "Periodlängden är inte 3, 6, 9 eller 12 månader"),
     "unit_suspect": (1, "Kassa eller burn är mycket liten eller stor: kontrollera enheten (SEK/TSEK/MSEK)"),
@@ -142,16 +142,18 @@ def check_company(row: sqlite3.Row, facts: list[sqlite3.Row], events: list[sqlit
         add("odd_period", ", ".join(f"{p['start']}: {p['months']} mån" for p in odd))
     if not result.get("cash_flow_positive") and (result.get("runway_at_report") or 0) > 60:
         add("runway_extreme", f"{result['runway_at_report']} mån vid rapporten")
-    if "cash_exhausted_since_report" in result.get("flags", []) and not result.get("financing_events"):
+    structural = any(flag in result.get("flags", []) for flag in ("structural_change", "public_offer", "delisting"))
+    if ("cash_exhausted_since_report" in result.get("flags", []) and not result.get("financing_events")
+            and not structural):   # strukturell förändring eller avnotering förklarar redan läget
         add("exhausted_unexplained", f"{news_after} nyheter efter rapporten, ingen finansiering funnen")
     months = result.get("months_since_report") or 0
     if months > 7:
         add("stale_report", f"{months} mån sedan periodslut {period_end}")
-    report_currency = next((f["currency"] for f in facts if f["currency"]), None)
-    for event in events:
-        if report_currency and event["currency"] and event["currency"] != report_currency \
-                and (event["event_date"] or "")[:10] > period_end:
-            add("currency_mix", f"{event['type']} {event['event_date']} i {event['currency']}, rapporten i {report_currency}")
+    # Händelser i annan valuta räknas om med Riksbankens kurs (fx.py); bara de som saknar kurs är ett problem.
+    for event in result.get("financing_events") or []:
+        if event.get("unconverted"):
+            add("currency_mix", f"{event.get('type')} {event.get('date')} i "
+                                f"{event.get('original_currency') or event.get('currency')} saknar växelkurs")
     for i, a in enumerate(events):
         for b in events[i + 1:]:
             if a["type"] == b["type"] and a["status"] == b["status"] and a["news_document_id"] != b["news_document_id"] \

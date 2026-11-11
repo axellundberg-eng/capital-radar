@@ -273,6 +273,12 @@ def _migrate(connection: sqlite3.Connection) -> None:
     _add_column(connection, "news", "events_error", "TEXT")
     _add_column(connection, "news", "events_tokens", "INTEGER NOT NULL DEFAULT 0")
     _add_column(connection, "companies", "mfn_slug", "TEXT")   # bolagets sida: mfn.se/all/a/<slug>
+    # Alla bilagor (JSON-lista). Första PDF:en är ibland bara pressmeddelandet; då provas övriga.
+    _add_column(connection, "reports", "attachments", "TEXT")
+    with connection:
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS pdf_probes (   -- PDF:er som lästs för att avgöra om de är rapporter
+                   url TEXT PRIMARY KEY, is_report INTEGER NOT NULL, checked_at TEXT NOT NULL)""")
     for table in ("reports", "news"):
         _add_column(connection, table, "source_url", "TEXT")   # postens sida på MFN, unik per tabell
         with connection:

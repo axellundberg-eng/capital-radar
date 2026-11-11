@@ -283,7 +283,8 @@ def test_calendar_items_are_not_stored(settings, monkeypatch):
                          BASE + "inbjudan", "sv")
     monkeypatch.setattr(mfn, "fetch_items", lambda *a, **k: [invite])
     counts = collect.collect_company(connection, settings, {"id": 1, "name": "A", "mfn_slug": "actic-group"})
-    assert counts == {"fetched": 1, "new_reports": 0, "new_news": 0, "calendar": 1}
+    assert counts == {"fetched": 1, "new_reports": 0, "new_news": 0, "calendar": 1, "probed_reports": 0,
+                      "retry_reports": 0}
 
 
 def test_dry_run_writes_nothing_to_radar_db(settings, legacy_db, page_items, monkeypatch):

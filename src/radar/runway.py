@@ -34,6 +34,10 @@ from .rounds import EQUITY_COST, NON_CASH_TYPES, OUTFLOW_TYPES
 
 DAYS_PER_MONTH = 30.4375
 RECENT_RATIO = 1.5
+# Rullande tolv månader med en stor engångsrörelse (t.ex. ett förskott som förbrukats förra året) kan ge
+# många gånger högre burn än både innevarande år och senaste kvartalet. Är skillnaden större än så räknas
+# burn på det högsta av årets snitt och senaste kvartalet (Gold Town Games: 814 000 mot 109 000 kr/mån).
+LTM_DISTORTED_RATIO = 3.0
 STALE_MONTHS = 7.0
 
 
@@ -317,6 +321,11 @@ def compute(facts: list[Fact], period_end: str, *, today: str,
         # Burn räknas då som snittet för innevarande år (längsta perioden), inte som noll.
         burn, result.burn_basis = chosen.monthly_burn, "longest_period"
         result.flags.append("ltm_one_off")
+    current = max(chosen.monthly_burn, recent.monthly_burn)
+    if (result.ltm and burn > 0 and current > 0 and chosen.months >= 6
+            and burn > current * LTM_DISTORTED_RATIO):
+        burn, result.burn_basis = current, "current_year"
+        result.flags.append("ltm_distorted")
     faster_recent = (len(result.periods) > 1 and recent.monthly_burn > 0
                      and recent.monthly_burn > burn * RECENT_RATIO)
     if chosen.investments_basis == "investing_cash_flow":

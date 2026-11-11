@@ -8,7 +8,9 @@ gamla databasen. Ett bolag som misslyckas stoppar aldrig körningen.
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 import shutil
 import sqlite3
 import tempfile
@@ -16,17 +18,29 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Iterator
 
 from . import calendar, mfn
 from .classify import classify
 from .db import connect, next_document_id
+from .fetch import allowed, fetch_pdf
+from .pdftext import pages as pdf_pages
 from .importer import legacy_slugs, open_legacy
 from .settings import Settings
 
 logger = logging.getLogger(__name__)
+
+# Rapporter med rubrik i nyhetsform och numeriskt filnamn (Cision: 4338911.pdf) känns bara igen på
+# innehållet. Därför läses de första sidorna, men bara för bolag vars senaste rapport är gammal och bara
+# för poster efter den rapporten. Varje PDF läses en gång (tabellen pdf_probes).
+STALE_DAYS = 100
+PROBE_PAGES = 3
+REPORT_TEXT = re.compile(
+    r"delårsrapport|halvårsrapport|kvartalsrapport|bokslutskommunik|interim report|half[- ]year report"
+    r"|quarterly report|year[- ]end report|(?:januari|january)\s*[–-]\s*(?:mars|march|juni|june|september|december)"
+    r"|(?:juli|july|april|oktober|october)\s*[–-]\s*(?:september|juni|june|december)", re.I)
 
 
 def _now() -> str:
@@ -66,8 +80,9 @@ def insert_item(connection: sqlite3.Connection, company_id: int, item: mfn.MfnIt
         if table == "reports":
             connection.execute(
                 """INSERT INTO reports(document_id, company_id, title, published_at, pdf_url, source_url,
-                   status, updated_at) VALUES (?,?,?,?,?,?, 'new', ?)""",
-                (document_id, company_id, item.title, item.published_at, item.pdf_url, item.url, _now()))
+                   attachments, status, updated_at) VALUES (?,?,?,?,?,?,?, 'new', ?)""",
+                (document_id, company_id, item.title, item.published_at, item.pdf_url, item.url,
+                 json.dumps(list(item.attachments)), _now()))
         else:
             connection.execute(
                 """INSERT INTO news(document_id, company_id, title, published_at, url, source_url, status,
@@ -80,19 +95,84 @@ def insert_item(connection: sqlite3.Connection, company_id: int, item: mfn.MfnIt
         raise
 
 
+def _pdfs(attachments) -> list[str]:
+    return [url for url in attachments or () if url.lower().split("?")[0].endswith(".pdf")]
+
+
+def store_attachments(connection: sqlite3.Connection, item: mfn.MfnItem) -> bool:
+    """Spara bilagorna för en känd rapport som saknar dem. En överhoppad rapport (första PDF:en var bara
+    pressmeddelandet) med fler PDF:er får ett nytt försök. Sant om rapporten ska läsas om."""
+    with connection:
+        changed = connection.execute(
+            "UPDATE reports SET attachments=? WHERE source_url=? AND attachments IS NULL",
+            (json.dumps(list(item.attachments)), item.url)).rowcount
+        if changed and len(_pdfs(item.attachments)) > 1:
+            return connection.execute(
+                "UPDATE reports SET status='new', error=NULL WHERE source_url=? AND status='skipped'",
+                (item.url,)).rowcount > 0
+    return False
+
+
+def _stale_since(connection: sqlite3.Connection, company_id: int, today: str | None = None) -> str | None:
+    """Senaste rapportens publiceringsdag om den är äldre än STALE_DAYS (eller "0000" om bolaget saknar
+    rapporter), annars None."""
+    row = connection.execute(
+        """SELECT MAX(substr(published_at, 1, 10)) FROM reports WHERE company_id=?
+           AND status NOT IN ('skipped', 'failed')""", (company_id,)).fetchone()
+    latest = row[0] if row else None
+    if not latest:
+        return "0000"
+    day = datetime.fromisoformat(today[:10]) if today else datetime.now(timezone.utc)
+    cutoff = (day - timedelta(days=STALE_DAYS)).date().isoformat()
+    return latest if latest < cutoff else None
+
+
+def probe_is_report(connection: sqlite3.Connection, settings: Settings, url: str,
+                    fetch: Callable = fetch_pdf, read: Callable = pdf_pages) -> bool:
+    """Läs de första sidorna i en PDF en gång och avgör om den är en rapport."""
+    known = connection.execute("SELECT is_report FROM pdf_probes WHERE url=?", (url,)).fetchone()
+    if known is not None:
+        return bool(known[0])
+    if not allowed(url):
+        return False
+    with tempfile.TemporaryDirectory() as folder:
+        try:
+            path, _sha = fetch(url, Path(folder) / "probe.pdf", timeout=min(settings.http_timeout, 60.0),
+                               user_agent=settings.user_agent)
+            text = " ".join(read(path)[:PROBE_PAGES])
+        except Exception as error:  # noqa: BLE001 - en trasig bilaga får inte stoppa insamlingen
+            logger.info("pdf-prov %s: %s", url, error)
+            return False   # sparas inte: nytt försök nästa varv
+    is_report = bool(REPORT_TEXT.search(text))
+    with connection:
+        connection.execute("INSERT OR REPLACE INTO pdf_probes(url, is_report, checked_at) VALUES (?,?,?)",
+                           (url, int(is_report), _now()))
+    return is_report
+
+
 def collect_company(connection: sqlite3.Connection, settings: Settings, company, *,
-                    throttle: mfn.Throttle | None = None) -> dict[str, int]:
+                    throttle: mfn.Throttle | None = None, probe: Callable | None = None,
+                    today: str | None = None) -> dict[str, int]:
     """Hämta ett bolags sida och spara nya poster. `company` har id, name och mfn_slug."""
     items = mfn.fetch_items(company["mfn_slug"], settings, throttle)
-    counts = {"fetched": len(items), "new_reports": 0, "new_news": 0, "calendar": 0}
+    counts = {"fetched": len(items), "new_reports": 0, "new_news": 0, "calendar": 0, "probed_reports": 0,
+              "retry_reports": 0}
+    probe = probe or (lambda url: probe_is_report(connection, settings, url))
+    stale = _stale_since(connection, company["id"], today)
     for item in items:
         kind = classify(item.title, item.category, item.attachments)
         if kind == "calendar":
             counts["calendar"] += calendar.store_item(connection, company["id"], item)
             continue
+        if (kind == "other" and stale and item.pdf_url and item.published_at[:10] > stale
+                and not is_known(connection, company["id"], item, ("reports",)) and probe(item.pdf_url)):
+            kind = "report"
+            counts["probed_reports"] += 1
         table = "reports" if kind == "report" else "news"
         if insert_item(connection, company["id"], item, table):
             counts["new_reports" if table == "reports" else "new_news"] += 1
+        elif table == "reports" and store_attachments(connection, item):
+            counts["retry_reports"] += 1
     return counts
 
 
@@ -167,7 +247,7 @@ def collect_all(settings: Settings, workers: int = 4, log: Callable[[str], None]
     with working_settings(settings, dry_run) as work_settings:
         companies, missing = _companies(work_settings, limit)
         counts = {"companies": len(companies), "fetched": 0, "new_reports": 0, "new_news": 0, "calendar": 0,
-                  "failed": 0, "skipped_no_slug": missing}
+                  "probed_reports": 0, "retry_reports": 0, "failed": 0, "skipped_no_slug": missing}
         run = _Run(work_settings)
         with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
             futures = {pool.submit(run.work, company): company for company in companies}
