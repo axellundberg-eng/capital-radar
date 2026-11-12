@@ -6,7 +6,7 @@
   <title>Capital Radar</title>
   <meta name="color-scheme" content="light dark">
   <script src="static/theme.js?v=1"></script>
-  <link rel="stylesheet" href="static/styles.css?v=25">
+  <link rel="stylesheet" href="static/styles.css?v=27">
 </head>
 <body>
   <header class="top">
@@ -70,6 +70,7 @@
       <div id="prospectView" hidden>
         <p class="source">Bolag med runway under 9 månader och ingen annonserad emission, rankade efter prospektpoäng. Bolag med uttalat kapitalbehov (stämmobeslut, kallelse, plan, osäkerhet om fortsatt drift eller indirekt behov) visas överst. Bolag som tagit in kapital de senaste 4 månaderna ligger i en egen grupp sist. Pågående kapitalanskaffning visas separat längst ner. Marknadsvärde från Nasdaq; saknas det visas "okänt".</p>
         <div class="facets" id="pFacets" aria-label="Filter: bransch och markörer"></div>
+        <div id="prospectMap"></div>
         <div class="tools"><button type="button" class="btn" data-export title="Laddar ned prospekten som visas som CSV för Excel">Exportera CSV</button></div>
         <div class="table-wrap">
           <table>
@@ -132,6 +133,6 @@
     </aside>
   </main>
 
-  <script src="static/app.js?v=29" defer></script>
+  <script src="static/app.js?v=31" defer></script>
 </body>
 </html>

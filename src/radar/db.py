@@ -281,6 +281,7 @@ def _migrate(connection: sqlite3.Connection) -> None:
     _add_column(connection, "news", "events_error", "TEXT")
     _add_column(connection, "news", "events_tokens", "INTEGER NOT NULL DEFAULT 0")
     _add_column(connection, "companies", "mfn_slug", "TEXT")   # bolagets sida: mfn.se/all/a/<slug>
+    _add_column(connection, "market_history_summary", "series", "TEXT")   # veckokurser ett år (JSON)
     # Alla bilagor (JSON-lista). Första PDF:en är ibland bara pressmeddelandet; då provas övriga.
     _add_column(connection, "reports", "attachments", "TEXT")
     with connection:

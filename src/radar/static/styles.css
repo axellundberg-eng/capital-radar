@@ -528,3 +528,78 @@ tr.expandable td > .namecell { max-width: calc(100% - 52px); }
 #prospectView th:first-child, #listView th:first-child { min-width: 280px; }
 /* På mobil rullar sidhuvudet med sidan i stället för att ta en sjättedel av skärmen. */
 @media (max-width: 720px) { .top { position: static; } }
+
+
+/* ================= Interaktiva diagram ================= */
+.tip { position: fixed; z-index: 100; max-width: 300px; pointer-events: none; background: var(--brand-1); color: #fff;
+  border: 1px solid rgba(79,227,198,.45); border-radius: 8px; padding: 7px 10px; font-size: 12px; line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+.tip strong { color: var(--mint); }
+.viz-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.viz-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.viz-legend i.need, .viz-legend i.debt { background: var(--target); }
+.viz-legend i.other, .viz-legend i.eq { background: var(--accent); }
+.viz-legend i.recent { background: var(--muted); }
+.viz-legend i.wr { background: var(--watch); }
+.viz-legend i.hollow { background: transparent; border: 1.5px dashed var(--muted); }
+.cash-chart.pmap, .cash-chart.timeline, .cash-chart.waterfall, .cash-chart.price { background: var(--panel); }
+.cash-chart.pmap svg, .cash-chart.timeline svg, .cash-chart.waterfall svg { cursor: default; }
+
+/* Prospektkarta */
+.pmap { margin-bottom: 12px; box-shadow: var(--shadow); }
+.pm-grid { stroke: var(--line); stroke-width: 1; }
+.pm-zone { fill: var(--select-bg); stroke: var(--select); stroke-dasharray: 4 3; opacity: .8; }
+.cash-chart text.pm-zone-label { fill: var(--select); font-weight: 600; }
+.pm-dot { fill-opacity: .5; stroke-width: 1.5; cursor: pointer; transition: fill-opacity var(--t) var(--ease), stroke-width var(--t) var(--ease); }
+.pm-dot.need { fill: var(--target); stroke: var(--target); }
+.pm-dot.other { fill: var(--accent); stroke: var(--accent); }
+.pm-dot.recent { fill: var(--muted); stroke: var(--muted); }
+.pm-dot:hover, .pm-dot:focus-visible { fill-opacity: .9; stroke-width: 2.5; outline: none; }
+.pm-dot.sel { fill-opacity: 1; stroke: var(--ink); stroke-width: 3; }
+
+/* Tidslinje */
+.tl-tick { stroke: var(--muted); opacity: .6; }
+.tl-dot { fill-opacity: .7; stroke-width: 1.5; cursor: help; transition: fill-opacity var(--t) var(--ease); }
+.tl-dot.eq { fill: var(--accent); stroke: var(--accent); }
+.tl-dot.debt { fill: var(--target); stroke: var(--target); }
+.tl-dot.wr { fill: var(--watch); stroke: var(--watch); }
+.tl-dot.hollow { fill-opacity: .08; stroke-dasharray: 3 2; }
+.tl-dot:hover { fill-opacity: 1; }
+
+/* Kapitalbehovstrappa */
+.wf-bar { cursor: help; transition: opacity var(--t) var(--ease); }
+.wf-bar:hover { opacity: .75; }
+.wf-add { fill: var(--target); }
+.wf-sub { fill: var(--watch); }
+.wf-sum { fill: var(--accent); opacity: .55; }
+.wf-total { fill: var(--accent); }
+.wf-link { stroke: var(--muted); stroke-dasharray: 2 3; opacity: .7; }
+.cash-chart text.wf-value { fill: var(--ink); font-weight: 600; }
+.waterfall { max-width: 640px; }
+
+/* Poängstapel och burn-staplar */
+.scorebar { display: flex; gap: 3px; height: 12px; margin: 6px 0 10px; }
+.sb-seg { min-width: 6px; background: var(--muted-bg); border-radius: 4px; overflow: hidden; cursor: help; transition: transform var(--t) var(--ease); }
+.sb-seg i { display: block; height: 100%; background: var(--watch); }
+.sb-seg.st-warn i { background: var(--target); }
+.sb-seg.st-fail { box-shadow: inset 0 0 0 1px var(--urgent); }
+.sb-seg:hover { transform: scaleY(1.5); }
+.hbars { margin: 10px 0 4px; }
+.hbar { display: grid; grid-template-columns: 132px 1fr auto; align-items: center; gap: 8px; font-size: 12px; margin: 5px 0; }
+.hbar span { color: var(--muted); }
+.hbar i { display: block; height: 8px; border-radius: 999px; background: var(--muted-bg); overflow: hidden; }
+.hbar b { display: block; height: 100%; border-radius: 999px; background: var(--muted); }
+.hbar.on b { background: var(--accent); }
+.hbar.on strong { color: var(--accent); }
+
+/* Kursdiagram */
+.pc-deal { stroke: var(--target); stroke-dasharray: 2 3; opacity: .7; }
+.pc-mark { fill: var(--target); stroke: var(--panel); stroke-width: 1.5; cursor: help; }
+.pc-mark:hover { r: 7; }
+
+/* Flikar på Garanti-sidan */
+.g-tabs { position: static; margin: 0; padding: 0 4px; background: transparent; }
+.g-pane { display: grid; gap: 14px; }
+.g-card .cash-chart { margin-bottom: 12px; }
+/* Trappan visar samma tal som rutnätet; rutnätet används bara när trappan inte kan ritas. */
+.waterfall + .g-eq { display: none; }

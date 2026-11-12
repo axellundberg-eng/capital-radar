@@ -291,21 +291,23 @@ function chartHover(event) {
   const svg = event.target.closest?.(".cash-chart svg");
   if (!svg) return;
   const figure = svg.parentElement, data = JSON.parse(figure.dataset.chart), box = svg.getBoundingClientRect();
-  const inner = CHART.W - CHART.L - CHART.R;
-  const fx = Math.min(1, Math.max(0, (((event.clientX - box.left) / box.width) * CHART.W - CHART.L) / inner));
+  const W = data.W || CHART.W, left = data.L ?? CHART.L, inner = W - left - (data.R ?? CHART.R);
+  const fx = Math.min(1, Math.max(0, (((event.clientX - box.left) / box.width) * W - left) / inner));
   const t = data.start + fx * (data.end - data.start);
   let value = 0;
   for (let i = 0; i < data.points.length - 1; i += 1) {
     const [t0, v0] = data.points[i], [t1, v1] = data.points[i + 1];
     if (t >= t0 && t <= t1) { value = t1 === t0 ? v1 : v0 + ((v1 - v0) * (t - t0)) / (t1 - t0); break; }
   }
-  const cursor = svg.querySelector(".cc-cursor"), cx = CHART.L + fx * inner;
+  const cursor = svg.querySelector(".cc-cursor"), cx = left + fx * inner;
   cursor.removeAttribute("hidden");
   cursor.setAttribute("x1", cx);
   cursor.setAttribute("x2", cx);
   const read = figure.querySelector(".chart-read");
   read.dataset.rest ??= read.textContent;
-  read.textContent = `${monthLabel(t)}: ${msek(value, data.cur)}`;
+  read.textContent = data.kind === "price"
+    ? `${new Date(t).toLocaleDateString("sv-SE")}: ${num(value, 2)} kr`
+    : `${monthLabel(t)}: ${msek(value, data.cur)}`;
 }
 function chartLeave(event) {
   const svg = event.target.closest?.(".cash-chart svg");
@@ -313,6 +315,187 @@ function chartLeave(event) {
   svg.querySelector(".cc-cursor").setAttribute("hidden", "");
   const read = svg.parentElement.querySelector(".chart-read");
   if (read.dataset.rest) read.textContent = read.dataset.rest;
+}
+
+// ---------- Verktygstips för diagram: element med data-tip visar en ruta vid pekaren ----------
+const tip = document.createElement("div");
+tip.className = "tip";
+tip.hidden = true;
+document.body.append(tip);
+function tipAttr(html) { return ` data-tip="${escapeHtml(html)}"`; }
+function tipMove(event) {
+  if (tip.hidden) return;
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = event.clientX + pad, y = event.clientY + pad;
+  if (x + w > window.innerWidth - 8) x = event.clientX - w - pad;
+  if (y + h > window.innerHeight - 8) y = event.clientY - h - pad;
+  tip.style.left = `${Math.max(8, x)}px`;
+  tip.style.top = `${Math.max(8, y)}px`;
+}
+function tipShow(event) {
+  const el = event.target.closest?.("[data-tip]");
+  if (!el) { tip.hidden = true; return; }
+  tip.innerHTML = el.dataset.tip;
+  tip.hidden = false;
+  tipMove(event);
+}
+
+// ---------- Prospektkarta: runway mot behovets andel av börsvärdet ----------
+// Varje bubbla är ett prospekt; storleken är kapitalbehovet. Den gröna zonen (3–9 mån, högst 25 %) är
+// de bolag som är lättast att garantera i rätt tid.
+function prospectMap(groups) {
+  const all = groups.flatMap(([items, cls]) => items.map((item) => ({ item, cls })));
+  const pts = all.filter(({ item }) => item.share != null && item.runway_today != null && item.capital_need > 0);
+  if (pts.length < 3) return "";
+  const W = 760, H = 250, L = 44, R = 14, T = 12, B = 32;
+  const xMax = Math.max(9, Math.min(12, Math.ceil(Math.max(...pts.map(({ item }) => item.runway_today)))));
+  const x = (v) => L + ((W - L - R) * Math.min(v, xMax)) / xMax;
+  const y = (share) => T + (H - T - B) * (1 - Math.min(share * 100, 100) / 100);
+  const maxNeed = Math.max(...pts.map(({ item }) => item.capital_need));
+  const r = (v) => 4 + 12 * Math.sqrt(v / maxNeed);
+  const xTicks = [0, 3, 6, 9, 12].filter((v) => v <= xMax);
+  const grid = xTicks.map((v) => `<line class="pm-grid" x1="${x(v)}" x2="${x(v)}" y1="${T}" y2="${H - B}"/><text x="${x(v)}" y="${H - B + 14}" text-anchor="middle">${v}</text>`).join("")
+    + [0, 25, 50, 75, 100].map((v) => `<line class="pm-grid" x1="${L}" x2="${W - R}" y1="${y(v / 100)}" y2="${y(v / 100)}"/><text x="${L - 6}" y="${y(v / 100) + 3}" text-anchor="end">${v === 100 ? "100+" : v} %</text>`).join("");
+  const dots = [...pts].sort((a, b) => b.item.capital_need - a.item.capital_need).map(({ item, cls }) => {
+    const html = `<strong>${escapeHtml(item.name)}</strong><br>Runway ${months(item.runway_today)} · behov ${msek(item.capital_need)}<br>${Math.round(item.share * 100)} % av börsvärdet · poäng ${item.score}`;
+    return `<circle class="pm-dot ${cls}${state.selected === item.id ? " sel" : ""}" data-map-id="${item.id}" cx="${x(item.runway_today).toFixed(1)}" cy="${y(item.share).toFixed(1)}" r="${r(item.capital_need).toFixed(1)}" tabindex="0" role="button" aria-label="${escapeHtml(item.name)}: runway ${months(item.runway_today)}, ${Math.round(item.share * 100)} procent av börsvärdet"${tipAttr(html)}/>`;
+  }).join("");
+  const missing = all.length - pts.length;
+  return `<figure class="cash-chart pmap">
+    <header><span>Prospektkarta <small>runway mot behovets andel av börsvärdet · bubblans storlek är kapitalbehovet</small></span>
+      <strong>Klicka på en bubbla för att öppna bolaget</strong></header>
+    <svg viewBox="0 0 ${W} ${H}" role="group" aria-label="Prospektkarta">
+      <rect class="pm-zone" x="${x(3)}" y="${y(0.25)}" width="${x(9) - x(3)}" height="${y(0) - y(0.25)}"><title>Målzon: runway 3–9 månader och behov högst 25 % av börsvärdet</title></rect>
+      <text class="pm-zone-label" x="${x(3) + 6}" y="${y(0.25) + 13}">Målzon</text>
+      ${grid}${dots}
+      <text x="${(L + W - R) / 2}" y="${H - 3}" text-anchor="middle">Runway idag, månader</text>
+    </svg>
+    <div class="viz-legend"><span><i class="need"></i>Uttalat kapitalbehov</span><span><i class="other"></i>Övriga prospekt</span><span><i class="recent"></i>Nyligen finansierade</span>${missing ? `<span>${missing} bolag utan känt börsvärde visas inte</span>` : ""}</div>
+  </figure>`;
+}
+
+// ---------- Tidslinje över finansiering de senaste 24 månaderna ----------
+const DEAL_GROUP = { rights_issue: "eq", directed_issue: "eq", set_off: "eq", warrants: "wr", loan: "debt", bridge_loan: "debt",
+  convertible: "debt", credit_facility: "debt", repayment: "debt" };
+function dealTimeline(deals, compact = false) {
+  const list = (deals || []).filter((e) => e.date);
+  if (!list.length) return "";
+  const W = compact ? 400 : 760, H = 92, L = 10, R = 10, axis = H - 24;
+  const end = Date.now(), start = end - 24 * MONTH_MS;
+  const x = (t) => L + (W - L - R) * Math.min(1, Math.max(0, (t - start) / (end - start)));
+  const max = Math.max(...list.map((e) => e.amount || 0), 1);
+  const r = (e) => 4 + (compact ? 9 : 12) * Math.sqrt((e.amount || 0) / max);
+  let ticks = "";
+  const first = new Date(start);
+  for (let d = new Date(first.getFullYear(), first.getMonth() + 1, 1); d.getTime() <= end; d.setMonth(d.getMonth() + 1)) {
+    const quarter = d.getMonth() % 3 === 0, year = d.getMonth() === 0;
+    if (!quarter) continue;
+    ticks += `<line class="tl-tick" x1="${x(d.getTime()).toFixed(1)}" x2="${x(d.getTime()).toFixed(1)}" y1="${axis}" y2="${axis + (year ? 7 : 4)}"/>`;
+    if (year || (!compact && d.getMonth() === 6)) ticks += `<text x="${x(d.getTime()).toFixed(1)}" y="${H - 5}" text-anchor="middle">${year ? d.getFullYear() : "juli"}</text>`;
+  }
+  const dots = [...list].sort((a, b) => (b.amount || 0) - (a.amount || 0)).map((e) => {
+    const extra = [e.subscription_rate_pct != null ? `tecknad till ${Number(e.subscription_rate_pct).toLocaleString("sv-SE")} %` : "",
+      e.guarantee_amount != null ? `garanti ${msek(e.guarantee_amount, e.currency)}` : "",
+      e.dilution_pct != null ? `utspädning ${Number(e.dilution_pct).toLocaleString("sv-SE")} %` : ""].filter(Boolean).join(" · ");
+    const html = `<strong>${TYPE[e.type] || escapeHtml(e.type)}</strong> · ${STATUS[e.status] || escapeHtml(e.status)}<br>${escapeHtml(date(e.date))} · ${e.amount != null ? msek(e.amount, e.currency) : "belopp saknas"}${extra ? `<br>${escapeHtml(extra)}` : ""}`;
+    const radius = r(e);
+    return `<circle class="tl-dot ${DEAL_GROUP[e.type] || "eq"}${e.status === "announced" ? " hollow" : ""}" cx="${x(Date.parse(e.date)).toFixed(1)}" cy="${(axis - radius - 2).toFixed(1)}" r="${radius.toFixed(1)}"${tipAttr(html)}/>`;
+  }).join("");
+  return `<figure class="cash-chart timeline">
+    <header><span>Finansiering senaste 24 månaderna <small>bubblans storlek är beloppet</small></span><strong>${list.length} ${list.length === 1 ? "affär" : "affärer"}</strong></header>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tidslinje med ${list.length} finansieringsaffärer de senaste 24 månaderna">
+      <line class="cc-axis" x1="${L}" x2="${W - R}" y1="${axis}" y2="${axis}"/>${ticks}${dots}
+      <text x="${W - R}" y="${H - 5}" text-anchor="end">idag</text>
+    </svg>
+    <div class="viz-legend"><span><i class="eq"></i>Emission</span><span><i class="wr"></i>Teckningsoptioner</span><span><i class="debt"></i>Lån</span><span><i class="hollow"></i>Annonserad</span></div>
+  </figure>`;
+}
+
+// ---------- Kapitalbehovet som trappa: burn och lån upp, kassa och kredit ned ----------
+function needWaterfall(n) {
+  if (!n || !(n.gross_need > 0) || !(n.net_need > 0)) return "";
+  const steps = [["Burn 12 mån", n.operating_12m, "add"], ["Lån inom 12 mån", n.debt_due_12m, "add"],
+    ["Kassa", -(n.cash_today || 0), "sub"], ["Outnyttjad kredit", -(n.available_credit || 0), "sub"],
+    ["Nettobehov", n.net_need, "sum"], ["Emissionskostnad", n.issue_costs, "add"], ["Bruttobehov", n.gross_need, "total"]]
+    .filter(([, v, kind]) => kind === "sum" || kind === "total" || Math.abs(v || 0) > 0);
+  let run = 0;
+  const bars = steps.map(([label, v, kind]) => {
+    const from = kind === "sum" || kind === "total" ? 0 : run;
+    run = kind === "sum" || kind === "total" ? v : run + v;
+    return { label, v, kind, lo: Math.min(from, run), hi: Math.max(from, run), end: run };
+  });
+  const W = 560, H = 190, L = 8, R = 8, T = 22, B = 30;
+  const top = Math.max(...bars.map((b) => b.hi), 1), bottom = Math.min(0, ...bars.map((b) => b.lo));
+  const y = (v) => T + (H - T - B) * (1 - (v - bottom) / (top - bottom));
+  const slot = (W - L - R) / bars.length, bw = Math.min(64, slot * 0.7);
+  const parts = bars.map((b, i) => {
+    const cx = L + slot * (i + 0.5), h = Math.max(2, y(b.lo) - y(b.hi));
+    const html = `<strong>${b.label}</strong>: ${b.kind === "sub" ? "minskar behovet med " : ""}${msek(Math.abs(b.v))}`;
+    const link = i < bars.length - 1 ? `<line class="wf-link" x1="${(cx + bw / 2).toFixed(1)}" x2="${(cx + slot - bw / 2).toFixed(1)}" y1="${y(b.end).toFixed(1)}" y2="${y(b.end).toFixed(1)}"/>` : "";
+    return `${link}<rect class="wf-bar wf-${b.kind}" x="${(cx - bw / 2).toFixed(1)}" y="${y(b.hi).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3"${tipAttr(html)}/>
+      <text class="wf-value" x="${cx.toFixed(1)}" y="${(y(b.hi) - 5).toFixed(1)}" text-anchor="middle">${b.kind === "sub" ? "−" : ""}${msek(Math.abs(b.v)).replace(" MSEK", "")}</text>
+      <text x="${cx.toFixed(1)}" y="${H - 10}" text-anchor="middle">${b.label}</text>`;
+  }).join("");
+  return `<figure class="cash-chart waterfall">
+    <header><span>Kapitalbehov 12 månader <small>MSEK</small></span><strong>${msek(n.gross_need)} brutto</strong></header>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Kapitalbehov: nettobehov ${msek(n.net_need)}, bruttobehov ${msek(n.gross_need)}">
+      <line class="cc-axis" x1="${L}" x2="${W - R}" y1="${y(0).toFixed(1)}" y2="${y(0).toFixed(1)}"/>${parts}</svg>
+  </figure>`;
+}
+
+// Poängen som stapel: en del per kontroll, bredden är vikten och fyllnaden är uppnådd poäng.
+function scoreBar(checks) {
+  const earn = { pass: 1, warn: 0.5 };
+  return `<div class="scorebar" role="img" aria-label="Poängens fördelning per kontroll">${(checks || []).map((c) => {
+    const got = (c.weight || 0) * (earn[c.status] || 0);
+    const html = `<strong>${escapeHtml(c.label)}</strong>: ${String(got).replace(".", ",")} av ${c.weight} poäng<br>${escapeHtml(c.reason)}`;
+    return `<span class="sb-seg st-${c.status}" style="flex:${c.weight || 1}"${tipAttr(html)}><i style="width:${(earn[c.status] || 0) * 100}%"></i></span>`;
+  }).join("")}</div>`;
+}
+
+// Burn per period som staplar; den markerade används i runway-beräkningen.
+function burnBars(d) {
+  const rows = (d.periods || []).map((p) => [`${p.months} mån från ${date(p.start)}`, p.monthly_burn]);
+  if (d.ltm) rows.push(["Rullande 12 mån", d.ltm.monthly_burn]);
+  if (rows.length < 2) return "";
+  const max = Math.max(...rows.map(([, v]) => v || 0), 1);
+  return `<div class="hbars">${rows.map(([label, v]) => `<div class="hbar${Math.abs((v || 0) - (d.monthly_burn || 0)) < 1 ? " on" : ""}">
+    <span>${label}</span><i><b style="width:${Math.max(2, ((v || 0) / max) * 100).toFixed(0)}%"></b></i><strong>${msek(v, d.currency)}</strong></div>`).join("")}</div>
+    <p class="source">Burn per månad. Den markerade stapeln används i runway-beräkningen.</p>`;
+}
+
+// Kursen vecka för vecka det senaste året, med finansieringsaffärerna markerade.
+function priceChart(m, deals) {
+  const pts = (Array.isArray(m.series) ? m.series : []).filter((p) => p && p[1] != null).map(([day, close]) => [Date.parse(day), close]);
+  if (pts.length < 8) return "";
+  const W = 760, H = 190, L = 8, R = 8, T = 14, B = 24;
+  const start = pts[0][0], end = pts[pts.length - 1][0];
+  const lo = Math.min(...pts.map((p) => p[1])), hi = Math.max(...pts.map((p) => p[1]));
+  const pad = (hi - lo) * 0.1 || hi * 0.05 || 1;
+  const x = (t) => (L + ((W - L - R) * (t - start)) / (end - start)).toFixed(1);
+  const y = (v) => (T + (H - T - B) * (1 - (v - (lo - pad)) / (hi - lo + 2 * pad))).toFixed(1);
+  const line = pts.map(([t, v]) => `${x(t)},${y(v)}`).join(" ");
+  const base = H - B;
+  const marks = (deals || []).filter((e) => e.date && Date.parse(e.date) >= start && Date.parse(e.date) <= end).map((e) => {
+    const t = Date.parse(e.date);
+    const html = `<strong>${TYPE[e.type] || escapeHtml(e.type)}</strong> · ${STATUS[e.status] || escapeHtml(e.status)}<br>${escapeHtml(date(e.date))} · ${e.amount != null ? msek(e.amount, e.currency) : "belopp saknas"}`;
+    return `<line class="pc-deal" x1="${x(t)}" x2="${x(t)}" y1="${T}" y2="${base}"/><circle class="pc-mark" cx="${x(t)}" cy="${base}" r="5"${tipAttr(html)}/>`;
+  }).join("");
+  const last = pts[pts.length - 1], rest = `Senast ${num(last[1], 2)} kr`;
+  const data = escapeHtml(JSON.stringify({ kind: "price", W, L, R, start, end, points: pts }));
+  return `<figure class="cash-chart price" data-chart="${data}">
+    <header><span>Kurs senaste året <small>veckoslut · prickar på linjen under är finansieringsaffärer</small></span><strong class="chart-read">${rest}</strong></header>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Kursutveckling senaste året, från ${num(pts[0][1], 2)} till ${num(last[1], 2)} kronor">
+      <polygon class="cc-area" points="${x(start)},${base} ${line} ${x(end)},${base}"/>
+      <line class="cc-axis" x1="${L}" x2="${W - R}" y1="${base}" y2="${base}"/>
+      ${marks}
+      <polyline class="cc-line" points="${line}"/>
+      <line class="cc-cursor" x1="0" x2="0" y1="${T}" y2="${base}" hidden/>
+      <text x="${L}" y="${H - 6}">${monthLabel(start)}</text>
+      <text x="${W - R}" y="${H - 6}" text-anchor="end">${monthLabel(end)}</text>
+      <text x="${W - R}" y="${Number(y(hi)) - 3}" text-anchor="end">högst ${num(hi, 2)}</text>
+      <text x="${W - R}" y="${Number(y(lo)) + 11}" text-anchor="end">lägst ${num(lo, 2)}</text>
+    </svg></figure>`;
 }
 
 // Tunn stapel under runway-talet: andel av 18 månader, färgad efter grupp.
@@ -463,6 +646,7 @@ function renderRows() {
 // Markerar vald rad utan att bygga om tabellerna (bevarar öppna rader och animationer).
 function markSelected() {
   document.querySelectorAll("tr[data-id]").forEach((tr) => tr.classList.toggle("selected", Number(tr.dataset.id) === state.selected));
+  document.querySelectorAll("[data-map-id]").forEach((dot) => dot.classList.toggle("sel", Number(dot.dataset.mapId) === state.selected));
 }
 
 function updateTabs() {
@@ -591,12 +775,14 @@ function prospectDetail(item) {
     <tr class="expand"><td colspan="9"><div class="xwrap"><div class="xinner">
       <p class="source">Kassa utan kredit: ${months(item.runway_cash_today)} · Outnyttjad kredit: ${msek(item.available_credit, item.currency)} ·
         Emissioner senaste 24 mån: ${item.emissions_24m ?? 0}${basis ? ` · Burn räknad på ${basis}` : ""}${report}</p>
-      ${need}${auth}
+      ${needWaterfall(n) || need}${auth}
       <h3>Varför poängen</h3>
+      ${scoreBar(item.checks)}
       <ul class="checks">${(item.checks || []).map((c) => `<li class="st-${c.status}">
         <span class="st">${{ pass: "Ok", warn: "Varning", fail: "Underkänd", info: "Info" }[c.status] || c.status}</span> ${escapeHtml(c.label)}
         <span>${escapeHtml(c.reason)}</span></li>`).join("")}</ul>
       <h3>Finansiering senaste 24 mån</h3>
+      ${dealTimeline(item.recent_financing)}
       ${list ? `<ul class="facts">${list}</ul>` : '<p class="source">Inga finansieringshändelser de senaste 24 månaderna.</p>'}
     </div></div></td></tr>`;
 }
@@ -638,6 +824,8 @@ function renderProspects(animate = true) {
   const [need, items, recent, raising, structural] = [keep(all.need), keep(all.items), keep(all.recent), keep(all.raising), keep(all.structural)];
   const filtered = FACETS.some((facet) => state.facets[facet].size);
   const none = filtered ? "Inga bolag matchar filtren." : "";
+  const map = $("#prospectMap");
+  if (map) map.innerHTML = prospectMap([[need, "need"], [items, "other"], [recent, "recent"]]);
   $("#structuralRows").innerHTML = structural.length ? structural.map(structuralRow).join("")
     : `<tr><td colspan="4" class="empty">${none || "Inga bolag med strukturell förändring just nu."}</td></tr>`;
   const rows = (list) => list.map((item) => prospectRow(item, true) + (expandedProspects.has(item.id) ? prospectDetail(item) : "")).join("");
@@ -660,6 +848,7 @@ function qualificationSection(d) {
     <span class="st">${{ pass: "ok", warn: "varning", fail: "underkänd", info: "info" }[c.status]}</span></div>
     <span>${escapeHtml(c.reason)}</span></li>`).join("");
   return `<h3>Kvalificering · poäng ${q.score}/100</h3><p class="explain">${escapeHtml(q.summary)}</p>
+    ${scoreBar(q.checks)}
     <ul class="facts checks">${items}</ul>`;
 }
 
@@ -839,12 +1028,14 @@ function renderDetail(d) {
       <p class="explain">${explanation(d)}${financingNote(d)}</p>
       ${flags ? `<ul class="flags">${flags}</ul>` : ""}
       ${qualificationSection(d)}`)}
-    ${pane("financing", `${structuralSection(d)}
+    ${pane("financing", `${dealTimeline(d.recent_financing, true)}
+      ${structuralSection(d)}
       ${afterPeriodSection(d)}
       ${financingSection(d)}`)}
     ${pane("sources", `<h3>Perioder</h3>
       <table class="mini"><thead><tr><th>Period</th><th class="num">Löpande</th><th class="num">Investeringar</th><th class="num">Burn / mån</th></tr></thead>
         <tbody>${periods || '<tr><td colspan="4">Inga perioder</td></tr>'}</tbody></table>
+      ${burnBars(d)}
       <h3>Källor i rapporten</h3>
       <p class="source">${escapeHtml(d.report_title)} · publicerad ${date(d.published_at)} · ${pdfLink(d)}</p>
       <ul class="facts">${facts}</ul>`)}</div>`;
@@ -888,6 +1079,9 @@ function currentTheme() {
     || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 }
 
+document.addEventListener("pointerover", tipShow);
+document.addEventListener("pointermove", tipMove);
+document.addEventListener("scroll", () => { tip.hidden = true; }, true);
 document.addEventListener("pointermove", chartHover);
 document.addEventListener("pointerout", chartLeave);
 document.addEventListener("click", (event) => {
@@ -912,6 +1106,21 @@ document.addEventListener("click", (event) => {
     state.tab = tabButton.dataset.tab;
     document.querySelectorAll("#detail [data-tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === state.tab));
     document.querySelectorAll("#detail [data-pane]").forEach((p) => { p.hidden = p.dataset.pane !== state.tab; });
+    return;
+  }
+  const gTab = event.target.closest("[data-gtab]");
+  if (gTab) {
+    garanti.tab = gTab.dataset.gtab;
+    document.querySelectorAll("#gCompany [data-gtab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.gtab === garanti.tab));
+    document.querySelectorAll("#gCompany [data-gpane]").forEach((p) => { p.hidden = p.dataset.gpane !== garanti.tab; });
+    return;
+  }
+  const mapDot = event.target.closest("[data-map-id]");
+  if (mapDot) {
+    const id = Number(mapDot.dataset.mapId);
+    if (!expandedProspects.has(id)) toggleProspect(id);
+    select(id);
+    document.querySelector(`#prospectRows tr[data-id="${id}"]`)?.scrollIntoView({ block: "center", behavior: REDUCED ? "auto" : "smooth" });
     return;
   }
   const garantiButton = event.target.closest("[data-open-garanti]");
@@ -980,6 +1189,8 @@ document.addEventListener("keydown", (event) => {
     if (field) { event.preventDefault(); field.focus(); }
     return;
   }
+  const dot = event.target.closest?.("[data-map-id]");
+  if (dot && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); dot.dispatchEvent(new MouseEvent("click", { bubbles: true })); return; }
   const head = event.target.closest?.("#listView th[data-sort]");
   if (head && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); sortBy(head.dataset.sort); return; }
   if (event.target.closest?.("button, a, input")) return;
@@ -1080,7 +1291,7 @@ function gNeed(d) {
     const orig = n.currency || "SEK";
     const cells = [["Burn 12 mån", n.operating_12m], ["+ Lån inom 12 mån", n.debt_due_12m], ["− Kassa", n.cash_today],
       ["− Outnyttjad kredit", n.available_credit], ["= Nettobehov", n.net_need], ["+ Emissionskostnad", n.issue_costs], ["= Bruttobehov", n.gross_need]];
-    body = `<div class="g-eq">${cells.map(([l, v], i) => `<div class="g-kv${i === 6 ? " total" : ""}"><span>${l}</span><strong>${msek(v, "SEK")}</strong></div>`).join("")}</div>
+    body = `${needWaterfall(n)}<div class="g-eq">${cells.map(([l, v], i) => `<div class="g-kv${i === 6 ? " total" : ""}"><span>${l}</span><strong>${msek(v, "SEK")}</strong></div>`).join("")}</div>
       ${orig !== "SEK" && n.sek_per_unit ? `<p class="source">Omräknat från ${escapeHtml(orig)} (${num(n.sek_per_unit, 3)} kr per enhet).</p>` : ""}`;
   } else body = '<p class="source">Kapitalbehov kan inte beräknas: underlag saknas.</p>';
   const rw = `<div class="g-grid">${gKv("Runway idag", months(r.runway_today))}${gKv("Endast kassa", months(r.runway_cash_today), "Utan outnyttjad kredit")}${gKv("Pro forma", months(r.runway_pro_forma), "Om säkrad finansiering kommer in")}${gKv("Kassa idag", msek(r.cash_today, r.currency))}${gKv("Burn / mån", msek(r.monthly_burn, r.currency))}</div>`;
@@ -1100,7 +1311,7 @@ function gMarket(d) {
   const days = c.turnover_days_for_need != null ? `${num(c.turnover_days_for_need)} dagars omsättning` : "—";
   const share = c.need_share_of_market_cap_pct != null ? `${num(c.need_share_of_market_cap_pct)} % av börsvärdet` : "—";
   const foot = [m.as_of ? `Per ${date(m.as_of)}` : "", m.source ? escapeHtml(m.source) : "", m.error ? escapeHtml(m.error) : ""].filter(Boolean).join(" · ");
-  return gCard("Marknad", `<div class="g-grid">${gKv("Börsvärde", msek(m.market_cap))}${gKv("Kurs", m.price != null ? `${num(m.price, 2)} kr` : "—")}
+  return gCard("Marknad", `${priceChart(m, d.financing)}<div class="g-grid">${gKv("Börsvärde", msek(m.market_cap))}${gKv("Kurs", m.price != null ? `${num(m.price, 2)} kr` : "—")}
     ${ch("1 mån", m.price_change_1m_pct)}${ch("3 mån", m.price_change_3m_pct)}${ch("12 mån", m.price_change_12m_pct)}
     ${gKv("Omsättning / dag (3 mån)", msek(m.avg_daily_turnover_3m))}${gKv("52 veckor", range)}</div>
     <div class="g-callouts"><div><span>Behovet motsvarar</span><strong>${days}</strong></div><div><span>Behovet motsvarar</span><strong>${share}</strong></div></div>
@@ -1212,7 +1423,16 @@ function gWarrants(d) {
 function renderGarantiCompany(d) {
   garanti.data = d;
   const upd = d.updated_at ? `<p class="source">Uppdaterad ${escapeHtml(String(d.updated_at).replace("T", " ").slice(0, 16))}</p>` : "";
-  $("#gCompany").innerHTML = `<div class="g-company fade-in">${gHeader(d)}${gNeed(d)}${gMarket(d)}${gOwners(d)}${gShort(d)}${gInsiders(d)}${gFinancing(d)}<div id="gHistory">${gHistory(d)}</div>${gAuth(d)}${gWarrants(d)}${upd}</div>`;
+  garanti.tab ??= "overview";
+  const tab = (key, label) => `<button type="button" class="tab" role="tab" data-gtab="${key}" aria-selected="${garanti.tab === key}">${label}</button>`;
+  const pane = (key, html) => `<div class="g-pane" role="tabpanel" data-gpane="${key}"${garanti.tab === key ? "" : " hidden"}>${html}</div>`;
+  const timeline = dealTimeline(d.financing);
+  $("#gCompany").innerHTML = `<div class="g-company fade-in">${gHeader(d)}
+    <div class="tabs g-tabs" role="tablist" aria-label="Garantiunderlag">${tab("overview", "Behov och marknad")}${tab("owners", "Ägare och handel")}${tab("issues", "Emissioner och garantier")}</div>
+    ${pane("overview", gNeed(d) + gMarket(d))}
+    ${pane("owners", gOwners(d) + gShort(d) + gInsiders(d))}
+    ${pane("issues", `${timeline ? gCard("Tidslinje", timeline) : ""}${gFinancing(d)}<div id="gHistory">${gHistory(d)}</div>${gAuth(d)}${gWarrants(d)}`)}
+    ${upd}</div>`;
 }
 
 async function openGaranti(id, push = true) {

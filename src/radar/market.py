@@ -11,6 +11,7 @@ hämtas inte om förrän nästa dag. Varje bolag hämtas högst en gång per dag
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 import time
@@ -84,6 +85,16 @@ def _change_pct(points: list[dict], last: dict, months: int) -> float | None:
     return round(100 * (last["close"] / base - 1), 2) if base else None
 
 
+def weekly_series(points: list[dict], as_of: date) -> list[list]:
+    """Sista stängningskursen per vecka det senaste året: [[datum, kurs], ...] för kursdiagrammet."""
+    cutoff = (as_of - timedelta(days=366)).isoformat()
+    weeks: dict[tuple[int, int], list] = {}
+    for point in points:
+        if point["date"] > cutoff and point["close"] is not None:
+            weeks[tuple(date.fromisoformat(point["date"]).isocalendar()[:2])] = [point["date"], point["close"]]
+    return list(weeks.values())
+
+
 def summarize(points: list[dict], sek_per_unit: float | None = 1.0) -> dict:
     """Sammandrag ur dagspunkter. `sek_per_unit` omvandlar omsättning till SEK (None = okänd kurs)."""
     if not points:
@@ -107,7 +118,8 @@ def summarize(points: list[dict], sek_per_unit: float | None = 1.0) -> dict:
             "avg_daily_turnover_3m": round(turnover) if turnover is not None else None,
             "avg_daily_volume_3m": round(volume) if volume is not None else None,
             "high_52w": max(highs) if covered and highs else None,
-            "low_52w": min(lows) if covered and lows else None, "as_of": last["date"]}
+            "low_52w": min(lows) if covered and lows else None, "as_of": last["date"],
+            "series": json.dumps(weekly_series(points, as_of))}
 
 
 _DAY: str | None = None   # dagen som körningen gäller; tidsstämplar får samma dag som kontrollen jämför med
@@ -119,7 +131,7 @@ def _now() -> str:
 
 
 FIELDS = ("price", "price_change_1m_pct", "price_change_3m_pct", "price_change_12m_pct",
-          "avg_daily_turnover_3m", "avg_daily_volume_3m", "high_52w", "low_52w", "as_of")
+          "avg_daily_turnover_3m", "avg_daily_volume_3m", "high_52w", "low_52w", "as_of", "series")
 
 
 def store(connection: sqlite3.Connection, company_id: int, isin: str | None, *, order_book: str | None = None,

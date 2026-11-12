@@ -7,6 +7,7 @@ rapport för ett bolag. Allt som saknas skickas som None; inget hittas på.
 from __future__ import annotations
 
 import re
+import json
 import sqlite3
 from datetime import date, datetime, timezone
 
@@ -93,6 +94,10 @@ def market_block(cap_row: dict | None, history: dict | None, rates: dict[str, fl
     for field in ("price", "price_change_1m_pct", "price_change_3m_pct", "price_change_12m_pct",
                   "avg_daily_turnover_3m", "avg_daily_volume_3m", "high_52w", "low_52w", "as_of", "source"):
         block[field] = history.get(field)
+    try:   # veckokurser för kursdiagrammet: [[datum, kurs], ...]
+        block["series"] = json.loads(history.get("series") or "[]")
+    except ValueError:
+        block["series"] = []
     block["error"] = error
     return block
 

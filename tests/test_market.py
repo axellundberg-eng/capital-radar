@@ -119,3 +119,16 @@ def test_run_respects_limit(connection):
     counts = market.run(connection, None, limit=1, fetch=fake_fetch([]), sleep=lambda _: None, today=TODAY,
                         log=lambda _: None)
     assert counts["fetched"] + counts["failed"] == 1 and counts["remaining"] == 1
+
+
+def test_weekly_series_keeps_the_last_close_per_week_for_one_year():
+    import json
+    from datetime import date, timedelta
+
+    start = date(2025, 1, 6)                                    # en måndag
+    points = [{"date": (start + timedelta(days=i)).isoformat(), "close": 10 + i, "high": None, "low": None, "volume": 100}
+              for i in range(0, 500) if (start + timedelta(days=i)).weekday() < 5]
+    series = market.weekly_series(points, date.fromisoformat(points[-1]["date"]))
+    assert 52 <= len(series) <= 54 and series[-1] == [points[-1]["date"], points[-1]["close"]]
+    assert all(date.fromisoformat(day).weekday() == 4 for day, _ in series[:-1])       # veckans sista handelsdag
+    assert json.loads(market.summarize(points)["series"]) == series

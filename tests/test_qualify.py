@@ -275,3 +275,12 @@ def test_page_has_brand_header_insights_sorting_and_theme_script(client):
     assert client.get("/static/theme.js").status_code == 200
     script = client.get("/static/app.js").text
     assert "function cashChart" in script and "function exportCsv" in script
+
+
+def test_detail_has_recent_financing_and_page_has_chart_code(client):
+    detail = client.get("/api/companies/1").json()
+    assert isinstance(detail["recent_financing"], list)
+    html, script = client.get("/").text, client.get("/static/app.js").text
+    assert 'id="prospectMap"' in html
+    for name in ("prospectMap", "dealTimeline", "needWaterfall", "scoreBar", "burnBars", "priceChart"):
+        assert f"function {name}" in script, name

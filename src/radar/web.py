@@ -214,6 +214,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return JSONResponse({**item, "pdf_url": report["pdf_url"], "page_count": report["page_count"],
                              "periods": result.get("periods", []), "facts": facts,
                              "qualification": qualify(item, market, history, rates).to_dict(),
+                             "recent_financing": recent_financing(history, date.today().isoformat())[1],
                              "flag_text": {flag: FLAG_TEXT.get(flag, flag) for flag in item["flags"]}},
                             headers={"Cache-Control": "no-store"})
 
