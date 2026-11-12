@@ -4,12 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Capital Radar</title>
-  <link rel="stylesheet" href="static/styles.css?v=19">
+  <meta name="color-scheme" content="light dark">
+  <script src="static/theme.js?v=1"></script>
+  <link rel="stylesheet" href="static/styles.css?v=25">
 </head>
 <body>
   <header class="top">
-    <div class="brand">Capital Radar <span class="tag">ny kärna</span></div>
-    <div class="meta" id="meta">Läser underlag…</div>
+    <a class="brand" href="#lista" aria-label="Perplex Invest Capital Radar, till listan">
+      <svg class="logo" viewBox="0 0 40 30" aria-hidden="true">
+        <defs><linearGradient id="logoGradient" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#6cf2d6"/><stop offset="1" stop-color="#1c9c9a"/></linearGradient></defs>
+        <path d="M1 1h9l10 28h-9z" fill="url(#logoGradient)"/><path d="M16 1h9l10 28h-9z" fill="url(#logoGradient)"/>
+      </svg>
+      <span class="wordmark">PERPLEX INVEST</span>
+      <span class="product">Capital Radar</span>
+    </a>
+    <nav class="views" id="views" role="tablist" aria-label="Vy">
+      <button class="view active" data-view="list" role="tab" aria-selected="true">Lista <span class="cnt"></span></button>
+      <button class="view" data-view="prospects" role="tab" aria-selected="false">Prospekt <span class="cnt"></span></button>
+      <button class="view" data-view="garanti" role="tab" aria-selected="false">Garanti</button>
+    </nav>
+    <div class="top-right">
+      <span class="meta" id="meta">Läser underlag…</span>
+      <button type="button" class="icon-btn" id="themeToggle" aria-label="Byt mellan ljust och mörkt läge" title="Ljust eller mörkt läge">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 0 0 18V3z"/><circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
   </header>
 
   <main class="layout">
@@ -19,30 +39,27 @@
         <p>Runway räknas från idag: rapportens kassa minus burn sedan periodslut. Målgrupp: 3–9 månader.</p>
       </div>
 
-      <div class="views" id="views" role="tablist" aria-label="Vy">
-        <button class="view active" data-view="list" role="tab" aria-selected="true">Lista <span class="cnt"></span></button>
-        <button class="view" data-view="prospects" role="tab" aria-selected="false">Prospekt <span class="cnt"></span></button>
-        <button class="view" data-view="garanti" role="tab" aria-selected="false">Garanti</button>
-      </div>
-
       <div id="listView">
+      <div class="insights" id="insights" aria-label="Nyckeltal och genvägar"></div>
       <nav class="bands" id="bands" aria-label="Runway-grupper (flerval)"></nav>
       <div class="facets" id="facets" aria-label="Filter: bransch och markörer"></div>
 
       <div class="tools">
-        <input id="search" type="search" placeholder="Sök bolag" aria-label="Sök bolag">
+        <input id="search" type="search" placeholder="Sök bolag  ( / )" aria-label="Sök bolag">
+        <span class="count" id="resultCount" aria-live="polite"></span>
+        <button type="button" class="btn" data-export title="Laddar ned de bolag som visas som CSV för Excel">Exportera CSV</button>
       </div>
 
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Bolag</th>
-              <th class="num">Runway idag</th>
-              <th class="num">Burn / mån</th>
-              <th class="num">Kassa</th>
-              <th>Rapport</th>
-              <th>Varningar</th>
+              <th data-sort="name" tabindex="0" title="Sortera på bolagsnamn">Bolag</th>
+              <th class="num" data-sort="runway" tabindex="0" title="Sortera på runway">Runway idag</th>
+              <th class="num" data-sort="burn" tabindex="0" title="Sortera på burn">Burn / mån</th>
+              <th class="num" data-sort="cash" tabindex="0" title="Sortera på kassa">Kassa</th>
+              <th data-sort="report" tabindex="0" title="Sortera på rapportperiod">Rapport</th>
+              <th data-sort="flags" tabindex="0" title="Sortera på antal varningar">Varningar</th>
             </tr>
           </thead>
           <tbody id="rows"><tr class="skel"><td colspan="6"><span class="sk"></span></td></tr></tbody>
@@ -53,6 +70,7 @@
       <div id="prospectView" hidden>
         <p class="source">Bolag med runway under 9 månader och ingen annonserad emission, rankade efter prospektpoäng. Bolag med uttalat kapitalbehov (stämmobeslut, kallelse, plan, osäkerhet om fortsatt drift eller indirekt behov) visas överst. Bolag som tagit in kapital de senaste 4 månaderna ligger i en egen grupp sist. Pågående kapitalanskaffning visas separat längst ner. Marknadsvärde från Nasdaq; saknas det visas "okänt".</p>
         <div class="facets" id="pFacets" aria-label="Filter: bransch och markörer"></div>
+        <div class="tools"><button type="button" class="btn" data-export title="Laddar ned prospekten som visas som CSV för Excel">Exportera CSV</button></div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -114,6 +132,6 @@
     </aside>
   </main>
 
-  <script src="static/app.js?v=27" defer></script>
+  <script src="static/app.js?v=29" defer></script>
 </body>
 </html>

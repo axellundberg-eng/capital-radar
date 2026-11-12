@@ -1,16 +1,29 @@
+/* Perplex Invest: djup marinblå och mint ur varumärket. Ljust tema som standard, mörkt via systemet eller
+   knappen i sidhuvudet (data-theme på <html>, se theme.js). */
 :root {
-  --bg: #f6f5f1; --panel: #ffffff; --ink: #1d2433; --muted: #6b7280; --line: #e5e2da;
-  --accent: #1f4e8c; --urgent: #b42318; --target: #b54708; --watch: #2e6f40; --good: #2e6f40;
-  --shadow: 0 1px 2px rgba(20,25,40,.06), 0 4px 14px rgba(20,25,40,.06); --hover: rgba(31,78,140,.06); --sel: rgba(31,78,140,.10);
-  --urgent-bg: #fde8e7; --target-bg: #fff1dd; --watch-bg: #e6f2e9; --muted-bg: #efeee9;
+  --bg: #f2f5f7; --panel: #ffffff; --ink: #0b1f2e; --muted: #5a6b7b; --line: #dde5ea;
+  --accent: #0a7d76; --urgent: #b3261e; --target: #a85a00; --watch: #1e7a4c; --good: #0b7a5e;
+  --select: #0b7a5e; --select-bg: #dcf5ec;
+  --shadow: 0 1px 2px rgba(6,21,35,.05), 0 6px 20px rgba(6,21,35,.06); --hover: rgba(10,125,118,.06); --sel: rgba(10,125,118,.11);
+  --urgent-bg: #fde9e7; --target-bg: #fff0d9; --watch-bg: #e2f4ea; --muted-bg: #eaf0f3;
+  --brand-1: #04121f; --brand-2: #072338; --brand-3: #0c3d4c; --mint: #4fe3c6;
+  color-scheme: light;
   font-family: Inter, "Segoe UI", system-ui, sans-serif; color: var(--ink);
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #14171d; --panel: #1c2028; --ink: #e8eaf0; --muted: #9aa3b2; --line: #2c313b;
-    --accent: #8bb4f0; --urgent: #ff8a80; --target: #ffb36b; --watch: #7fd49a; --good: #7fd49a;
-    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3); --hover: rgba(139,180,240,.07); --sel: rgba(139,180,240,.14);
-    --urgent-bg: #3a1f1f; --target-bg: #3a2c1a; --watch-bg: #1d3325; --muted-bg: #262a33; }
+  :root:not([data-theme="light"]) { --bg: #061523; --panel: #0b2032; --ink: #e6eff4; --muted: #8fa5b5; --line: #1a3346;
+    --accent: #4fe3c6; --urgent: #ff8f85; --target: #ffbb6b; --watch: #6fdc9f; --good: #5fe6b8;
+    --select: #5fe6b8; --select-bg: #0f3a33;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35); --hover: rgba(79,227,198,.06); --sel: rgba(79,227,198,.12);
+    --urgent-bg: #3a1c22; --target-bg: #38290f; --watch-bg: #10332a; --muted-bg: #102a3d;
+    color-scheme: dark; }
 }
+:root[data-theme="dark"] { --bg: #061523; --panel: #0b2032; --ink: #e6eff4; --muted: #8fa5b5; --line: #1a3346;
+    --accent: #4fe3c6; --urgent: #ff8f85; --target: #ffbb6b; --watch: #6fdc9f; --good: #5fe6b8;
+    --select: #5fe6b8; --select-bg: #0f3a33;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35); --hover: rgba(79,227,198,.06); --sel: rgba(79,227,198,.12);
+    --urgent-bg: #3a1c22; --target-bg: #38290f; --watch-bg: #10332a; --muted-bg: #102a3d;
+  color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); }
 .top { display: flex; justify-content: space-between; align-items: center; gap: 16px;
@@ -373,3 +386,145 @@ tr.group-row small { display: inline; font-weight: 400; color: var(--muted); mar
 /* Kolumnerna får krympa under tabellens bredd: tabellen rullar i sidled i sin ruta i stället för att
    göra hela sidan bredare än skärmen (mobil). */
 .layout > * { min-width: 0; }
+
+
+/* ================= Perplex Invest-gränssnittet ================= */
+body { color: var(--ink); }
+a { text-underline-offset: 2px; }
+
+/* Sidhuvud: varumärkets marinblå med mintfärgad våg, i båda teman */
+.top { color: #fff; padding: 10px 24px; gap: 8px 20px; flex-wrap: wrap; border-bottom: 1px solid rgba(79,227,198,.28);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 80' preserveAspectRatio='none'%3E%3Cpath d='M0 52 C220 8 420 92 720 50 S1080 18 1200 44' fill='none' stroke='%234fe3c6' stroke-opacity='.28' stroke-width='1.5'/%3E%3Cpath d='M0 64 C260 28 460 102 760 60 S1090 38 1200 62' fill='none' stroke='%234fe3c6' stroke-opacity='.13'/%3E%3C/svg%3E") center / 100% 100% no-repeat,
+    radial-gradient(110% 220% at 100% 0%, rgba(79,227,198,.24) 0%, transparent 46%),
+    linear-gradient(100deg, var(--brand-1), var(--brand-2) 55%, var(--brand-3)); }
+.brand { display: inline-flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; font-weight: 500; letter-spacing: 0; }
+.logo { height: 22px; width: auto; flex: none; }
+.wordmark { letter-spacing: .26em; font-size: 15px; white-space: nowrap; }
+.product { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--mint); white-space: nowrap;
+  border-left: 1px solid rgba(255,255,255,.25); padding-left: 12px; }
+.top .views { margin: 0 0 0 8px; gap: 4px; }
+.top .view { background: transparent; border-color: transparent; color: rgba(255,255,255,.78); padding: 6px 14px; }
+.top .view:hover { background: rgba(255,255,255,.09); color: #fff; }
+.top .view.active { background: rgba(79,227,198,.16); border-color: rgba(79,227,198,.5); color: var(--mint); box-shadow: none; }
+.top .view .cnt { background: rgba(255,255,255,.13); color: rgba(255,255,255,.85); }
+.top .view.active .cnt { background: var(--mint); color: var(--brand-1); }
+.top-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.top .meta { color: rgba(255,255,255,.62); font-size: 12px; }
+.icon-btn { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.07); color: #fff;
+  transition: background-color var(--t) var(--ease), transform var(--t) var(--ease); }
+.icon-btn:hover { background: rgba(79,227,198,.2); transform: rotate(-20deg); }
+.top :focus-visible { outline-color: var(--mint); }
+
+/* Sidans ytor */
+.layout { max-width: 1560px; }
+.intro h1 { font-size: 22px; letter-spacing: -.01em; }
+.intro p { margin-bottom: 14px; }
+.table-wrap, .detail, .g-card { border-radius: 14px; }
+.detail { box-shadow: var(--shadow); top: 76px; max-height: calc(100vh - 96px); }
+th { text-transform: uppercase; letter-spacing: .05em; font-size: 11px; }
+tbody tr[data-id].selected { box-shadow: inset 3px 0 0 var(--accent); }
+.band { border-radius: 12px; }
+.band.on, .facet.on { background: var(--select-bg); border-color: var(--select); }
+.band.on { box-shadow: inset 0 0 0 1px var(--select); }
+.band.on strong, .band.on span, .facet.on, .facet.on small { color: var(--select); }
+.kpis div, .kpi-btn { border-radius: 12px; }
+::selection { background: var(--sel); }
+
+/* Nyckeltalskort */
+.insights { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
+.insight { position: relative; overflow: hidden; display: grid; gap: 2px; text-align: left; font: inherit; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px 12px 17px; cursor: pointer;
+  box-shadow: var(--shadow); transition: transform var(--t) var(--ease), border-color var(--t) var(--ease), background-color var(--t) var(--ease); }
+.insight::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: linear-gradient(var(--mint), var(--accent)); }
+.insight span { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.insight strong { font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.insight small { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.insight:hover { transform: translateY(-2px); border-color: var(--accent); }
+.insight:active { transform: translateY(0) scale(.99); }
+.insight.on { background: var(--select-bg); border-color: var(--select); }
+.insight.on strong, .insight.on span { color: var(--select); }
+.insights:empty { display: none; }
+
+/* Verktygsrad, knappar och sortering */
+.count { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.btn { font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 12px; cursor: pointer; white-space: nowrap;
+  transition: border-color var(--t) var(--ease), color var(--t) var(--ease), background-color var(--t) var(--ease); }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.small { padding: 5px 10px; font-size: 12px; }
+#prospectView .tools { justify-content: flex-end; }
+th[data-sort] { cursor: pointer; user-select: none; transition: color var(--t) var(--ease); }
+th[data-sort]:hover { color: var(--ink); }
+th[data-sort]::after { content: "↕"; margin-left: 5px; opacity: .35; font-size: 11px; }
+th[aria-sort="ascending"]::after { content: "↑"; opacity: 1; color: var(--accent); }
+th[aria-sort="descending"]::after { content: "↓"; opacity: 1; color: var(--accent); }
+th[aria-sort="ascending"], th[aria-sort="descending"] { color: var(--ink); }
+
+/* Bevakning och runway-stapel i tabellen */
+.star { font: inherit; font-size: 16px; line-height: 1.2; background: none; border: 0; padding: 0 8px 0 0; cursor: pointer;
+  color: var(--line); vertical-align: top; transition: color var(--t) var(--ease), transform var(--t) var(--ease); }
+.star:hover { color: #d99a00; transform: scale(1.2); }
+.star.on { color: #e0a100; }
+.rbar { display: block; width: 84px; height: 4px; margin: 5px 0 0 auto; border-radius: 999px; background: var(--muted-bg); overflow: hidden; }
+.rbar i { display: block; height: 100%; border-radius: 999px; background: var(--watch); }
+.rbar.band-3_9 i, .rbar.band-raising i { background: var(--target); }
+.rbar.band-under_3 i, .rbar.band-acute i, .rbar.band-exhausted i { background: var(--urgent); }
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+tbody.anim .rbar i { transform-origin: left; animation: grow 520ms var(--ease) both; }
+
+/* Detaljpanel: huvud, flikar och kassadiagram */
+.detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.detail-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.detail-head .star { font-size: 20px; }
+.tabs { position: sticky; top: -18px; z-index: 3; display: flex; gap: 2px; margin: 14px -18px 12px; padding: 4px 18px 0;
+  background: var(--panel); border-bottom: 1px solid var(--line); }
+.tab { font: inherit; font-size: 13px; font-weight: 600; color: var(--muted); background: none; border: 0; cursor: pointer;
+  border-bottom: 2px solid transparent; padding: 8px 10px; margin-bottom: -1px; transition: color var(--t) var(--ease), border-color var(--t) var(--ease); }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.tab small { font-weight: 600; font-size: 11px; background: var(--muted-bg); color: var(--muted); border-radius: 999px; padding: 0 6px; }
+[data-pane] > :first-child { margin-top: 0; }
+.cash-chart { margin: 0 0 12px; padding: 10px 12px 8px; border: 1px solid var(--line); border-radius: 12px;
+  background: linear-gradient(180deg, var(--hover), transparent 70%); }
+.cash-chart header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+.cash-chart header small { font-size: 11px; }
+.cash-chart header strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.cash-chart svg { display: block; width: 100%; height: auto; touch-action: pan-y; cursor: crosshair; }
+.cash-chart figcaption { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.cash-chart text { font-size: 10px; fill: var(--muted); }
+.cc-area { fill: var(--accent); opacity: .13; }
+.cc-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.cc-axis { stroke: var(--line); }
+.cc-today { stroke: var(--muted); stroke-dasharray: 3 3; }
+.cc-credit { stroke: var(--watch); stroke-width: 3; stroke-dasharray: 6 4; stroke-linecap: round; }
+.cc-dot { fill: var(--panel); stroke: var(--accent); stroke-width: 2; }
+.cc-zero { fill: var(--urgent); }
+.cc-cursor { stroke: var(--ink); opacity: .4; }
+@keyframes draw { from { stroke-dashoffset: 600; } to { stroke-dashoffset: 0; } }
+.fade-in .cc-line { stroke-dasharray: 600; animation: draw 700ms var(--ease) both; }
+
+/* Korten bryts efter listkolumnens bredd, inte fönstrets (detaljpanelen tar plats bredvid). */
+.list { container-type: inline-size; }
+@container (max-width: 780px) {
+  .insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1000px) {
+  .tabs { top: 0; }
+}
+@media (max-width: 720px) {
+  .top { padding: 10px 14px; }
+  .top .meta { display: none; }
+  .top .views { margin-left: 0; order: 3; width: 100%; }
+  .wordmark { font-size: 13px; letter-spacing: .2em; }
+  .insight strong { font-size: 22px; }
+}
+/* Stjärnan står på samma rad som bolagsnamnet även när texten under är lång. */
+td > .namecell { max-width: calc(100% - 30px); }
+tr.expandable td > .namecell { max-width: calc(100% - 52px); }
+/* Namnkolumnen får inte klämmas ihop av många sifferkolumner (prospekttabellerna). */
+#prospectView th:first-child, #listView th:first-child { min-width: 280px; }
+/* På mobil rullar sidhuvudet med sidan i stället för att ta en sjättedel av skärmen. */
+@media (max-width: 720px) { .top { position: static; } }

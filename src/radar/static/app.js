@@ -35,7 +35,14 @@ const garanti = { id: null, results: [], active: -1, timer: null, seq: 0, search
 const expandedProspects = new Set();
 // bands: valda runway-grupper (tom mängd = alla). facets: andra filterlagret, flerval per grupp.
 const state = { items: [], bands: new Set(["3_9"]), facets: { sector: new Set(), marker: new Set() }, query: "",
-  selected: null, overview: null, view: "list", prospects: null };
+  selected: null, overview: null, view: "list", prospects: null,
+  sort: { key: "runway", dir: 1 }, quick: null, tab: "overview" };
+// Webbläsarens lagring för bekvämligheter (bevakade bolag, tema). Sidan fungerar även utan den.
+const store = {
+  get(key, fallback) { try { const raw = localStorage.getItem(key); return raw == null ? fallback : JSON.parse(raw); } catch { return fallback; } },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* privat läge */ } },
+};
+const watch = new Set(store.get("radar.watch", []));
 const $ = (selector) => document.querySelector(selector);
 
 function escapeHtml(value) {
@@ -144,16 +151,175 @@ function pruneFacets() {
   state.bands = new Set([...state.bands].filter((key) => BANDS.some(([band]) => band === key && key !== "all")));
 }
 
+// Sortering: klick på en kolumnrubrik. Tomma värden hamnar alltid sist.
+const SORTS = {
+  name: (i) => i.name.toLowerCase(),
+  runway: (i) => (i.status !== "ok" ? null : i.cash_flow_positive ? Infinity : i.runway_today),
+  burn: (i) => (i.cash_flow_positive ? null : i.monthly_burn),
+  cash: (i) => i.cash,
+  report: (i) => i.period_end,
+  flags: (i) => i.flags.length,
+};
+const SORT_DEFAULT_DIR = { name: 1, runway: 1, burn: -1, cash: -1, report: -1, flags: -1 };
+
+function sorted(rows) {
+  const get = SORTS[state.sort.key] || SORTS.runway;
+  return [...rows].sort((a, b) => {
+    const x = get(a), y = get(b);
+    if (x == null || y == null) return (x == null) - (y == null);
+    return (x < y ? -1 : x > y ? 1 : 0) * state.sort.dir || a.name.localeCompare(b.name, "sv");
+  });
+}
+
+// Snabbfilter från nyckeltalskorten: bevakade bolag eller bolag som ändrats senaste veckan.
+function changedRecently(item) {
+  return Boolean(item.change && item.changed_at && (Date.now() - Date.parse(item.changed_at)) / 864e5 <= 7);
+}
+function quickMatch(item) {
+  return !state.quick || (state.quick === "watch" ? watch.has(item.id) : changedRecently(item));
+}
+
 function visible() {
   const q = state.query.trim().toLowerCase();
-  return pool().filter((item) => bandMatch(item) && facetMatch(item) && (!q || item.name.toLowerCase().includes(q)));
+  return sorted(pool().filter((item) => bandMatch(item) && facetMatch(item) && quickMatch(item)
+    && (!q || item.name.toLowerCase().includes(q))));
+}
+
+function starButton(item) {
+  const on = watch.has(item.id);
+  return `<button type="button" class="star${on ? " on" : ""}" data-star="${item.id}" aria-pressed="${on}" aria-label="Bevaka ${escapeHtml(item.name)}" title="${on ? "Sluta bevaka" : "Bevaka bolaget"}">★</button>`;
+}
+
+// Nyckeltalskort överst: genvägar till de vyer som oftast behövs.
+function renderInsights() {
+  const host = $("#insights");
+  if (!host) return;
+  const items = pool();
+  const need = state.prospects ? state.prospects.need.length
+    : items.filter((i) => ["3_9", "under_3", "acute"].includes(i.band) && i.need_level
+      && !(i.markers || []).some((m) => m.key === "recent_raise")).length;
+  const going = items.filter((i) => (i.markers || []).some((m) => m.key === "going_concern")).length;
+  const goingOn = state.facets.marker.size === 1 && state.facets.marker.has("going_concern");
+  const card = (key, label, value, sub, on) => `<button type="button" class="insight${on ? " on" : ""}" data-insight="${key}" aria-pressed="${on}">
+    <span>${label}</span><strong>${value}</strong><small>${sub}</small></button>`;
+  host.innerHTML = card("need", "Uttalat kapitalbehov", need, "prospekt med stämmobeslut, plan eller lån · visa →", false)
+    + card("going", "Osäkerhet om fortsatt drift", going, "enligt bolagens senaste rapport", goingOn)
+    + card("changed", "Ändrade senaste 7 dagarna", items.filter(changedRecently).length, "bytt grupp eller ny finansiering", state.quick === "changed")
+    + card("watch", "Bevakade", watch.size, watch.size ? "dina stjärnmärkta bolag" : "stjärnmärk bolag för att följa dem", state.quick === "watch");
 }
 
 function renderList() {
+  renderInsights();
   renderBands();
-  renderFacets($("#facets"), pool().filter(bandMatch));
+  renderFacets($("#facets"), pool().filter((item) => bandMatch(item) && quickMatch(item)));
   renderRows();
   syncHash();
+}
+
+// Exporterar det som visas (lista eller prospekt) som CSV för Excel (semikolon, decimalkomma).
+function exportCsv() {
+  const prospects = state.view === "prospects" && state.prospects;
+  const rows = prospects
+    ? [...state.prospects.need, ...state.prospects.items, ...state.prospects.recent].filter((i) => facetMatch(i))
+    : visible();
+  const num = (v) => (v == null ? "" : String(Math.round(v * 10) / 10).replace(".", ","));
+  const bandLabel = Object.fromEntries(BANDS.map(([key, label]) => [key, label]));
+  const head = ["Bolag", "Lista", "Bransch", "Grupp", "Runway idag (mån)", "Burn per månad", "Kassa", "Valuta",
+    "Rapportperiod", "Markörer", "Poäng", "Kapitalbehov (SEK)", "Marknadsvärde (SEK)"];
+  const lines = rows.map((i) => [i.name, i.market || "", i.sector?.label || "", bandLabel[i.band] || i.band,
+    num(i.runway_today), num(i.monthly_burn), num(i.cash), i.currency || "SEK", date(i.period_end),
+    (i.markers || []).map((m) => m.label).join(", "), i.score ?? "", num(i.capital_need), num(i.market_cap)]);
+  const cell = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const csv = "\ufeff" + [head, ...lines].map((r) => r.map(cell).join(";")).join("\r\n");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  link.download = `capital-radar-${prospects ? "prospekt" : "lista"}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+// ---------- Kassadiagram i detaljpanelen ----------
+const MONTH_MS = 30.4375 * 864e5;
+const CHART = { W: 400, H: 150, L: 6, R: 6, T: 18, B: 24 };
+function monthLabel(t) { return new Date(t).toLocaleDateString("sv-SE", { month: "short", year: "numeric" }); }
+
+// Kassan från rapporten till idag och framåt tills den är slut, vid oförändrad burn.
+function cashChart(d) {
+  if (d.status !== "ok" || d.cash_flow_positive || !(d.monthly_burn > 0) || d.cash == null || !d.period_end) return "";
+  const { W, H, L, R, T, B } = CHART;
+  const start = Date.parse(d.period_end), now = Math.max(Date.now(), start);
+  const today = d.cash_today ?? Math.max(0, d.cash - d.monthly_burn * (d.months_since_report || 0));
+  const left = d.runway_cash_today ?? today / d.monthly_burn;
+  const points = today > 0
+    ? [[start, d.cash], [now, today], [now + left * MONTH_MS, 0]]
+    : [[start, d.cash], [Math.min(now, start + (d.cash / d.monthly_burn) * MONTH_MS), 0], [now, 0]];
+  const zero = today > 0 ? points[2][0] : points[1][0];
+  const credit = d.available_credit > 0 && d.runway_today > left ? now + d.runway_today * MONTH_MS : null;
+  const end = Math.max(credit || 0, zero, now) + MONTH_MS;
+  const top = Math.max(d.cash, today, 1);
+  const x = (t) => (L + ((W - L - R) * (t - start)) / (end - start)).toFixed(1);
+  const y = (v) => (T + (H - T - B) * (1 - v / top)).toFixed(1);
+  const line = points.map(([t, v]) => `${x(t)},${y(v)}`).join(" ");
+  const base = y(0);
+  const zeroText = today > 0 ? `Kassan slut ≈ ${monthLabel(zero)}` : `Kassan slut sedan ${monthLabel(zero)}`;
+  const zx = Number(x(zero));
+  const anchor = zx > W * 0.72 ? "end" : zx < W * 0.28 ? "start" : "middle";
+  const data = escapeHtml(JSON.stringify({ start, end, points, cur: d.currency || "SEK" }));
+  return `<figure class="cash-chart" data-chart="${data}">
+    <header><span>Kassa över tid <small>vid oförändrad burn</small></span><strong class="chart-read">${zeroText}</strong></header>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Kassan var ${msek(d.cash, d.currency)} den ${date(d.period_end)} och är cirka ${msek(today, d.currency)} idag. ${zeroText}.">
+      <polygon class="cc-area" points="${x(start)},${base} ${line} ${x(points[2][0])},${base}"/>
+      <line class="cc-axis" x1="${L}" x2="${W - R}" y1="${base}" y2="${base}"/>
+      ${credit ? `<line class="cc-credit" x1="${x(zero)}" x2="${x(credit)}" y1="${base}" y2="${base}"><title>Outnyttjad kredit räcker till ${monthLabel(credit)}</title></line>` : ""}
+      <line class="cc-today" x1="${x(now)}" x2="${x(now)}" y1="${T - 5}" y2="${base}"/>
+      <polyline class="cc-line" points="${line}"/>
+      <circle class="cc-dot" cx="${x(start)}" cy="${y(d.cash)}" r="3.5"/>
+      <circle class="cc-dot" cx="${x(now)}" cy="${y(today)}" r="3.5"/>
+      <circle class="cc-zero" cx="${x(zero)}" cy="${base}" r="4"/>
+      <line class="cc-cursor" x1="0" x2="0" y1="${T - 5}" y2="${base}" hidden/>
+      ${zx > 90 ? `<text x="${L}" y="${H - 6}">${monthLabel(start)}</text>` : ""}
+      <text x="${x(now)}" y="9" text-anchor="middle">Idag</text>
+      <text x="${zx}" y="${H - 6}" text-anchor="${anchor}">${monthLabel(zero)}</text>
+    </svg>
+    ${credit ? `<figcaption>Streckad linje: outnyttjad kredit räcker till ${monthLabel(credit)}.</figcaption>` : ""}</figure>`;
+}
+
+// Pekaren över diagrammet visar beräknad kassa för den månaden.
+function chartHover(event) {
+  const svg = event.target.closest?.(".cash-chart svg");
+  if (!svg) return;
+  const figure = svg.parentElement, data = JSON.parse(figure.dataset.chart), box = svg.getBoundingClientRect();
+  const inner = CHART.W - CHART.L - CHART.R;
+  const fx = Math.min(1, Math.max(0, (((event.clientX - box.left) / box.width) * CHART.W - CHART.L) / inner));
+  const t = data.start + fx * (data.end - data.start);
+  let value = 0;
+  for (let i = 0; i < data.points.length - 1; i += 1) {
+    const [t0, v0] = data.points[i], [t1, v1] = data.points[i + 1];
+    if (t >= t0 && t <= t1) { value = t1 === t0 ? v1 : v0 + ((v1 - v0) * (t - t0)) / (t1 - t0); break; }
+  }
+  const cursor = svg.querySelector(".cc-cursor"), cx = CHART.L + fx * inner;
+  cursor.removeAttribute("hidden");
+  cursor.setAttribute("x1", cx);
+  cursor.setAttribute("x2", cx);
+  const read = figure.querySelector(".chart-read");
+  read.dataset.rest ??= read.textContent;
+  read.textContent = `${monthLabel(t)}: ${msek(value, data.cur)}`;
+}
+function chartLeave(event) {
+  const svg = event.target.closest?.(".cash-chart svg");
+  if (!svg || event.relatedTarget?.closest?.(".cash-chart svg") === svg) return;
+  svg.querySelector(".cc-cursor").setAttribute("hidden", "");
+  const read = svg.parentElement.querySelector(".chart-read");
+  if (read.dataset.rest) read.textContent = read.dataset.rest;
+}
+
+// Tunn stapel under runway-talet: andel av 18 månader, färgad efter grupp.
+function runwayBar(item) {
+  if (item.status !== "ok" || item.cash_flow_positive || item.runway_today == null) return "";
+  const share = Math.max(3, Math.min(100, (item.runway_today / 18) * 100));
+  return `<span class="rbar band-${item.band}" aria-hidden="true"><i style="width:${share.toFixed(0)}%"></i></span>`;
 }
 
 // Urvalet sparas i adressen (#lista?band=3_9,under_3&bransch=medtech&markor=egm_called) så att det kan delas.
@@ -237,10 +403,10 @@ function runwayCell(item) {
   const recent = item.recent_runway_today != null
     ? `<small title="I senaste periodens takt">${months(item.recent_runway_today)} i senaste takt</small>` : "";
   if (item.band === "exhausted") return `<span class="pill band-exhausted" title="Kassan borde vara slut sedan rapporten">Slut?</span>${recent}${signalPill(item)}`;
-  if (item.band === "acute") return `<span class="pill band-acute" title="${ACUTE_TEXT}">${months(item.runway_today)}</span><small>Akut: under 1 mån</small>${recent}${proForma(item)}${signalPill(item)}${creditNote(item)}`;
+  if (item.band === "acute") return `<span class="pill band-acute" title="${ACUTE_TEXT}">${months(item.runway_today)}</span>${runwayBar(item)}<small>Akut: under 1 mån</small>${recent}${proForma(item)}${signalPill(item)}${creditNote(item)}`;
   const raise = item.band === "raising" ? '<small><span class="pill raise">Pågående kapitalanskaffning</span></small>' : "";
   const pill = item.band === "raising" ? "band-under_3" : `band-${item.band}`;
-  return `<span class="pill ${pill}">${months(item.runway_today)}</span>${recent}${proForma(item)}${raise}${signalPill(item)}${creditNote(item)}`;
+  return `<span class="pill ${pill}">${months(item.runway_today)}</span>${runwayBar(item)}${recent}${proForma(item)}${raise}${signalPill(item)}${creditNote(item)}`;
 }
 
 // Runway idag inkluderar outnyttjad kreditlinje; här visas hur mycket som är kassan utan kredit.
@@ -252,7 +418,7 @@ function creditNote(item) {
 // Flerval: klick väljer till eller bort en grupp; "Alla" tömmer valet. Antalen följer bransch och markörer.
 function renderBands() {
   const counts = {};
-  const matching = pool().filter((item) => facetMatch(item));
+  const matching = pool().filter((item) => facetMatch(item) && quickMatch(item));
   matching.forEach((item) => { counts[item.band] = (counts[item.band] || 0) + 1; });
   $("#bands").innerHTML = BANDS.map(([key, label, hint, tone]) => {
     const count = key === "all" ? matching.length : (counts[key] || 0);
@@ -273,18 +439,24 @@ function renderRows() {
   const rows = visible();
   $("#rows").innerHTML = rows.length ? rows.map((item) => `
     <tr data-id="${item.id}" class="${state.selected === item.id ? "selected" : ""}" tabindex="0">
-      <td><strong>${escapeHtml(item.name)}</strong>${changeBadge(item)}<small>${escapeHtml(item.market || "")}${sectorText(item)}</small>${chips(item)}</td>
+      <td>${starButton(item)}<span class="namecell"><strong>${escapeHtml(item.name)}</strong>${changeBadge(item)}<small>${escapeHtml(item.market || "")}${sectorText(item)}</small>${chips(item)}</span></td>
       <td class="num">${runwayCell(item)}</td>
       <td class="num">${item.cash_flow_positive ? "—" : msek(item.monthly_burn, item.currency)}</td>
       <td class="num">${msek(item.cash, item.currency)}</td>
       <td>${date(item.period_end)}<small>${months(item.months_since_report)} sedan</small></td>
       <td>${item.flags.length ? `<span class="warn" title="${escapeHtml(item.flags.map((f) => state.overview?.flag_text?.[f] || f).join(", "))}">${item.flags.length} ⚠</span>` : ""}</td>
-    </tr>`).join("") : `<tr><td colspan="6" class="empty">${state.query.trim()
+    </tr>`).join("") : `<tr><td colspan="6" class="empty">${state.quick === "watch" && !watch.size
+    ? "Du bevakar inga bolag än. Klicka på stjärnan vid ett bolag för att följa det."
+    : state.query.trim()
     ? `Inga bolag matchar "${escapeHtml(state.query.trim())}" i den här gruppen. Rensa sökningen eller välj <strong>Alla</strong> ovan.`
     : FACETS.some((facet) => state.facets[facet].size)
       ? "Inga bolag matchar filtren i de valda grupperna. Välj fler grupper eller rensa filtren."
       : "Inga bolag i de valda grupperna. Välj fler runway-grupper ovan."}</td></tr>`;
   $("#rows").classList.add("anim");
+  document.querySelectorAll("#listView th[data-sort]").forEach((th) => th.setAttribute("aria-sort",
+    th.dataset.sort === state.sort.key ? (state.sort.dir > 0 ? "ascending" : "descending") : "none"));
+  const count = $("#resultCount");
+  if (count) count.textContent = `${rows.length} bolag`;
   updateTabs();
 }
 
@@ -318,9 +490,9 @@ function prospectRow(item, expandable) {
   const aria = expandable ? ` aria-expanded="${open}"` : "";
   return `
     <tr data-id="${item.id}" class="${state.selected === item.id ? "selected" : ""}${expandable ? " expandable" : ""}${open ? " open" : ""}" tabindex="0"${aria}>
-      <td>${chev}<span class="namecell"><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.market || "")}</small>${nextReport(item)}</span></td>
+      <td>${chev}${starButton(item)}<span class="namecell"><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.market || "")}${sectorText(item)}</small>${nextReport(item)}</span></td>
       <td class="num"><span class="score ${scoreClass(item.score)}" title="${escapeHtml(item.summary)}">${item.score}</span></td>
-      <td class="num"><span class="pill band-${item.band}">${months(item.runway_today)}</span>${proForma(item)}${signalPill(item)}</td>
+      <td class="num"><span class="pill band-${item.band}">${months(item.runway_today)}</span>${runwayBar(item)}${proForma(item)}${signalPill(item)}</td>
       <td class="num">${msek(item.capital_need)}</td>
       <td class="num">${item.market_cap ? msek(item.market_cap) : "okänt"}</td>
       <td class="num">${pct(item.share)}</td>
@@ -501,6 +673,7 @@ async function loadProspects() {
     const data = await api("api/prospects");
     state.prospects = { need: data.need || [], items: data.items, recent: data.recent || [], raising: data.raising || [], structural: data.structural || [] };
     renderProspects();
+    renderInsights();
   } catch (error) {
     $("#prospectRows").innerHTML = `<tr><td colspan="8" class="empty">Prospekten kunde inte läsas (${escapeHtml(error.message)}). Ladda om sidan för att försöka igen.</td></tr>`;
     $("#structuralRows").innerHTML = "";
@@ -631,10 +804,19 @@ function renderDetail(d) {
       <div class="wide proforma-kpi"><span>Pro forma runway</span><strong>${months(d.runway_pro_forma)}</strong>
         <small>om säkrad finansiering${d.secured_financing != null ? ` (${msek(d.secured_financing, d.currency)})` : ""} kommer in</small></div>` : "";
   const nextRep = d.next_report ? `<p class="source">Nästa rapport: ${escapeHtml(date(d.next_report.date))}${d.next_report.title ? ` (${escapeHtml(d.next_report.title)})` : ""}</p>` : "";
+  const events = (d.financing_events || []).length + (d.structural_events || []).length;
+  const tab = (key, label, extra = "") => `<button type="button" class="tab" role="tab" data-tab="${key}" aria-selected="${state.tab === key}">${label}${extra}</button>`;
+  const pane = (key, html) => `<div data-pane="${key}" role="tabpanel"${state.tab === key ? "" : " hidden"}>${html}</div>`;
   $("#detail").innerHTML = `<div class="fade-in">
     <div class="detail-head">
-      <h2>${escapeHtml(d.name)}</h2>
-      <span>${escapeHtml(d.market || "")} ${d.segment ? "· " + escapeHtml(d.segment) : ""}${sectorText(d)}</span>
+      <div>
+        <h2>${escapeHtml(d.name)}</h2>
+        <span>${escapeHtml(d.market || "")} ${d.segment ? "· " + escapeHtml(d.segment) : ""}${sectorText(d)}</span>
+      </div>
+      <div class="detail-actions">
+        ${starButton(d)}
+        <button type="button" class="btn small" data-open-garanti="${d.id}" title="Marknadsdata, ägare, insynshandel och garantihistorik">Garantivy →</button>
+      </div>
     </div>
     <div class="kpis">
       <div><span>Runway idag</span><strong class="band-${d.band}">${d.cash_flow_positive ? "Positivt" : months(d.runway_today)}</strong></div>
@@ -647,21 +829,25 @@ function renderDetail(d) {
         "Lån, brygglån, konvertibler och utnyttjad kredit efter rapporten, minus återbetalningar. Klicka för affärerna.")}${pro}
     </div>
     <div id="capitalDetail" class="capital-detail" aria-live="polite"></div>
-    ${nextRep}
-    ${signalSection(d)}
-    ${markersSection(d)}
-    <p class="explain">${explanation(d)}${financingNote(d)}</p>
-    ${flags ? `<ul class="flags">${flags}</ul>` : ""}
-    ${qualificationSection(d)}
-    ${structuralSection(d)}
-    ${afterPeriodSection(d)}
-    ${financingSection(d)}
-    <h3>Perioder</h3>
-    <table class="mini"><thead><tr><th>Period</th><th class="num">Löpande</th><th class="num">Investeringar</th><th class="num">Burn / mån</th></tr></thead>
-      <tbody>${periods || '<tr><td colspan="4">Inga perioder</td></tr>'}</tbody></table>
-    <h3>Källor i rapporten</h3>
-    <p class="source">${escapeHtml(d.report_title)} · publicerad ${date(d.published_at)} · ${pdfLink(d)}</p>
-    <ul class="facts">${facts}</ul></div>`;
+    <div class="tabs" role="tablist" aria-label="Bolagets underlag">
+      ${tab("overview", "Översikt")}${tab("financing", "Finansiering", events ? ` <small>${events}</small>` : "")}${tab("sources", "Underlag")}
+    </div>
+    ${pane("overview", `${cashChart(d)}
+      ${nextRep}
+      ${signalSection(d)}
+      ${markersSection(d)}
+      <p class="explain">${explanation(d)}${financingNote(d)}</p>
+      ${flags ? `<ul class="flags">${flags}</ul>` : ""}
+      ${qualificationSection(d)}`)}
+    ${pane("financing", `${structuralSection(d)}
+      ${afterPeriodSection(d)}
+      ${financingSection(d)}`)}
+    ${pane("sources", `<h3>Perioder</h3>
+      <table class="mini"><thead><tr><th>Period</th><th class="num">Löpande</th><th class="num">Investeringar</th><th class="num">Burn / mån</th></tr></thead>
+        <tbody>${periods || '<tr><td colspan="4">Inga perioder</td></tr>'}</tbody></table>
+      <h3>Källor i rapporten</h3>
+      <p class="source">${escapeHtml(d.report_title)} · publicerad ${date(d.published_at)} · ${pdfLink(d)}</p>
+      <ul class="facts">${facts}</ul>`)}</div>`;
 }
 
 async function select(id) {
@@ -693,9 +879,61 @@ async function load() {
   }
 }
 
+function applyTheme(mode) {
+  document.documentElement.dataset.theme = mode;
+  try { localStorage.setItem("radar.theme", mode); } catch { /* privat läge */ }
+}
+function currentTheme() {
+  return document.documentElement.dataset.theme
+    || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+}
+
+document.addEventListener("pointermove", chartHover);
+document.addEventListener("pointerout", chartLeave);
 document.addEventListener("click", (event) => {
   const capital = event.target.closest("[data-capital]");
   if (capital) { toggleCapital(capital); return; }
+  if (event.target.closest("#themeToggle")) { applyTheme(currentTheme() === "dark" ? "light" : "dark"); return; }
+  if (event.target.closest("[data-export]")) { exportCsv(); return; }
+  const star = event.target.closest("[data-star]");
+  if (star) {
+    const id = Number(star.dataset.star);
+    if (watch.has(id)) watch.delete(id); else watch.add(id);
+    store.set("radar.watch", [...watch]);
+    document.querySelectorAll(`[data-star="${id}"]`).forEach((button) => {
+      button.classList.toggle("on", watch.has(id));
+      button.setAttribute("aria-pressed", watch.has(id));
+    });
+    if (state.quick === "watch") renderList(); else renderInsights();
+    return;
+  }
+  const tabButton = event.target.closest("[data-tab]");
+  if (tabButton) {
+    state.tab = tabButton.dataset.tab;
+    document.querySelectorAll("#detail [data-tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === state.tab));
+    document.querySelectorAll("#detail [data-pane]").forEach((p) => { p.hidden = p.dataset.pane !== state.tab; });
+    return;
+  }
+  const garantiButton = event.target.closest("[data-open-garanti]");
+  if (garantiButton) { location.hash = `#garanti/${garantiButton.dataset.openGaranti}`; return; }
+  const insight = event.target.closest("[data-insight]");
+  if (insight) {
+    const key = insight.dataset.insight;
+    if (key === "need") { setView("prospects"); return; }
+    if (key === "going") {
+      const on = state.facets.marker.size === 1 && state.facets.marker.has("going_concern");
+      state.facets.marker = new Set(on ? [] : ["going_concern"]);
+      if (!on) { state.bands.clear(); state.quick = null; }
+    } else {
+      state.quick = state.quick === key ? null : key;
+      if (state.quick) state.bands.clear();
+    }
+    renderList();
+    renderProspects(false);
+    return;
+  }
+  const sortHead = event.target.closest("#listView th[data-sort]");
+  if (sortHead) { sortBy(sortHead.dataset.sort); return; }
   const viewButton = event.target.closest("[data-view]");
   if (viewButton) { setView(viewButton.dataset.view); return; }
   const bandButton = event.target.closest("[data-band]");
@@ -730,8 +968,28 @@ document.addEventListener("click", (event) => {
   const row = event.target.closest("tr[data-id]");
   if (row) select(Number(row.dataset.id));
 });
+function sortBy(key) {
+  state.sort = state.sort.key === key ? { key, dir: -state.sort.dir } : { key, dir: SORT_DEFAULT_DIR[key] || 1 };
+  renderRows();
+}
+
 document.addEventListener("keydown", (event) => {
+  // "/" hoppar till sökrutan; pil upp och ned flyttar mellan rader; Enter öppnar bolaget.
+  if (event.key === "/" && !event.target.closest?.("input, textarea")) {
+    const field = state.view === "garanti" ? $("#gSearch") : state.view === "list" ? $("#search") : null;
+    if (field) { event.preventDefault(); field.focus(); }
+    return;
+  }
+  const head = event.target.closest?.("#listView th[data-sort]");
+  if (head && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); sortBy(head.dataset.sort); return; }
+  if (event.target.closest?.("button, a, input")) return;
   const row = event.target.closest?.("tr[data-id]");
+  if (row && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+    let next = row;
+    do { next = event.key === "ArrowDown" ? next.nextElementSibling : next.previousElementSibling; } while (next && !next.dataset.id);
+    if (next) { event.preventDefault(); next.focus(); }
+    return;
+  }
   if (!row || event.key !== "Enter") return;
   const id = Number(row.dataset.id);
   if (row.closest("#prospectRows")) toggleProspect(id);

@@ -265,3 +265,13 @@ def test_prospects_put_recently_funded_last_and_stated_need_first(tmp_path):
     assert [i["name"] for i in data["recent"]] == ["Finansierat AB"]
     funded = data["recent"][0]
     assert next(c for c in funded["checks"] if c["key"] == "no_raise")["status"] == "fail"
+
+
+def test_page_has_brand_header_insights_sorting_and_theme_script(client):
+    html = client.get("/").text
+    for part in ('id="insights"', 'id="themeToggle"', 'data-sort="runway"', "data-export", "PERPLEX INVEST",
+                 "static/theme.js"):
+        assert part in html, part
+    assert client.get("/static/theme.js").status_code == 200
+    script = client.get("/static/app.js").text
+    assert "function cashChart" in script and "function exportCsv" in script
