@@ -204,7 +204,7 @@ def check_quality(item: dict, cap: float | None) -> Check:
 
 def check_capital_need(item: dict) -> Check:
     """Uttalat kapitalbehov (markers.py): full poäng för capital, halv för half."""
-    weight, label = WEIGHTS["capital_need"], "Uttalat kapitalbehov"
+    weight, label = WEIGHTS["capital_need"], "Tecken på kapitalbehov"
     markers = item.get("markers") or []
     strong = [m["label"] for m in markers if m.get("tier") == "capital"]
     weak = [m["label"] for m in markers if m.get("tier") == "half"]

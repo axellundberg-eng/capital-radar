@@ -63,6 +63,7 @@ function date(value) { return value ? String(value).slice(0, 10) : "—"; }
 
 async function api(path) {
   const response = await fetch(path, { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (response.status === 401) { location.replace("login"); throw new Error("inloggning krävs"); }
   if (!response.ok) throw new Error(`API ${response.status}`);
   return response.json();
 }
@@ -100,7 +101,7 @@ function chips(item) {
 // ---------- Filter: runway-grupper (lager 1) och bransch/markörer (lager 2), båda med flerval ----------
 const FACETS = ["sector", "marker"];
 const FACET_LABEL = { sector: "Bransch", marker: "Markörer" };
-const TIER_LABEL = { capital: "Kapitalbehov", half: "Indirekt kapitalbehov", context: "Sammanhang" };
+const TIER_LABEL = { capital: "Uttalat kapitalbehov", half: "Indirekt kapitalbehov", context: "Sammanhang" };
 
 function bandMatch(item) { return !state.bands.size || state.bands.has(item.band); }
 
@@ -202,8 +203,8 @@ function renderInsights() {
   const goingOn = state.facets.marker.size === 1 && state.facets.marker.has("going_concern");
   const card = (key, label, value, sub, on) => `<button type="button" class="insight${on ? " on" : ""}" data-insight="${key}" aria-pressed="${on}">
     <span>${label}</span><strong>${value}</strong><small>${sub}</small></button>`;
-  host.innerHTML = card("need", "Uttalat kapitalbehov", need, "prospekt med stämmobeslut, plan eller lån · visa →", false)
-    + card("going", "Osäkerhet om fortsatt drift", going, "enligt bolagens senaste rapport", goingOn)
+  host.innerHTML = card("need", "Tecken på kapitalbehov", need, "prospekt med stämmobeslut, plan, rapportvarning eller lån · visa →", false)
+    + card("going", "Finansiering krävs", going, "enligt bolagens senaste rapport", goingOn)
     + card("changed", "Ändrade senaste 7 dagarna", items.filter(changedRecently).length, "bytt grupp eller ny finansiering", state.quick === "changed")
     + card("watch", "Bevakade", watch.size, watch.size ? "dina stjärnmärkta bolag" : "stjärnmärk bolag för att följa dem", state.quick === "watch");
 }
@@ -370,7 +371,7 @@ function prospectMap(groups) {
       ${grid}${dots}
       <text x="${(L + W - R) / 2}" y="${H - 3}" text-anchor="middle">Runway idag, månader</text>
     </svg>
-    <div class="viz-legend"><span><i class="need"></i>Uttalat kapitalbehov</span><span><i class="other"></i>Övriga prospekt</span><span><i class="recent"></i>Nyligen finansierade</span>${missing ? `<span>${missing} bolag utan känt börsvärde visas inte</span>` : ""}</div>
+    <div class="viz-legend"><span><i class="need"></i>Tecken på kapitalbehov</span><span><i class="other"></i>Övriga prospekt</span><span><i class="recent"></i>Nyligen finansierade</span>${missing ? `<span>${missing} bolag utan känt börsvärde visas inte</span>` : ""}</div>
   </figure>`;
 }
 
@@ -634,7 +635,7 @@ function readHash() {
 const SIGNAL = {
   stamma_issue: ["Stämman har beslutat om emission", "raise"],
   egm_called: ["Kallelse till extra stämma om emission", "raise"],
-  going_concern: ["Osäkerhet om fortsatt drift", "raise"],
+  going_concern: ["Finansiering krävs enligt rapport", "raise"],
   plan: ["Planerad kapitalanskaffning", "raise"],
   evaluating: ["Utvärderar finansiering", "raise soft"],
 };
@@ -657,7 +658,7 @@ function signalSection(d) {
     : s.kind === "egm_called"
       ? "Bolaget har kallat till extra bolagsstämma med ett emissionsärende på dagordningen. Ingen genomförd emission har registrerats efter kallelsen."
     : s.kind === "going_concern"
-      ? "Senaste rapporten anger väsentlig osäkerhet om fortsatt drift: bolaget behöver ny finansiering."
+      ? "Senaste rapporten säger att verksamheten kräver ny finansiering för att fortsätta (revisorns eller styrelsens formulering: väsentlig osäkerhet om fortsatt drift)."
     : s.kind === "plan"
       ? `Bolaget har sagt att det ska ta in kapital${s.timing ? ` (${escapeHtml(s.timing)})` : ""}, men ingen emission är annonserad.`
       : "Bolaget säger att det utvärderar ny finansiering. Ingen emission är annonserad.";
@@ -933,7 +934,7 @@ function renderProspects(animate = true) {
   const rows = (list) => list.map((item) => prospectRow(item, true) + (expandedProspects.has(item.id) ? prospectDetail(item) : "")).join("");
   const group = (title, text) => `<tr class="group-row"><td colspan="8">${title}<small>${text}</small></td></tr>`;
   $("#prospectRows").innerHTML = need.length || items.length || recent.length
-    ? (need.length ? group("Uttalat kapitalbehov", `${need.length} bolag med stämmobeslut, kallelse, plan, osäkerhet om fortsatt drift eller indirekt behov`) + rows(need) : "")
+    ? (need.length ? group("Tecken på kapitalbehov", `${need.length} bolag med stämmobeslut, kallelse, plan, finansieringsbehov enligt rapport eller indirekt behov`) + rows(need) : "")
       + (need.length && items.length ? group("Övriga prospekt", `${items.length} bolag`) : "") + rows(items)
       + (recent.length ? group("Nyligen finansierade", `${recent.length} bolag som tagit in kapital de senaste 4 månaderna: troligen inget nära behov`) + rows(recent) : "")
     : `<tr><td colspan="8" class="empty">${none || "Inga prospekt just nu. Bolag hamnar här när runway understiger 9 månader utan annonserad emission. Se Lista för alla bolag."}</td></tr>`;
@@ -1191,6 +1192,7 @@ document.addEventListener("pointerout", chartLeave);
 document.addEventListener("click", (event) => {
   const capital = event.target.closest("[data-capital]");
   if (capital) { toggleCapital(capital); return; }
+  if (event.target.closest("#logoutBtn")) { fetch("logout", { method: "POST" }).finally(() => location.replace("login")); return; }
   if (event.target.closest("#themeToggle")) { applyTheme(currentTheme() === "dark" ? "light" : "dark"); return; }
   if (event.target.closest("[data-export]")) { exportCsv(); return; }
   const star = event.target.closest("[data-star]");

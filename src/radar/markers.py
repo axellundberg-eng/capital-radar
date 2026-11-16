@@ -2,7 +2,7 @@
 
 Tre nivåer:
 - `capital`: uttalat kapitalbehov. Ger full poäng i prospektpoängen och placerar bolaget i sektionen
-  "Uttalat kapitalbehov" på prospektsidan.
+  "Tecken på kapitalbehov" på prospektsidan.
 - `half`: indirekt kapitalbehov (lån som förfaller, brygglån, teckningsoptioner som snart löses).
   Ger halv poäng och placerar också bolaget i sektionen.
 - `context`: visas och går att filtrera på, men påverkar inte poängen.
@@ -25,7 +25,7 @@ MARKERS = (
     ("stamma_issue", "Stämmobeslut om emission", "capital"),
     ("egm_called", "Kallelse till extra stämma", "capital"),
     ("plan", "Planerad kapitalanskaffning", "capital"),
-    ("going_concern", "Osäkerhet om fortsatt drift", "capital"),
+    ("going_concern", "Finansiering krävs enligt rapport", "capital"),
     ("debt_due", "Lån förfaller före kassan räcker", "half"),
     ("bridge_loan", "Utestående brygglån", "half"),
     ("to_window", "TO-period inom 90 dagar", "half"),

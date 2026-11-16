@@ -12,11 +12,11 @@ import sqlite3
 from datetime import date
 from importlib import resources
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__
+from . import __version__, auth
 from .db import connect
 from .authorizations import latest as latest_authorizations
 from .calendar import next_report
@@ -159,6 +159,63 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def db() -> sqlite3.Connection:
         return connect(settings.db_path)
+
+    # ---- PIN-inloggning (auth.py): allt utom /health, /login och inloggningssidans egna resurser kräver kaka ----
+    key = auth.secret(settings.db_path.parent)
+    throttle = auth.Throttle()
+    open_paths = ("/health", "/login")
+
+    def local_path(request: Request) -> str:
+        path, root = request.url.path, request.scope.get("root_path", "")
+        return path[len(root):] if root and path.startswith(root) else path
+
+    def client_id(request: Request) -> str:
+        forwarded = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for", "")
+        return (forwarded.split(",")[0].strip() or (request.client.host if request.client else "okänd"))
+
+    @app.middleware("http")
+    async def require_pin(request: Request, call_next):
+        path = local_path(request)
+        if path in open_paths or auth.valid_token(key, request.cookies.get(auth.COOKIE)):
+            return await call_next(request)
+        if path.startswith("/api/"):
+            return JSONResponse({"error": "inloggning krävs"}, status_code=401, headers={"Cache-Control": "no-store"})
+        return RedirectResponse(f"{request.scope.get('root_path', '')}/login", status_code=303)
+
+    @app.get("/login", include_in_schema=False)
+    def login_page(request: Request):
+        if auth.valid_token(key, request.cookies.get(auth.COOKIE)):
+            return RedirectResponse(f"{request.scope.get('root_path', '')}/", status_code=303)
+        return HTMLResponse(auth.LOGIN_HTML, headers={"Cache-Control": "no-store"})
+
+    @app.post("/login", include_in_schema=False)
+    async def login(request: Request):
+        who = client_id(request)
+        wait = throttle.wait_seconds(who)
+        if wait:
+            return JSONResponse({"error": f"För många försök. Vänta {wait // 60 + 1} min."}, status_code=429,
+                                headers={"Cache-Control": "no-store", "Retry-After": str(wait)})
+        try:
+            body = await request.json()
+            candidate = str(body.get("pin", ""))
+        except Exception:  # noqa: BLE001 - trasig förfrågan räknas som ett fel försök
+            candidate = ""
+        if not auth.check_pin(candidate):
+            locked = throttle.fail(who)
+            message = "För många försök. Vänta 5 min." if locked else "Fel PIN."
+            return JSONResponse({"error": message}, status_code=429 if locked else 401, headers={"Cache-Control": "no-store"})
+        throttle.ok(who)
+        response = JSONResponse({"ok": True, "next": f"{request.scope.get('root_path', '')}/"}, headers={"Cache-Control": "no-store"})
+        response.set_cookie(auth.COOKIE, auth.make_token(key), max_age=auth.SESSION_SECONDS, httponly=True,
+                            samesite="lax", secure=request.url.scheme == "https" or
+                            request.headers.get("x-forwarded-proto") == "https", path=request.scope.get("root_path") or "/")
+        return response
+
+    @app.post("/logout", include_in_schema=False)
+    def logout(request: Request):
+        response = JSONResponse({"ok": True})
+        response.delete_cookie(auth.COOKIE, path=request.scope.get("root_path") or "/")
+        return response
 
     @app.get("/health")
     def health() -> dict:

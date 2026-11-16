@@ -645,3 +645,6 @@ tr.expandable td > .namecell { max-width: calc(100% - 52px); }
 .linkish { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
 .linkish:hover { text-decoration: underline; }
 .section-title small { font-weight: 400; margin-left: 8px; }
+
+.top .logout { background: transparent; color: rgba(255,255,255,.8); border-color: rgba(255,255,255,.22); }
+.top .logout:hover { color: var(--mint); border-color: var(--mint); }
