@@ -77,7 +77,10 @@ def test_refresh_stores_value_error_and_respects_cache(tmp_path):
     assert again["cached"] == 3 and len(calls) == n
     forced = marketcap.refresh_many(connection, wanted[:1], TODAY, force=True, fetch=fetch, sleep=sleeps.append)
     assert forced["fetched"] == 1 and len(calls) == n + 2
-    old = marketcap.refresh_many(connection, wanted[:1], "2026-11-20", fetch=fetch, sleep=sleeps.append)
+    from datetime import date, timedelta
+
+    later = (date.today() + timedelta(days=8)).isoformat()   # fetched_at är idag: åtta dagar fram är äldre än 7
+    old = marketcap.refresh_many(connection, wanted[:1], later, fetch=fetch, sleep=sleeps.append)
     assert old["fetched"] == 1  # äldre än 7 dagar
 
 
@@ -284,3 +287,11 @@ def test_detail_has_recent_financing_and_page_has_chart_code(client):
     assert 'id="prospectMap"' in html
     for name in ("prospectMap", "dealTimeline", "needWaterfall", "scoreBar", "burnBars", "priceChart"):
         assert f"function {name}" in script, name
+
+
+def test_flow_endpoint_and_flow_view_in_page(client):
+    data = client.get("/api/flow?weeks=4").json()
+    assert data["weeks"] == [] and "3_9" in data["bands"]          # ingen historik än: tomt men giltigt
+    html, script = client.get("/").text, client.get("/static/app.js").text
+    assert 'data-view="flow"' in html and 'id="flowChart"' in html
+    assert "function flowChart" in script and "function ownerRing" in script

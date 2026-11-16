@@ -6,7 +6,7 @@
   <title>Capital Radar</title>
   <meta name="color-scheme" content="light dark">
   <script src="static/theme.js?v=1"></script>
-  <link rel="stylesheet" href="static/styles.css?v=27">
+  <link rel="stylesheet" href="static/styles.css?v=28">
 </head>
 <body>
   <header class="top">
@@ -23,6 +23,7 @@
       <button class="view active" data-view="list" role="tab" aria-selected="true">Lista <span class="cnt"></span></button>
       <button class="view" data-view="prospects" role="tab" aria-selected="false">Prospekt <span class="cnt"></span></button>
       <button class="view" data-view="garanti" role="tab" aria-selected="false">Garanti</button>
+      <button class="view" data-view="flow" role="tab" aria-selected="false">Flöde</button>
     </nav>
     <div class="top-right">
       <span class="meta" id="meta">Läser underlag…</span>
@@ -118,6 +119,11 @@
         </div>
       </div>
 
+      <div id="flowView" hidden>
+        <p class="source">Hur bolagen flyttar sig mellan runway-grupperna över tid. Varje vecka visar den sista ögonblicksbilden från den schemalagda driften; flyttarna jämför med veckan innan. Klicka på ett bolag för att öppna det i listan.</p>
+        <div id="flowChart"></div>
+        <div id="flowMoves"></div>
+      </div>
       <div id="garantiView" hidden>
         <div class="g-search">
           <label for="gSearch" class="g-label">Sök bolag att garantera</label>
@@ -133,6 +139,6 @@
     </aside>
   </main>
 
-  <script src="static/app.js?v=31" defer></script>
+  <script src="static/app.js?v=32" defer></script>
 </body>
 </html>

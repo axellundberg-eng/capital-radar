@@ -22,6 +22,7 @@ from .authorizations import latest as latest_authorizations
 from .calendar import next_report
 from . import guarantee
 from .fx import latest_rates
+from . import history as history_module
 from . import markers as marker_module
 from . import sectors as sector_module
 from .qualify import load_history, load_market, qualify, recent_financing
@@ -252,6 +253,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         structural.sort(key=lambda i: i["name"].casefold())
         return JSONResponse({"need": need, "items": out, "recent": just_funded, "raising": raising, "structural": structural},
                             headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/flow")
+    def flow(weeks: int = 12) -> JSONResponse:
+        """Gruppfördelning och flyttar vecka för vecka (history.py), för flödesvyn."""
+        connection = db()
+        try:
+            data = history_module.flow(connection, date.today().isoformat(), max(2, min(weeks, 52)))
+        finally:
+            connection.close()
+        return JSONResponse(data, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/search")
     def search(q: str = "", limit: int = 20) -> JSONResponse:

@@ -498,6 +498,107 @@ function priceChart(m, deals) {
     </svg></figure>`;
 }
 
+// ---------- Ägarbild: ring med de tio största ägarna; klick markerar ägaren i tabellen ----------
+const OWNER_COLORS = ["#0a7d76", "#4fe3c6", "#1e7a4c", "#a85a00", "#ffbb6b", "#2f6f9f", "#8bb4f0", "#7a4c9c", "#c58bdc", "#5a6b7b"];
+function ownerRing(owners) {
+  const top = (owners || []).filter((t) => Number(t.pct_capital) > 0).slice(0, 10);
+  if (top.length < 2) return "";
+  const total = Math.min(100, top.reduce((a, t) => a + Number(t.pct_capital), 0));
+  const R = 70, r = 44, C = 80, circ = 2 * Math.PI * R;
+  let offset = 0;
+  const arcs = top.map((t, i) => {
+    const share = Number(t.pct_capital) / 100, len = share * circ;
+    const html = `<strong>${escapeHtml(t.name)}</strong><br>${gPct(t.pct_capital, 2)} av kapitalet${t.pct_votes != null ? ` · ${gPct(t.pct_votes, 2)} av rösterna` : ""}`;
+    const el = `<circle class="or-arc" data-owner="${i}" cx="${C}" cy="${C}" r="${(R + r) / 2}" fill="none" stroke="${OWNER_COLORS[i % OWNER_COLORS.length]}"
+      stroke-width="${R - r}" stroke-dasharray="${len.toFixed(2)} ${(circ - len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" tabindex="0" role="button"
+      aria-label="${escapeHtml(t.name)}: ${gPct(t.pct_capital, 2)}"${tipAttr(html)}/>`;
+    offset += len;
+    return el;
+  }).join("");
+  const rest = `<circle class="or-rest" cx="${C}" cy="${C}" r="${(R + r) / 2}" fill="none" stroke-width="${R - r}" stroke-dasharray="${((1 - total / 100) * circ).toFixed(2)} ${(total / 100 * circ).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}"${tipAttr(`<strong>Övriga ägare</strong><br>${gPct(100 - total)}`)}/>`;
+  const legend = top.map((t, i) => `<button type="button" class="or-item" data-owner="${i}"><i style="background:${OWNER_COLORS[i % OWNER_COLORS.length]}"></i>${escapeHtml(t.name)}<small>${gPct(t.pct_capital, 1)}</small></button>`).join("");
+  return `<div class="owner-ring">
+    <svg viewBox="0 0 ${C * 2} ${C * 2}" role="group" aria-label="De största ägarnas andel av kapitalet">${rest}${arcs}
+      <text class="or-center" x="${C}" y="${C - 4}" text-anchor="middle">${gPct(total, 0)}</text>
+      <text class="or-sub" x="${C}" y="${C + 12}" text-anchor="middle">topp ${top.length}</text></svg>
+    <div class="or-legend">${legend}</div></div>`;
+}
+
+// ---------- Flödesvy: gruppfördelningen vecka för vecka ----------
+const FLOW_BANDS = ["acute", "exhausted", "under_3", "3_9", "9_18", "over_18", "raising", "structural", "positive", "missing"];
+const FLOW_COLOR = { acute: "var(--urgent)", exhausted: "#d9736a", under_3: "#e9a08a", "3_9": "var(--target)", "9_18": "#7fbf9a",
+  over_18: "var(--watch)", raising: "#c9a24a", structural: "#9a8fb8", positive: "#9fcbb8", missing: "var(--line)" };
+const flowState = { data: null, week: null, loading: false };
+
+function flowChart(data) {
+  const weeks = data.weeks;
+  if (!weeks.length) return '<p class="source">Historiken börjar byggas när nästa schemalagda varv har körts. Kom tillbaka om en stund.</p>';
+  const label = Object.fromEntries(BANDS.map(([key, text]) => [key, text]));
+  const W = 760, H = 230, L = 36, R = 10, T = 12, B = 28;
+  const max = Math.max(...weeks.map((w) => w.companies), 1);
+  const slot = (W - L - R) / weeks.length, bw = Math.min(46, slot * 0.72);
+  const y = (v) => T + (H - T - B) * (1 - v / max);
+  const cols = weeks.map((w, i) => {
+    const cx = L + slot * (i + 0.5);
+    let acc = 0;
+    const segs = FLOW_BANDS.map((band) => {
+      const n = w.counts[band] || 0;
+      if (!n) return "";
+      const top = y(acc + n), h = y(acc) - top;
+      acc += n;
+      return `<rect class="fl-seg" x="${(cx - bw / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(h, 0.5).toFixed(1)}" fill="${FLOW_COLOR[band]}"${tipAttr(`<strong>${label[band] || band}</strong>: ${n} bolag<br>vecka ${weekLabel(w.week)}`)}/>`;
+    }).join("");
+    const on = flowState.week === w.week;
+    return `<g class="fl-col${on ? " on" : ""}" data-week="${w.week}" tabindex="0" role="button" aria-label="Vecka ${weekLabel(w.week)}: ${w.companies} bolag, ${w.moves.length} flyttar">
+      <rect class="fl-hit" x="${(cx - slot / 2).toFixed(1)}" y="${T}" width="${slot.toFixed(1)}" height="${H - T - B}"/>${segs}
+      ${w.moves.length ? `<text class="fl-moves" x="${cx.toFixed(1)}" y="${(y(w.companies) - 4).toFixed(1)}" text-anchor="middle">${w.moves.length} ↕</text>` : ""}
+      <text x="${cx.toFixed(1)}" y="${H - 8}" text-anchor="middle">${weekLabel(w.week)}</text></g>`;
+  }).join("");
+  const ticks = [0, 0.5, 1].map((f) => `<text x="${L - 6}" y="${(y(max * f) + 3).toFixed(1)}" text-anchor="end">${Math.round(max * f)}</text>`).join("");
+  const legend = FLOW_BANDS.filter((b) => weeks.some((w) => w.counts[b])).map((b) => `<span><i style="background:${FLOW_COLOR[b]}"></i>${label[b] || b}</span>`).join("");
+  return `<figure class="cash-chart flow"><header><span>Bolag per grupp <small>sista ögonblicksbilden varje vecka · klicka på en vecka för flyttarna</small></span><strong>${weeks.length} veckor</strong></header>
+    <svg viewBox="0 0 ${W} ${H}" role="group" aria-label="Antal bolag per runway-grupp vecka för vecka">${ticks}${cols}</svg>
+    <div class="viz-legend">${legend}</div></figure>`;
+}
+function weekLabel(iso) {
+  const d = new Date(iso), jan4 = new Date(d.getFullYear(), 0, 4);
+  const week = Math.round(((d - jan4) / 864e5 + jan4.getDay() + 6) / 7) + 1;
+  return `v${week}`;
+}
+
+function flowMoves(data) {
+  const label = Object.fromEntries(BANDS.map(([key, text]) => [key, text]));
+  const week = data.weeks.find((w) => w.week === flowState.week) || data.weeks[data.weeks.length - 1];
+  if (!week) return "";
+  const groups = new Map();
+  week.moves.forEach((m) => { const key = `${m.from}→${m.to}`; (groups.get(key) || groups.set(key, { from: m.from, to: m.to, items: [] }).get(key)).items.push(m); });
+  const body = groups.size ? [...groups.values()].map((g) => `<section class="fl-group">
+      <h4><span class="pill band-${g.from}">${label[g.from] || g.from}</span> → <span class="pill band-${g.to}">${label[g.to] || g.to}</span><small>${g.items.length}</small></h4>
+      <ul>${g.items.map((m) => `<li><button type="button" class="linkish" data-flow-open="${m.id}">${escapeHtml(m.name)}</button><small>${escapeHtml(date(m.day))}</small></li>`).join("")}</ul></section>`).join("")
+    : `<p class="source">${data.weeks.indexOf(week) === 0 ? "Första veckan i historiken: inga flyttar att jämföra med." : "Inga bolag bytte grupp den här veckan."}</p>`;
+  return `<h2 class="section-title">Flyttar vecka ${weekLabel(week.week)} <small class="source">${week.companies} bolag · ${week.moves.length} bytte grupp jämfört med veckan innan</small></h2>${body}`;
+}
+
+function renderFlow() {
+  const host = $("#flowView");
+  if (!host || !flowState.data) return;
+  $("#flowChart").innerHTML = flowChart(flowState.data);
+  $("#flowMoves").innerHTML = flowMoves(flowState.data);
+}
+
+async function loadFlow() {
+  if (flowState.data || flowState.loading) return;
+  flowState.loading = true;
+  $("#flowChart").innerHTML = '<span class="sk block"></span>';
+  try {
+    flowState.data = await api("api/flow?weeks=16");
+    flowState.week = flowState.data.weeks.length ? flowState.data.weeks[flowState.data.weeks.length - 1].week : null;
+    renderFlow();
+  } catch (error) {
+    $("#flowChart").innerHTML = `<p class="source">Flödet kunde inte läsas (${escapeHtml(error.message)}).</p>`;
+  } finally { flowState.loading = false; }
+}
+
 // Tunn stapel under runway-talet: andel av 18 månader, färgad efter grupp.
 function runwayBar(item) {
   if (item.status !== "ok" || item.cash_flow_positive || item.runway_today == null) return "";
@@ -513,13 +614,14 @@ function syncHash() {
   if (state.facets.sector.size) params.set("bransch", [...state.facets.sector].join(","));
   if (state.facets.marker.size) params.set("markor", [...state.facets.marker].join(","));
   const query = params.toString().replace(/%2C/g, ",");
-  const hash = `#${state.view === "prospects" ? "prospekt" : "lista"}${query ? "?" + query : ""}`;
+  const hash = `#${{ prospects: "prospekt", flow: "flode" }[state.view] || "lista"}${query ? "?" + query : ""}`;
   if (location.hash !== hash) history.replaceState(null, "", hash);
 }
 
 function readHash() {
-  const m = location.hash.match(/^#(lista|prospekt)(?:\?(.*))?$/);
+  const m = location.hash.match(/^#(lista|prospekt|flode)(?:\?(.*))?$/);
   if (!m) return null;
+  if (m[1] === "flode") return "flow";
   const params = new URLSearchParams(m[2] || "");
   const split = (value) => (value ? value.split(",").map((v) => v.trim()).filter(Boolean) : []);
   if (params.has("band")) state.bands = new Set(params.get("band") === "alla" ? [] : split(params.get("band")));
@@ -876,8 +978,10 @@ function setView(view) {
   $("#listView").hidden = view !== "list";
   $("#prospectView").hidden = view !== "prospects";
   $("#garantiView").hidden = view !== "garanti";
-  document.querySelector(".layout").classList.toggle("garanti-mode", view === "garanti");
+  $("#flowView").hidden = view !== "flow";
+  document.querySelector(".layout").classList.toggle("garanti-mode", view === "garanti" || view === "flow");
   if (view === "prospects") loadProspects();
+  if (view === "flow") loadFlow();
   if (view === "garanti") {
     if (!location.hash.startsWith("#garanti")) history.replaceState(null, "", "#garanti" + (garanti.id ? "/" + garanti.id : ""));
     $("#gSearch").focus();
@@ -1115,6 +1219,20 @@ document.addEventListener("click", (event) => {
     document.querySelectorAll("#gCompany [data-gpane]").forEach((p) => { p.hidden = p.dataset.gpane !== garanti.tab; });
     return;
   }
+  const flowCol = event.target.closest("[data-week]");
+  if (flowCol) { flowState.week = flowCol.dataset.week; renderFlow(); return; }
+  const flowOpen = event.target.closest("[data-flow-open]");
+  if (flowOpen) { setView("list"); state.bands.clear(); state.query = ""; $("#search").value = ""; renderList(); select(Number(flowOpen.dataset.flowOpen)); return; }
+  const owner = event.target.closest("[data-owner]");
+  if (owner) {
+    const i = owner.dataset.owner, card = owner.closest(".g-card");
+    const on = !owner.classList.contains("on");
+    card.querySelectorAll("[data-owner]").forEach((el) => el.classList.toggle("on", on && el.dataset.owner === i));
+    card.querySelectorAll("[data-owner-row]").forEach((tr) => tr.classList.toggle("g-hot", on && tr.dataset.ownerRow === i));
+    const row = card.querySelector(`[data-owner-row="${i}"]`);
+    if (on && row) row.scrollIntoView({ block: "nearest", behavior: REDUCED ? "auto" : "smooth" });
+    return;
+  }
   const mapDot = event.target.closest("[data-map-id]");
   if (mapDot) {
     const id = Number(mapDot.dataset.mapId);
@@ -1189,7 +1307,7 @@ document.addEventListener("keydown", (event) => {
     if (field) { event.preventDefault(); field.focus(); }
     return;
   }
-  const dot = event.target.closest?.("[data-map-id]");
+  const dot = event.target.closest?.("[data-map-id], [data-week], .or-arc");
   if (dot && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); dot.dispatchEvent(new MouseEvent("click", { bubbles: true })); return; }
   const head = event.target.closest?.("#listView th[data-sort]");
   if (head && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); sortBy(head.dataset.sort); return; }
@@ -1368,10 +1486,10 @@ function gOwners(d) {
   const rest = gPct(Math.max(0, 100 - shown));
   const bar = `<div class="g-stack" role="img" aria-label="Topp 10 äger ${gPct(shown)} av kapitalet, övriga ${rest}">${segs}<span class="g-seg rest" style="flex:1" title="Övriga: ${rest}"></span></div>
     <p class="source g-stack-legend">Topp 10 ${gPct(shown)} av kapitalet · övriga ${rest}</p>`;
-  const rows = o.top.map((t, i) => `<tr${i < 3 ? ' class="g-top"' : ""}><td>${escapeHtml(dash(t.name))}</td><td class="num">${gPct(t.pct_capital, 2)}</td><td class="num">${gPct(t.pct_votes, 2)}</td><td class="num">${t.shares != null ? Number(t.shares).toLocaleString("sv-SE") : "—"}</td></tr>`).join("");
+  const rows = o.top.map((t, i) => `<tr${i < 3 ? ' class="g-top"' : ""} data-owner-row="${i}"><td>${escapeHtml(dash(t.name))}</td><td class="num">${gPct(t.pct_capital, 2)}</td><td class="num">${gPct(t.pct_votes, 2)}</td><td class="num">${t.shares != null ? Number(t.shares).toLocaleString("sv-SE") : "—"}</td></tr>`).join("");
   const table = `<div class="table-wrap g-table"><table><thead><tr><th>Ägare</th><th class="num">Kapital</th><th class="num">Röster</th><th class="num">Antal aktier</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   const src = [o.as_of ? `Per ${escapeHtml(date(o.as_of))}` : "", o.source_title ? escapeHtml(o.source_title) : ""].filter(Boolean).join(" · ");
-  return gCard("Ägare", `${src ? `<p class="source">${src}</p>` : ""}<div class="chips g-chips">${chips}</div>${bar}${table}`);
+  return gCard("Ägare", `${src ? `<p class="source">${src}</p>` : ""}<div class="chips g-chips">${chips}</div>${ownerRing(o.top) || bar}${table}`);
 }
 
 function gShort(d) {

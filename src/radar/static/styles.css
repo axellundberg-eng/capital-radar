@@ -603,3 +603,45 @@ tr.expandable td > .namecell { max-width: calc(100% - 52px); }
 .g-card .cash-chart { margin-bottom: 12px; }
 /* Trappan visar samma tal som rutnätet; rutnätet används bara när trappan inte kan ritas. */
 .waterfall + .g-eq { display: none; }
+
+
+/* Ägarring */
+.owner-ring { display: grid; grid-template-columns: 170px 1fr; gap: 6px 16px; align-items: center; margin: 6px 0 12px; }
+.owner-ring svg { width: 160px; height: 160px; }
+.or-arc { cursor: pointer; transition: opacity var(--t) var(--ease), stroke-width var(--t) var(--ease); }
+.or-arc:hover, .or-arc.on, .or-arc:focus-visible { stroke-width: 30; outline: none; }
+.owner-ring svg:has(.or-arc.on) .or-arc:not(.on) { opacity: .35; }
+.or-rest { stroke: var(--muted-bg); }
+.cash-chart text, .owner-ring text { font-size: 10px; fill: var(--muted); }
+.owner-ring .or-center { font-size: 22px; font-weight: 700; fill: var(--ink); }
+.owner-ring .or-sub { font-size: 10px; fill: var(--muted); }
+.or-legend { display: grid; gap: 2px; }
+.or-item { display: flex; align-items: center; gap: 7px; font: inherit; font-size: 12px; text-align: left; color: var(--ink); background: none;
+  border: 0; border-radius: 6px; padding: 3px 6px; cursor: pointer; transition: background-color var(--t) var(--ease); }
+.or-item i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.or-item small { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.or-item:hover, .or-item.on { background: var(--hover); }
+.or-item.on { font-weight: 600; }
+@media (max-width: 600px) { .owner-ring { grid-template-columns: 1fr; justify-items: center; } .or-legend { width: 100%; } }
+
+/* Flödesvy */
+#flowView { display: grid; gap: 14px; }
+.flow { box-shadow: var(--shadow); }
+.fl-hit { fill: transparent; }
+.fl-col { cursor: pointer; }
+.fl-col:hover .fl-hit, .fl-col.on .fl-hit { fill: var(--hover); }
+.fl-col.on .fl-hit { stroke: var(--accent); stroke-dasharray: 3 3; }
+.fl-col:focus-visible { outline: none; }
+.fl-col:focus-visible .fl-hit { stroke: var(--accent); }
+.fl-seg { transition: opacity var(--t) var(--ease); }
+.fl-seg:hover { opacity: .75; }
+.cash-chart text.fl-moves { fill: var(--ink); font-weight: 600; }
+.fl-group { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 0 0 10px; box-shadow: var(--shadow); }
+.fl-group h4 { margin: 0 0 6px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.fl-group h4 small { color: var(--muted); font-weight: 400; }
+.fl-group ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px 14px; }
+.fl-group li { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.fl-group li small { color: var(--muted); }
+.linkish { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.linkish:hover { text-decoration: underline; }
+.section-title small { font-weight: 400; margin-left: 8px; }

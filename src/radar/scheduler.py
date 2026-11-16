@@ -23,7 +23,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from . import authorizations, plans
+from . import authorizations, history, plans
 from .batch import run_latest
 from .collect import collect_all
 from .db import connect
@@ -288,7 +288,9 @@ def run_cycle(settings: Settings, client: ChatClient | None, *, report_budget: i
             rows = latest_rows(connection)
             wanted = [(i["id"], isin) for i, isin in prospect_companies(connection, rows)]
             summary["market"] = refresh_many(connection, wanted, today)
-            summary["changes"] = record_changes(connection, latest_rows(connection))
+            rows = latest_rows(connection)
+            summary["changes"] = record_changes(connection, rows)
+            summary["band_history"] = history.snapshot(connection, rows, today)
         finally:
             connection.close()
         summary["market_history"] = _market_history_step(settings, log)
