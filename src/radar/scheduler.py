@@ -40,7 +40,7 @@ HEARTBEAT_SECONDS = 30
 RETRY_AFTER_SKIP_SECONDS = 300
 OWNERS_TOKEN_BUDGET = 60000    # tokens för ägartolkning per varv
 CHANGE_TEXT = {"3_9": "Ny i 3–9 mån", "under_3": "Ny under 3 mån", "exhausted": "Kassan borde vara slut",
-               "acute": "Akut: under 1 mån", "structural": "Strukturell förändring"}
+               "acute": "Akut: under 1 mån", "structural": "Bud, fusion eller avnotering"}
 
 STATUS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS company_status (

@@ -143,7 +143,7 @@ def test_score_orders_better_prospects_first_and_stays_in_range():
     assert best.score == 85 > no_history.score > unknown.score > big_share.score > worst.score >= 0
     assert "Poäng 85/100" in best.summary and "25 MSEK" in best.summary
     stamma = {"key": "stamma_issue", "label": "Stämmobeslut om emission", "tier": "capital"}
-    debt = {"key": "debt_due", "label": "Lån förfaller före kassan räcker", "tier": "half"}
+    debt = {"key": "debt_due", "label": "Lån inom 12 mån större än kassan", "tier": "half"}
     with_need = qualify(item(markers=[stamma]), cap, history(("rights_issue", "completed", 30e6, "2025-03-01")))
     half = qualify(item(markers=[debt]), cap, history(("rights_issue", "completed", 30e6, "2025-03-01")))
     assert with_need.score == 100 and half.score == 92          # halv poäng: 85 + 7,5 = 92,5 (round -> 92)

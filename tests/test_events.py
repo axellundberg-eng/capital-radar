@@ -231,10 +231,10 @@ def test_frontend_has_structural_band_and_sections():
     static = resources.files("radar") / "static"
     app = (static / "app.js").read_text(encoding="utf-8")
     html = (static / "index.html").read_text(encoding="utf-8")
-    for text in ("Strukturell förändring", "Företagshändelser efter rapporten", "runway bygger på äldre siffror",
+    for text in ("Bud, fusion eller avnotering", "Företagshändelser efter rapporten", "runway bygger på äldre siffror",
                  "Kontrollera manuellt: rapportens siffror kan vara inaktuella", "Omvänt förvärv", "Avknoppning"):
         assert text in app, text
-    assert "Strukturell förändring (kontrollera manuellt)" in html and 'id="structuralRows"' in html
+    assert "Bud, fusion eller avnotering (kontrollera manuellt)" in html and 'id="structuralRows"' in html
 
 
 def test_plain_acquisition_is_listed_but_does_not_move_the_company_to_the_structural_band():
