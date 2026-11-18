@@ -422,7 +422,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "add":
         from . import addcompany
 
-        result = addcompany.run(connection, settings, client, args.slug, args.name, today=today, isin=args.isin,
+        result = addcompany.run(connection, settings, _client(settings), args.slug, args.name, today=today, isin=args.isin,
                                 symbol=args.symbol, market=args.market)
         print(json.dumps(result, ensure_ascii=False, default=str))
         return 0

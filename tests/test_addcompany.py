@@ -26,3 +26,19 @@ def test_add_gives_a_high_id_and_never_duplicates(tmp_path):
 def test_market_is_read_from_the_mfn_page():
     assert addcompany.detect_market("... Spotlight Stock Market ...") == "Spotlight"
     assert addcompany.detect_market("ingenting") is None
+
+
+def test_cli_add_runs_without_a_model_key(tmp_path, monkeypatch, capsys):
+    """Kommandot ska fungera även utan DeepSeek-nyckel (AI-stegen hoppas då över)."""
+    import json
+
+    from radar import __main__ as cli, mfn
+
+    monkeypatch.setenv("RADAR_DB_PATH", str(tmp_path / "radar.db"))
+    monkeypatch.setenv("RADAR_DATA_PATH", str(tmp_path))
+    monkeypatch.setattr(cli, "_client", lambda settings: None)
+    monkeypatch.setattr(mfn, "fetch_html", lambda *a, **k: "<html>Spotlight</html>")
+    monkeypatch.setattr(mfn, "fetch_items", lambda *a, **k: [])
+    assert cli.main(["add", "--slug", "foremont-group", "--name", "Foremont Group"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["created"] is True and out["company_id"] >= addcompany.FIRST_ID and "hoppades" in out["ai"]
