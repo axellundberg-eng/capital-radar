@@ -36,6 +36,12 @@ def add(connection: sqlite3.Connection, slug: str, name: str, *, isin: str | Non
     row = connection.execute("SELECT id FROM companies WHERE mfn_slug=? OR (isin IS NOT NULL AND isin=?)",
                              (slug, isin)).fetchone()
     if row:
+        # Ett befintligt bolag får de uppgifter det saknar (slug, ISIN, kortnamn, handelsplats), aldrig överskrivna.
+        with connection:
+            connection.execute(
+                """UPDATE companies SET mfn_slug=COALESCE(NULLIF(mfn_slug, ''), ?), isin=COALESCE(NULLIF(isin, ''), ?),
+                   symbol=COALESCE(NULLIF(symbol, ''), ?), market=COALESCE(NULLIF(market, ''), ?) WHERE id=?""",
+                (slug, isin, symbol, market, row[0]))
         return row[0], False
     company_id = next_id(connection)
     with connection:
