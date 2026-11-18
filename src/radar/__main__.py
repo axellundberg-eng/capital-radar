@@ -359,6 +359,12 @@ def main(argv: list[str] | None = None) -> int:
                        ("insiders", "insynshandel från Finansinspektionen")):
         extra = sub.add_parser(name, help=text)
         extra.add_argument("--limit", type=int)
+    add = sub.add_parser("add", help="lägg till ett bolag som saknas och fyll på det (rapporter, nyheter, bransch)")
+    add.add_argument("--slug", required=True, help="bolagets MFN-slug, t.ex. foremont-group (mfn.se/all/a/<slug>)")
+    add.add_argument("--name", required=True)
+    add.add_argument("--isin")
+    add.add_argument("--symbol")
+    add.add_argument("--market")
     slugs = sub.add_parser("slugs", help="matcha bolag utan MFN-sida mot MFN:s sökning")
     slugs.add_argument("--apply", action="store_true", help="skriv träffar på ISIN och exakt namn")
     corrections = sub.add_parser("corrections", help="lista eller ångra rättelser")
@@ -412,6 +418,13 @@ def main(argv: list[str] | None = None) -> int:
         if client is not None and args.limit:
             result["classify"] = sectors.classify(connection, client, limit=args.limit, token_budget=10**9)
         print(json.dumps(result, ensure_ascii=False))
+        return 0
+    if args.command == "add":
+        from . import addcompany
+
+        result = addcompany.run(connection, settings, client, args.slug, args.name, today=today, isin=args.isin,
+                                symbol=args.symbol, market=args.market)
+        print(json.dumps(result, ensure_ascii=False, default=str))
         return 0
     if args.command == "slugs":
         from . import slugs as slug_matcher
