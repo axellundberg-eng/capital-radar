@@ -46,3 +46,16 @@ Nya fält i GET /api/guarantee/{company_id} (null eller [] när underlag saknas)
 Bedömningen i "capacity" får nya skäl när underlaget finns: hög ägarkoncentration (top3 > 50 %) gör
 garantin lättare (större ägare kan teckna), hög blankning (> 2 %) och låg historisk teckningsgrad
 (< 60 %) gör den svårare.
+
+## liquidity (utförsäljning vid 20 % av dagsvolymen)
+
+Garanten säljer alltid direkt, men aldrig mer än 20 % av dagens volym. Se `src/radar/liquidity.py`.
+
+- `capacity`: `turnover_per_day` (median 60 handelsdagar, annars snitt 3 mån; `turnover_basis`),
+  `sell_per_day`, `days_full_utilization` (dagar att sälja ut `amount` = 1 MSEK om garantin tas i anspråk helt),
+  `max_guarantee_10d`, `max_guarantee_20d`.
+- `deals`: tidigare garantier i bolaget, nyast först. Villkor (`guarantee_amount`, `fee_pct`, `fee_in_shares`,
+  `issue_price`, `subscription_rate_pct`, `utilized_share`, `utilized_estimated`) och utfall per `amount`:
+  `result` (kr), `result_pct`, `exit` (dagar, intäkt, `complete`, `open`) eller `missing` (skäl).
+  Försäljningen startar `registration_days` (10) handelsdagar efter utfallet; ej sålt efter
+  `max_exit_days` (60) räknas som fastnat och värderas till sista kurs.

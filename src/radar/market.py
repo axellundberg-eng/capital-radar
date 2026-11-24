@@ -174,7 +174,23 @@ def refresh_company(connection: sqlite3.Connection, company_id: int, isin: str |
         store(connection, company_id, isin, order_book=order_book, currency=currency, error=str(error))
         return False
     store(connection, company_id, isin, order_book=order_book, currency=currency, summary=summary)
+    store_daily(connection, company_id, points)
     return True
+
+
+def store_daily(connection: sqlite3.Connection, company_id: int, points: list[dict]) -> None:
+    """Spara dagspunkterna (kurs och volym) så att utförsäljningen kan räknas dag för dag (liquidity.py)."""
+    with connection:
+        connection.executemany(
+            """INSERT INTO market_daily(company_id, day, close, volume) VALUES (?,?,?,?)
+               ON CONFLICT(company_id, day) DO UPDATE SET close=excluded.close, volume=excluded.volume""",
+            [(company_id, p["date"], p["close"], p.get("volume")) for p in points])
+
+
+def load_daily(connection: sqlite3.Connection, company_id: int) -> list[dict]:
+    """Dagspunkter [{date, close, volume}] i datumordning."""
+    return [{"date": r["day"], "close": r["close"], "volume": r["volume"]} for r in connection.execute(
+        "SELECT day, close, volume FROM market_daily WHERE company_id=? ORDER BY day", (company_id,))]
 
 
 def candidates(connection: sqlite3.Connection, today: str) -> list[tuple[int, str | None]]:

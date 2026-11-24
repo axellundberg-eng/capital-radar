@@ -11,7 +11,7 @@ import json
 import sqlite3
 from datetime import date, datetime, timezone
 
-from . import insiders, market, owners, shorts
+from . import insiders, liquidity, market, owners, shorts
 from .authorizations import latest as latest_authorizations
 from .calendar import next_report
 from .fx import latest_rates
@@ -207,7 +207,8 @@ def build(connection: sqlite3.Connection, company_id: int, today: str | None = N
     history = load_history(connection).get(company_id, [])
     emissions, financing = recent_financing(history, today)
     need = need_breakdown(item, rates) if item else None
-    market_info = market_block(cap_row, market.load(connection, company_id), rates)
+    market_row = market.load(connection, company_id)
+    market_info = market_block(cap_row, market_row, rates)
     runway = {field: (item or {}).get(field) for field in RUNWAY_FIELDS}
     runway["band"] = (item or {}).get("band", "missing")
     runway["flags"] = list(runway["flags"] or [])
@@ -230,6 +231,9 @@ def build(connection: sqlite3.Connection, company_id: int, today: str | None = N
         "next_report": next_report(connection, today).get(company_id),
         "owners": owner_info, "short_positions": short_list, "short_total_pct": short_total,
         "guarantee_history": guarantee_info, "warrants_outstanding": warrants_outstanding(history, today),
+        "liquidity": liquidity.block(market.load_daily(connection, company_id), history,
+                                     market_info.get("avg_daily_turnover_3m"),
+                                     factor=_sek(1.0, (market_row or {}).get("currency"), rates) or 1.0),
         "updated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     }
 

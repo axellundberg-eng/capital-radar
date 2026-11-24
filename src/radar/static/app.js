@@ -1521,6 +1521,45 @@ function gHistory(d) {
   return gCard("Garantihistorik", avg + gl + note + table);
 }
 
+function gAmt(value, currency) {   // små belopp i tkr så att 150 000 kr inte blir "0,2 MSEK"
+  if (value == null) return "—";
+  return Math.abs(value) >= 1e6 ? msek(value, currency) : `${Math.round(value / 1000).toLocaleString("sv-SE")} t${(currency || "SEK").toUpperCase()}`;
+}
+
+function gExitDays(x) {
+  if (!x) return "—";
+  if (x.complete) return `${x.days} dagar`;
+  return x.open ? `${x.days}+ dagar (pågår)` : `fastnade efter ${x.days} dagar`;
+}
+
+function gLiquidity(d) {
+  const l = d.liquidity;
+  const title = "Utförsäljning vid 20 % av dagsvolymen";
+  if (!l) return gCard(title, '<p class="source">Underlag saknas.</p>');
+  const c = l.capacity || {};
+  const days = c.days_full_utilization;
+  const tone = days == null ? "" : days <= 10 ? "up" : days <= 20 ? "" : "down";
+  const basis = c.turnover_basis === "median_60d" ? "medianomsättningen de senaste 60 handelsdagarna"
+    : c.turnover_basis === "mean_3m" ? "snittomsättningen tre månader (dagsdata saknas än)" : "";
+  const cap = c.sell_per_day == null ? '<p class="source">Omsättning saknas, utförsäljningen kan inte räknas.</p>'
+    : `<div class="g-callouts"><div><span>Sälja ut ${msek(c.amount)} vid full tilldelning</span><strong class="${tone}">${num(days)} handelsdagar</strong></div>
+       <div><span>Största garanti som säljs ut på 10 dagar</span><strong>${gAmt(c.max_guarantee_10d)}</strong></div></div>
+       <div class="g-grid">${gKv("Säljbart per dag", gAmt(c.sell_per_day))}${gKv("Max garanti på 20 dagar", gAmt(c.max_guarantee_20d))}${gKv("Omsättning per dag", gAmt(c.turnover_per_day))}</div>
+       <p class="source">Räknat på ${basis}. Andra garanter säljer samtidigt, så det verkliga utrymmet kan vara mindre.</p>`;
+  const deals = Array.isArray(l.deals) ? l.deals : [];
+  const rows = deals.map((x) => {
+    const fee = x.fee_pct != null ? `${gPct(x.fee_pct)} ${x.fee_in_shares ? "i aktier" : "kontant"}` : "—";
+    const used = x.utilized_share != null ? `${gPct(100 * x.utilized_share, 0)}${x.utilized_estimated ? " (uppsk.)" : ""}` : "—";
+    const res = x.result != null ? `<strong class="${pctClass(x.result)}">${gAmt(x.result, x.currency)}</strong> <small class="${pctClass(x.result_pct)}">${signedPct(x.result_pct)}</small>` : `<small title="${escapeHtml(x.missing || "")}">${escapeHtml(x.missing || "—")}</small>`;
+    return `<tr><td>${escapeHtml(date(x.date))}</td><td class="num">${msek(x.guarantee_amount, x.currency)}</td><td>${fee}</td><td class="num">${gPct(x.subscription_rate_pct, 0)}</td><td class="num">${used}</td><td>${gExitDays(x.exit)}</td><td class="num">${res}</td></tr>`;
+  }).join("");
+  const table = deals.length ? `<h4>Tidigare garantier: utfall per ${msek(c.amount)} garanterat</h4>
+    <div class="table-wrap g-table"><table><thead><tr><th>Datum</th><th class="num">Garanti</th><th>Ersättning</th><th class="num">Teckningsgrad</th><th class="num">Tilldelat</th><th>Utförsäljning</th><th class="num">Resultat</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="source">Försäljning från ${l.registration_days} handelsdagar efter utfallet (registrering), högst 20 % av dagens volym till stängningskurs. Inte sålt efter ${l.max_exit_days} dagar räknas som fastnat och värderas till sista kurs.</p>`
+    : '<p class="source">Inga tidigare garantier med villkor registrerade för bolaget.</p>';
+  return gCard(title, cap + table);
+}
+
 function gWarrantState(w) {
   const day = 86400000, now = Date.now();
   const s = w.exercise_start ? Date.parse(w.exercise_start) : NaN, e = w.exercise_end ? Date.parse(w.exercise_end) : NaN;
@@ -1549,7 +1588,7 @@ function renderGarantiCompany(d) {
   const timeline = dealTimeline(d.financing);
   $("#gCompany").innerHTML = `<div class="g-company fade-in">${gHeader(d)}
     <div class="tabs g-tabs" role="tablist" aria-label="Garantiunderlag">${tab("overview", "Behov och marknad")}${tab("owners", "Ägare och handel")}${tab("issues", "Emissioner och garantier")}</div>
-    ${pane("overview", gNeed(d) + gMarket(d))}
+    ${pane("overview", gNeed(d) + gMarket(d) + gLiquidity(d))}
     ${pane("owners", gOwners(d) + gShort(d) + gInsiders(d))}
     ${pane("issues", `${timeline ? gCard("Tidslinje", timeline) : ""}${gFinancing(d)}<div id="gHistory">${gHistory(d)}</div>${gAuth(d)}${gWarrants(d)}`)}
     ${upd}</div>`;

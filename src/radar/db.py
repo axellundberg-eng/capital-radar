@@ -191,6 +191,13 @@ CREATE TABLE IF NOT EXISTS market_history_summary (   -- kurshistorik i sammandr
     high_52w REAL, low_52w REAL,
     as_of TEXT, source TEXT, fetched_at TEXT NOT NULL, error TEXT
 );
+CREATE TABLE IF NOT EXISTS market_daily (   -- dagskurs och volym ett år bakåt, se market.py och liquidity.py
+    company_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    close REAL NOT NULL,               -- stängningskurs i aktiens valuta
+    volume REAL,                       -- antal aktier
+    PRIMARY KEY (company_id, day)
+);
 CREATE TABLE IF NOT EXISTS insider_trades (   -- Finansinspektionens insynsregister, se insiders.py
     id INTEGER PRIMARY KEY,
     company_id INTEGER NOT NULL,
