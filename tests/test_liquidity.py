@@ -101,3 +101,13 @@ def test_daily_points_are_stored_and_loaded(tmp_path):
                                        {"date": "2026-01-01", "close": 1.4, "volume": None}])
     assert market.load_daily(connection, 7) == [{"date": "2026-01-01", "close": 1.4, "volume": None},
                                                {"date": "2026-01-02", "close": 1.6, "volume": 120.0}]
+
+
+def test_stated_utilization_wins_over_estimate_when_outcome_rows_share_a_date():
+    rows = [row(type="warrants", event_date="2026-01-01", gross_amount=5_300_000.0, guarantee_amount=3_700_000.0,
+                guarantee_fee_pct=15.0, issue_price=0.025),
+            row(type="warrants", event_date="2026-01-20", status="completed", subscription_rate_pct=81.55),
+            row(type="warrants", event_date="2026-01-20", status="completed", subscription_rate_pct=81.55,
+                guarantee_utilized=0.0)]
+    terms = liquidity.deal_terms(liquidity._groups(rows)[0], rows)
+    assert terms["utilized_share"] == 0.0 and terms["utilized_estimated"] is False

@@ -124,8 +124,9 @@ def deal_terms(group: list[dict], rows: list[dict]) -> dict:
     share_fee = _max(set_offs, "guarantee_fee_pct")
     fee_in_shares = bool(set_offs) and (share_fee is not None or cash_fee is not None)
     fee_price = _first(set_offs, "issue_price") or issue_price
-    subscription = (outcome or {}).get("subscription_rate_pct")
-    utilized = _first(([outcome] if outcome else []) + group, "guarantee_utilized")
+    latest_first = sorted(outcomes, key=lambda r: r["event_date"], reverse=True)
+    subscription = _first(latest_first, "subscription_rate_pct")
+    utilized = _first(latest_first + group, "guarantee_utilized")   # angivet utnyttjande går före uppskattning
     offered = _max([r for r in group + ([outcome] if outcome else []) if r["type"] != "set_off"], "gross_amount")
     share_used, estimated = None, False
     if utilized is not None and guarantee:
