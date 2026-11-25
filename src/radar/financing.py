@@ -142,10 +142,16 @@ def trim_text(text: str) -> str:
 
 
 def from_title(title: str, text: str) -> str:
-    """Texten från pressmeddelandets rubrik. På MFN står rubriken sist före brödtexten, efter meny och kalender."""
+    """Texten från pressmeddelandets rubrik. På MFN står rubriken med publiceringstid direkt efter, efter meny
+    och kalender; rubriken förekommer också i sidhuvud och sidfot, så den förekomst som följs av ett datum väljs."""
     text = text or ""
-    at = text.rfind(title.strip()) if title and title.strip() else -1
-    return text[at:] if at > 0 else text
+    title = (title or "").strip()
+    if not title:
+        return text
+    for match in re.finditer(re.escape(title), text):
+        if match.start() > 0 and re.search(r"\d{4}-\d{2}-\d{2}", text[match.end():match.end() + 40]):
+            return text[match.start():]
+    return text
 
 
 def build_message(title: str, published_at: str | None, text: str) -> str:
