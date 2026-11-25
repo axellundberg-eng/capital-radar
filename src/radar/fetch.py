@@ -12,7 +12,7 @@ ALLOWED_HOSTS = ("mfn.se", "tt.se", "cision.com", "bequoted.com", "globenewswire
                  "storage.googleapis.com")   # vissa bolag (t.ex. PION) lägger rapport-PDF:en där
 MAX_BYTES = 40_000_000
 MAX_TEXT_BYTES = 2_000_000
-MAX_TEXT_CHARS = 12_000
+MAX_TEXT_CHARS = 40_000   # MFN-sidor har flera tusen tecken meny och kalender före pressmeddelandet
 SKIPPED_TAGS = ("script", "style", "noscript", "svg", "head", "template")
 
 
@@ -72,7 +72,7 @@ def visible_text(html: str, limit: int = MAX_TEXT_CHARS) -> str:
 
 
 def fetch_text(url: str, *, timeout: float, user_agent: str) -> str:
-    """Synlig text ur en HTML-sida (högst ca 2 MB hämtas, 12 000 tecken returneras)."""
+    """Synlig text ur en HTML-sida (högst ca 2 MB hämtas, 40 000 tecken returneras)."""
     if not allowed(url):
         raise FetchError(f"värden är inte tillåten: {urlparse(url).hostname}")
     request = Request(url, headers={"User-Agent": user_agent, "Accept": "text/html,text/plain;q=0.9,*/*;q=0.5"})

@@ -141,7 +141,15 @@ def trim_text(text: str) -> str:
     return text[:HEAD_CHARS] + ("\n[…]\n" + "\n".join(picked) if picked else "")
 
 
+def from_title(title: str, text: str) -> str:
+    """Texten från pressmeddelandets rubrik. På MFN står rubriken sist före brödtexten, efter meny och kalender."""
+    text = text or ""
+    at = text.rfind(title.strip()) if title and title.strip() else -1
+    return text[at:] if at > 0 else text
+
+
 def build_message(title: str, published_at: str | None, text: str) -> str:
+    text = from_title(title, text)
     return f"Rubrik: {title}\nPublicerat: {(published_at or '')[:10]}\n\n{trim_text(text)}"
 
 

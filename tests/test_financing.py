@@ -94,7 +94,7 @@ def test_ask_retries_once_then_fails():
 def test_visible_text_skips_scripts_and_limits_length():
     html = "<html><head><title>x</title><style>p{}</style></head><body><script>bad()</script><p>Hej</p><p>världen</p></body></html>"
     assert visible_text(html) == "Hej\nvärlden"
-    assert len(visible_text("<p>" + "a" * 50_000 + "</p>")) == 12_000
+    assert len(visible_text("<p>" + "a" * 50_000 + "</p>")) == 40_000
 
 
 # --- Rundor och runway -----------------------------------------------------------

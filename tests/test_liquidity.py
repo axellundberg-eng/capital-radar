@@ -116,3 +116,19 @@ def test_stated_utilization_wins_over_estimate_when_outcome_rows_share_a_date():
 def test_simulate_refuses_when_price_data_starts_after_the_outcome():
     points = days(100, start=date(2026, 3, 1))
     assert liquidity.simulate(points, "2026-01-15", 1_000.0) is None
+
+
+def test_later_warrant_exercise_is_not_the_rights_issue_outcome():
+    rows = [row(type="rights_issue", event_date="2025-11-04", gross_amount=18_500_000.0, guarantee_amount=18_500_000.0,
+                guarantee_fee_pct=12.0, issue_price=0.078),
+            row(type="rights_issue", event_date="2025-12-01", status="completed", subscription_rate_pct=100.0),
+            row(type="warrants", event_date="2025-12-17", status="completed", subscription_rate_pct=0.01)]
+    terms = liquidity.deal_terms(liquidity._groups(rows)[0], rows)
+    assert terms["subscription_rate_pct"] == 100.0 and terms["utilized_share"] == 0.0
+
+
+def test_posts_chained_within_the_gap_are_one_deal():
+    rows = [row(type="rights_issue", event_date="2025-04-16", guarantee_amount=15e6),
+            row(type="rights_issue", event_date="2025-05-27", guarantee_amount=15e6),
+            row(type="rights_issue", event_date="2025-06-13", guarantee_fee_pct=12.0)]
+    assert len(liquidity._groups(rows)) == 1

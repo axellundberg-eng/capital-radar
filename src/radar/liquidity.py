@@ -24,8 +24,8 @@ COVERAGE_DAYS = 10           # kursdata måste finnas högst så många dagar f�
 MEDIAN_DAYS = 60             # handelsdagar som medianomsättningen räknas på
 MIN_MEDIAN_DAYS = 20
 DEFAULT_AMOUNT = 1_000_000.0
-DEAL_GAP_DAYS = 45           # garantiposter närmare än så hör till samma affär
-OUTCOME_WINDOW_DAYS = 75     # utfall och kvittning letas så här långt efter affärens första post
+DEAL_GAP_DAYS = 45           # garantiposter närmare än så den föregående hör till samma affär
+OUTCOME_WINDOW_DAYS = 75     # utfall och kvittning letas så här långt efter affärens senaste post
 OUTCOME_TYPES = ("rights_issue", "directed_issue", "warrants")
 
 
@@ -103,7 +103,7 @@ def _groups(rows: list[dict]) -> list[list[dict]]:
                    key=lambda r: r["event_date"])
     groups: list[list[dict]] = []
     for row in posts:
-        if groups and _day(row["event_date"]) - _day(groups[-1][0]["event_date"]) <= timedelta(days=DEAL_GAP_DAYS):
+        if groups and _day(row["event_date"]) - _day(groups[-1][-1]["event_date"]) <= timedelta(days=DEAL_GAP_DAYS):
             groups[-1].append(row)
         else:
             groups.append([row])
@@ -113,13 +113,16 @@ def _groups(rows: list[dict]) -> list[list[dict]]:
 def deal_terms(group: list[dict], rows: list[dict]) -> dict:
     """Villkoren för en garantiaffär: belopp, ersättning (kontant eller i aktier), kurs, utfall, ianspråktagande."""
     start = _day(group[0]["event_date"])
-    end = start + timedelta(days=OUTCOME_WINDOW_DAYS)
+    end = _day(group[-1]["event_date"]) + timedelta(days=OUTCOME_WINDOW_DAYS)
     window = [r for r in rows if r.get("status") != "cancelled" and (d := _day(r.get("event_date")))
               and start <= d <= end]
     main = [r for r in group if r["type"] != "set_off"]
     set_offs = [r for r in window if r["type"] == "set_off"]
     outcomes = [r for r in window if r["type"] in OUTCOME_TYPES and r.get("status") == "completed"
                 and (r.get("subscription_rate_pct") is not None or r.get("guarantee_utilized") is not None)]
+    # optioner som löses senare (t.ex. TO9 efter en unitemission) är inte emissionens utfall
+    same_type = [r for r in outcomes if r["type"] in {g["type"] for g in main}]
+    outcomes = same_type or outcomes
     outcome = max(outcomes, key=lambda r: r["event_date"]) if outcomes else None
     guarantee = _max(group, "guarantee_amount")
     issue_price = _first(main, "issue_price") or _first(window, "issue_price")
