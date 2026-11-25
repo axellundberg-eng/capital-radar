@@ -111,3 +111,8 @@ def test_stated_utilization_wins_over_estimate_when_outcome_rows_share_a_date():
                 guarantee_utilized=0.0)]
     terms = liquidity.deal_terms(liquidity._groups(rows)[0], rows)
     assert terms["utilized_share"] == 0.0 and terms["utilized_estimated"] is False
+
+
+def test_simulate_refuses_when_price_data_starts_after_the_outcome():
+    points = days(100, start=date(2026, 3, 1))
+    assert liquidity.simulate(points, "2026-01-15", 1_000.0) is None

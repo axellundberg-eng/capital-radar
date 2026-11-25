@@ -20,6 +20,7 @@ from statistics import median
 SELL_SHARE = 0.20            # högst så stor andel av dagens volym säljs
 REGISTRATION_DAYS = 10       # handelsdagar från utfall till att aktierna kan säljas (registrering)
 MAX_EXIT_DAYS = 60           # längre än så räknas som att fastna
+COVERAGE_DAYS = 10           # kursdata måste finnas högst så många dagar före utfallet
 MEDIAN_DAYS = 60             # handelsdagar som medianomsättningen räknas på
 MIN_MEDIAN_DAYS = 20
 DEFAULT_AMOUNT = 1_000_000.0
@@ -62,8 +63,10 @@ def simulate(points: list[dict], after: str, shares: float, *, skip: int = REGIS
 
     None om kursdata saknas för perioden. `complete` är falskt om aktierna inte hann säljas inom
     max_days handelsdagar (fastnat) eller om kursdatan tar slut innan (`open`: utförsäljningen pågår)."""
+    covered = _day(after) and any(_day(after) - timedelta(days=COVERAGE_DAYS) <= _day(p["date"]) <= _day(after)
+                                  for p in points)
     later = [p for p in points if p["date"] > after[:10]]
-    if len(later) <= skip:
+    if not covered or len(later) <= skip:   # kursdatan måste täcka utfallsdagen, annars säljs på fel kurser
         return None
     window = later[skip:skip + max_days]
     remaining, proceeds, used, last = shares, 0.0, 0, None
